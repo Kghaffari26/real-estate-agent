@@ -105,4 +105,67 @@ larger change than "wire briefs through agents_core.llm."
 Rechecked `Kghaffari26/agents-core` for a qualifying commit (see
 DECISIONS.md for timestamps of each check via `ScheduleWakeup`).
 
+## Evals (SPEC §11)
+
+`uv run python -m evals.real_estate.run` — 12 metro + 2 national fixtures,
+entirely offline (no network/LLM calls). Results in
+`evals/results/real_estate-2026-09-24.json`. All checks pass:
+
+| Check | Result | Target |
+|---|---|---|
+| Number fidelity | 100% | 100% (spec: first-attempt ≥ 90%, N/A here — no retries exist without an LLM) |
+| Units correctness (pp vs %) | 100% | no violations |
+| No-advice / style | 100% | no banned phrases |
+| Length (≤90 words / ≤6 sentences) | 100% | — |
+| Flag coverage | 100% | ≥ 90% (spec wants an LLM judge; substituted a keyword-based check, see caveat below) |
+
+Two real findings the evals themselves needed fixing (both in the eval
+script, not the agent): a fact dict's string values weren't scanned for
+their own embedded numbers (so "August 2026" flagged its "2026" as
+unsupported), and the national-brief check didn't know some narrated
+numbers legitimately come from `alerts`/`mover_counts` rather than `facts`.
+
+One real finding in the **agent itself**: flag coverage started at 51%
+because `templates.metro_brief` only ever narrated price/inventory/DOM/
+temperature, never the other flag types. Fixed by having it append the
+metro's other flags as a trailing sentence when present (kept out of
+sentences the price/inventory text already covers, to avoid repeating a
+flag in two forms). Covered by a new `tests/test_templates.py`.
+
+Caveat: the spec's flag-coverage eval specifies a fast-tier LLM judge;
+substituted a keyword/phrase-matching check instead, since no LLM is
+wired up and evals must stay free (see "Needed from agents-core" above).
+This is a materially weaker signal than an LLM judge — revisit once briefs
+are LLM-generated.
+
+## §13 acceptance criteria
+
+| Criterion | Status |
+|---|---|
+| `build_metro_config.py` → 50 metros, all with Redfin region + CBSA, ≥48 with Zillow ID | **Partial.** 50/50 Redfin regions ✓. CBSA 0/50, Zillow ID 0/50 — blocked on network (see above), not a code issue. |
+| `--dry-run` fetches/filters/computes, prints per-metro table, zero LLM calls | ✅ Verified fresh tonight against live Redfin data. |
+| Real run publishes index ≤150KB + 50 metro files ≤40KB, all validated | ✅ Verified tonight: index 140KB, metro files ~12KB each (50/50), both validate against the pydantic schema (`IndexOutput`/`MetroDetailOutput`). |
+| Immediate second run makes zero LLM calls (hash match / 304) | ✅ Verified tonight: `data_changed: false`, every brief `reused: true`, `data/costs.jsonl` stayed empty (0 lines — trivially true since no LLM calls exist in this build at all). |
+| Forcing a mortgage-rate change regenerates only the national brief | **Unverified as a live scenario** (no FRED access to actually move the rate). The caching *design* is covered by `tests/test_brief_cache.py` and by construction: `agent.py` hashes metro facts *excluding* `rates`/`affordability` but hashes national facts *including* `rates`, so a rate-only change can only ever invalidate the national brief's hash. Not exercised end-to-end tonight. |
+| Affordability numbers match the site calculator with default inputs | **N/A yet** — no site exists (Phase 4, out of scope for this agent repo). The shared test vector from the spec ($400,000 @ 6.5%/30yr → $2,528.27) passes in `tests/test_affordability.py`, which is what a future calculator would need to match. |
+| Every unit test passes and evals meet §11 thresholds | ✅ 185 tests pass (`uv run pytest`), ruff clean, evals 100% (see above). |
+| `/real-estate` page renders | **N/A** — no site (Phase 4, out of scope). |
+
+## One real run report
+
+Ran `uv run agents-run real_estate` (not `--dry-run`) twice tonight
+against live Redfin data:
+
+- **Cost: $0.00.** No LLM calls exist in this build (task 2 blocked, see
+  above) — `data/costs.jsonl` has 0 lines both before and after. Total
+  Anthropic API spend this entire session: **$0**, well under the $1 cap.
+- **Output sizes:** `public-data/real_estate/latest.json` = 140KB (limit
+  150KB); 50 `public-data/real_estate/metros/<slug>.json` files at ~12KB
+  each (limit 40KB). All validate against the pydantic schema.
+- **Second run:** `data_changed: false`, every brief `reused: true` — the
+  cache worked correctly with zero wasted work.
+- Warnings on both runs (expected, matches the network section above):
+  permits skipped (unverified Census URL + blocked), ACS income
+  unavailable (403), FRED fetch failed (no `FRED_API_KEY`/blocked).
+
 (rest of this file fills in as later steps complete)

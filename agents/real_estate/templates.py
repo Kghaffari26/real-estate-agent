@@ -36,6 +36,13 @@ def metro_brief(facts: dict[str, Any]) -> dict[str, Any]:
     )
     sentence3 = f"The market is {temp['label']} relative to the {temp['relative_to']}."
 
+    # Name any other flags price/inventory/temperature don't already cover,
+    # so a brief doesn't silently omit a notable shift just because the
+    # first three sentences have a fixed shape (SPEC §5.4's flag coverage).
+    covered_terms = ("median price", "inventory")
+    other_flags = [f for f in facts.get("flags", []) if not any(t in f.lower() for t in covered_terms)]
+    sentence4 = f"Other notable signals: {'; '.join(other_flags)}." if other_flags else ""
+
     key_points = [
         f"Median price {price_yoy:+.1f}% YoY" if price.get("yoy_pct") is not None else None,
         f"Inventory {inv_yoy:+.1f}% YoY" if inv.get("yoy_pct") is not None else None,
@@ -43,7 +50,8 @@ def metro_brief(facts: dict[str, Any]) -> dict[str, Any]:
     ]
     key_points = [k for k in key_points if k][:3]
 
-    return {"text": " ".join([sentence1, sentence2, sentence3]), "key_points": key_points}
+    text = " ".join(s for s in (sentence1, sentence2, sentence3, sentence4) if s)
+    return {"text": text, "key_points": key_points}
 
 
 def national_brief(

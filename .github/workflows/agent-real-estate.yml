@@ -1,0 +1,39 @@
+name: real_estate agent
+
+# NOT YET FUNCTIONAL — see STATUS.md "Needed from agents-core".
+#
+# Kghaffari26/agents-core's actual run-agent.yml (as of the commit this
+# was written against) only accepts `agent` and `args` inputs — it has no
+# `max_run_usd`, `site_repo`, or `cache_path` input, so those requested
+# inputs are omitted here rather than passed (an unrecognized input to a
+# reusable workflow is a hard validation error, not a warning). It also
+# checks out the CALLING repo and runs `uv run python -m core.runner
+# <agent>`, which assumes this repo has agents-hub's `core.agent.Agent`
+# class contract (agents/<id>/agent.py exposing AGENT). This repo instead
+# uses the agents_core.agents entry-point + `agents-run` console-script
+# contract per this session's instructions, so `python -m core.runner`
+# has no `core` package to find here — the run step will fail today
+# regardless of these inputs. Triggers below are wired correctly and
+# ready; the `uses:` call needs one of: agents-core switching to a
+# pip-installable package agent repos can depend on (matching how this
+# repo is built), or this repo being rewritten to the Agent-class
+# contract and moved into the agents-core monorepo.
+
+on:
+  schedule:
+    - cron: "0 15 * * 5" # Friday 08:00 PT, after Thursday's Freddie Mac rate release
+  workflow_dispatch:
+    inputs:
+      force_briefs:
+        description: "Regenerate every brief regardless of cached facts hashes"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  run:
+    uses: Kghaffari26/agents-core/.github/workflows/run-agent.yml@main
+    with:
+      agent: real_estate
+      args: ${{ inputs.force_briefs && '--force-briefs' || '' }}
+    secrets: inherit

@@ -1,0 +1,24 @@
+[settings]
+history_months = 36
+use_permits = true
+use_acs_income = true
+batch_poll_timeout_min = 40
+max_index_kb = 150
+max_metro_kb = 40
+
+[flags]
+inventory_surge_yoy = 0.25
+inventory_surge_major_yoy = 0.50
+inventory_drop_yoy = -0.20
+price_decline_yoy = -0.03
+price_decline_major_yoy = -0.08
+price_surge_yoy = 0.08
+price_cuts_yoy_pp = 0.03
+slowing_dom_days = 10
+rent_outpacing_pp = 3.0
+permits_swing_12m = 0.30
+payment_jump = 0.10
+
+[temperature]
+min_components = 4
+bands = [80, 60, 40, 20]

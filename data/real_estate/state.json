@@ -1,0 +1,63 @@
+{
+  "brief_hashes": {
+    "anaheim-ca": "f9ec528075567f399ef1fe68397b91ee827c4a21a467ef5ad6899fc6c60e2437",
+    "atlanta-ga": "545e81181536dade8e61bbf57a261473a3703e414399d792d66eb6f2143ec7f7",
+    "austin-tx": "404d53e764cc2f9e3d3330d5ea72646d8f1418a7a45a303830c5cafd53f7e28c",
+    "baltimore-md": "400623edc1005a13c960b15cff306bf8a0d6176989e953ef057e4f2d21d8d1a7",
+    "boston-ma": "334613a3713db4eb881a86258aa3ec4265ba7d96eb85741f95f89a331b3008bf",
+    "cape-coral-fl": "ce34e9a92af9501da2ca1d5b85dfea4ca3da08f9386d714159f52aa5835cb429",
+    "charlotte-nc": "a8c1056a0400b4b54822652a130290be289552ad61dc860cabfc6feec73137f8",
+    "chicago-il": "f559469c6e186d4e418bd7661c60d7748cff794ce7e3388cccebc0ffec57361d",
+    "cincinnati-oh": "731251aabf3e6da203b9e43dadea73408bd379ec6c539c91e36e0b5b88439206",
+    "cleveland-oh": "81caed91faf1aa6d72280c82177b034996a01f90178be506e7375f5bd5462cfb",
+    "columbus-oh": "373926f11d80ef83910733b5dc6d8db88170a8323d999f104d49115a58f45516",
+    "dallas-tx": "e28b7dfa480f7d8a00df4b48ed81d9d2e1402f821177e7b1c03faa9db56c1ecc",
+    "denver-co": "9ab78d21e74a7bebb0e89aece961ee13cb68bdcc7e16aec99584488973db50c0",
+    "detroit-mi": "b0c07be4172030faebfdd3f1d138a09c8662890b1e9b3cbaa3cf45242ad9c947",
+    "fort-lauderdale-fl": "0f0a02ca3bd46e60ef1e646877e2df332fe7966e34b848c138832627af2e441f",
+    "fort-worth-tx": "dd14340aa843d19c5916afa0b98b86cb59b397344ebb5c8111b8ce3f79a086e6",
+    "houston-tx": "f973fcd5ebb111fb98ced3fa33dde837c3d51756339feea486abdf5fec3244d1",
+    "indianapolis-in": "98618fb67f4a6153cbb94204bbc676a10a8963a42f3c2f9bfd4c52e081ab20f5",
+    "jacksonville-fl": "5e6b28a7966819af5d001fd1660d7d9fb9338ad2313bcf08988e00546c57c95f",
+    "kansas-city-mo": "b1047279baf6f247c6833c7441d01c4ff73a9b61b8d2f8905186eebd409b6b64",
+    "las-vegas-nv": "5d9277d39d86947a69d1ee218f7a75305015be2c8d83caf1ee89fe2bee264648",
+    "los-angeles-ca": "d35eab4aa26dcd9a6a48d36574cacc1b9f490721015288d3af9fb6245c0a09a8",
+    "miami-fl": "2cf6fad0cc52159190c1c69ed07fa39d777c891e565476f4397df51e594795d4",
+    "minneapolis-mn": "a608e1f8de4ac058123cfd205772697a6cce35eb8accd05759eeb2b414ccb3d6",
+    "montgomery-county-pa": "f4957a93583005e7826f53a15a3dfe5982325975a35a50f5ba52c4425f319e3c",
+    "myrtle-beach-sc": "28f484eaf92e3b075c81e6886ef7c9b5e3aa07410261f2eb3551fba8eb896f47",
+    "nashville-tn": "2b67798682a20f6b3d21121f892493b07fb57effa745fcd5b4f72ab265a244b0",
+    "nassau-county-ny": "14e08bcdf6b46205077f4b0a5f82c8a462b1e3813cd7b4f37351ca53d1de1b70",
+    "national": "ee0901e325c367c90d084ef56279c8143919b2c73534a7e397856fdd0a402556",
+    "new-brunswick-nj": "9ac8d3ee9ac5963354b8fe01d87e793576b0dc64cf52425b2bec415b361577d6",
+    "new-york-ny": "b0cfa0ae0462245c6b2edba70d4327bcc20d0e9a3db784ee503b5d4b57735653",
+    "north-port-fl": "4308f6b6ca5a0bbf83979e49cd924910c4996a3842c1f32d807c5c230328e5a5",
+    "oakland-ca": "2c16dc214d05afe51079c6de233758f5086b9906e33c23b35e714184a10b098e",
+    "oklahoma-city-ok": "6a1b0185f7a07edae0bc0d1ebb4f3cd9ff3a533d3941834aec0398a02fe8da7f",
+    "orlando-fl": "e9c45e7f7f0b8e4954448b752e4d9ce51bfa6ece727e78e6887254511fa731cf",
+    "philadelphia-pa": "b2371b407e236fd58b0e974e83c87be6aab1254e9a4ca3f455b0b0847b56c9e7",
+    "phoenix-az": "4d2dfa56d4314a87564f23f435b76240a46f46f92bf7aa6d8dbe92ebf1928d00",
+    "pittsburgh-pa": "1fa0c5ac21e83b5fac9cb4cd15c0fe2cf5b3ec8061dd67f7e0981885bacb9bfc",
+    "portland-or": "0c5372b18fa66bb7c3cae9c5156a6e43e91fb1e50669cd71f360343e33e93c57",
+    "raleigh-nc": "3ce8d2133fff4d01afa9252c1489b99aafe8e2e9227432b15fa661c2a59a6ea6",
+    "riverside-ca": "27d96f9e32b71bd1f23f8689607efe2ef7810c92709aa6ec7f12a4da29f82a50",
+    "sacramento-ca": "6e34d01262c0a2d71b5a9a2caf7ed8417d23d6f874cb84288fde57ed1616fd9f",
+    "san-antonio-tx": "2d39a567875dc0a63f1b0bed38e1705efcc2717cd068f86e86a09c1ccb1b252a",
+    "san-diego-ca": "cda214403d078e4241fcd8943f10d438229a102cd958127109793e8dd00f9fb4",
+    "seattle-wa": "dd3a0f60c8be910fddd344ed9f5d9fabad8f8b2de6e23053e06006ff38001466",
+    "st-louis-mo": "e1c374c3f2b146ec10825e4f7d25fae0e071d8d307bbe340244cf2ea012534ec",
+    "tampa-fl": "74ebfc79983edfecdbbb422931459fc0db2bf38446c8fdfedf16a253e6d8904c",
+    "virginia-beach-va": "af9a147751e8c6a476743db38d7f32c896cd86e2c71e2ce50047883bd40311fc",
+    "warren-mi": "3db1eee19f3261748b1a27381679beee5a87378a0c5023ecf24f3dc6c9c32d31",
+    "washington-dc": "5b387a01d802133d0f665bbf4cb6c73d0d2ee4fdde64e2d3d7b8c55e30c2399c",
+    "west-palm-beach-fl": "c7f6291c53c328c4dcac644bdb92adb61391e572452541963630dd1a390f181c"
+  },
+  "sources": {
+    "redfin_metro": {
+      "data_through": "2026-05-31"
+    },
+    "redfin_national": {
+      "data_through": "2026-05-31"
+    }
+  }
+}

@@ -1,0 +1,1649 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "definitions": {
+    "IndexOutput": {
+      "$defs": {
+        "AlertOut": {
+          "properties": {
+            "flag": {
+              "title": "Flag",
+              "type": "string"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "notable",
+                "major"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "slugs": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Slugs",
+              "type": "array"
+            }
+          },
+          "required": [
+            "flag",
+            "label",
+            "severity",
+            "slugs"
+          ],
+          "title": "AlertOut",
+          "type": "object"
+        },
+        "Brief": {
+          "properties": {
+            "citations": {
+              "items": {
+                "$ref": "#/$defs/Citation"
+              },
+              "title": "Citations",
+              "type": "array"
+            },
+            "generated_at": {
+              "format": "date-time",
+              "title": "Generated At",
+              "type": "string"
+            },
+            "key_points": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Key Points",
+              "type": "array"
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "narrative_source": {
+              "enum": [
+                "llm",
+                "template"
+              ],
+              "title": "Narrative Source",
+              "type": "string"
+            },
+            "reused": {
+              "default": false,
+              "title": "Reused",
+              "type": "boolean"
+            },
+            "text": {
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "text",
+            "narrative_source",
+            "generated_at"
+          ],
+          "title": "Brief",
+          "type": "object"
+        },
+        "CaseShiller": {
+          "properties": {
+            "period": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Period"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Value"
+            },
+            "yoy": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Yoy"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "CaseShiller",
+          "type": "object"
+        },
+        "Citation": {
+          "description": "A source attribution, attached to a brief or the sources list.",
+          "properties": {
+            "attribution": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Attribution"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "url": {
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "url"
+          ],
+          "title": "Citation",
+          "type": "object"
+        },
+        "ConstructionSeriesValue": {
+          "properties": {
+            "mom": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mom"
+            },
+            "period": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Period"
+            },
+            "units": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Units"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "ConstructionSeriesValue",
+          "type": "object"
+        },
+        "KeyStat": {
+          "properties": {
+            "delta": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Delta"
+            },
+            "delta_format": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Delta Format"
+            },
+            "format": {
+              "title": "Format",
+              "type": "string"
+            },
+            "good_direction": {
+              "default": "neutral",
+              "enum": [
+                "up",
+                "down",
+                "neutral"
+              ],
+              "title": "Good Direction",
+              "type": "string"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "label",
+            "value",
+            "format"
+          ],
+          "title": "KeyStat",
+          "type": "object"
+        },
+        "MetricRegistryEntry": {
+          "properties": {
+            "change_kind": {
+              "enum": [
+                "ratio",
+                "pp",
+                "diff"
+              ],
+              "title": "Change Kind",
+              "type": "string"
+            },
+            "format": {
+              "title": "Format",
+              "type": "string"
+            },
+            "good_direction": {
+              "enum": [
+                "up",
+                "down",
+                "neutral"
+              ],
+              "title": "Good Direction",
+              "type": "string"
+            },
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            },
+            "note": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Note"
+            },
+            "source": {
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "label",
+            "format",
+            "change_kind",
+            "good_direction",
+            "source"
+          ],
+          "title": "MetricRegistryEntry",
+          "type": "object"
+        },
+        "MetricValue": {
+          "properties": {
+            "delta_format": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Delta Format"
+            },
+            "high_36m": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "High 36M"
+            },
+            "low_36m": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Low 36M"
+            },
+            "mom": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mom"
+            },
+            "pct_rank": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Pct Rank"
+            },
+            "trend_3m": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "up",
+                    "down",
+                    "flat"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Trend 3M"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Value"
+            },
+            "yoy": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Yoy"
+            },
+            "yoy_pct_rank": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Yoy Pct Rank"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "MetricValue",
+          "type": "object"
+        },
+        "MetroSummary": {
+          "properties": {
+            "brief_excerpt": {
+              "default": "",
+              "title": "Brief Excerpt",
+              "type": "string"
+            },
+            "cbsa": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cbsa"
+            },
+            "flags": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Flags",
+              "type": "array"
+            },
+            "homes_sold_12m": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Homes Sold 12M"
+            },
+            "lat": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lat"
+            },
+            "latest": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/MetricValue"
+                  },
+                  {
+                    "$ref": "#/$defs/PermitsValue"
+                  }
+                ]
+              },
+              "title": "Latest",
+              "type": "object"
+            },
+            "lon": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lon"
+            },
+            "market_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Market Type"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "slug": {
+              "title": "Slug",
+              "type": "string"
+            },
+            "stale": {
+              "default": false,
+              "title": "Stale",
+              "type": "boolean"
+            },
+            "temperature": {
+              "$ref": "#/$defs/TemperatureSummary"
+            }
+          },
+          "required": [
+            "slug",
+            "name",
+            "cbsa",
+            "lat",
+            "lon",
+            "latest",
+            "temperature",
+            "market_type"
+          ],
+          "title": "MetroSummary",
+          "type": "object"
+        },
+        "MoverEntry": {
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "slug": {
+              "title": "Slug",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "number"
+            }
+          },
+          "required": [
+            "slug",
+            "name",
+            "value"
+          ],
+          "title": "MoverEntry",
+          "type": "object"
+        },
+        "Movers": {
+          "properties": {
+            "inventory_growth": {
+              "items": {
+                "$ref": "#/$defs/MoverEntry"
+              },
+              "title": "Inventory Growth",
+              "type": "array"
+            },
+            "price_declines": {
+              "items": {
+                "$ref": "#/$defs/MoverEntry"
+              },
+              "title": "Price Declines",
+              "type": "array"
+            },
+            "price_gains": {
+              "items": {
+                "$ref": "#/$defs/MoverEntry"
+              },
+              "title": "Price Gains",
+              "type": "array"
+            },
+            "temperature_bottom": {
+              "items": {
+                "$ref": "#/$defs/MoverEntry"
+              },
+              "title": "Temperature Bottom",
+              "type": "array"
+            },
+            "temperature_top": {
+              "items": {
+                "$ref": "#/$defs/MoverEntry"
+              },
+              "title": "Temperature Top",
+              "type": "array"
+            }
+          },
+          "title": "Movers",
+          "type": "object"
+        },
+        "NationalBlock": {
+          "properties": {
+            "brief": {
+              "$ref": "#/$defs/Brief"
+            },
+            "case_shiller": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CaseShiller"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "construction": {
+              "$ref": "#/$defs/NationalConstruction"
+            },
+            "latest": {
+              "additionalProperties": {
+                "$ref": "#/$defs/MetricValue"
+              },
+              "title": "Latest",
+              "type": "object"
+            },
+            "rates": {
+              "$ref": "#/$defs/NationalRates"
+            },
+            "series": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "title": "Series",
+              "type": "object"
+            },
+            "temperature": {
+              "$ref": "#/$defs/TemperatureSummary"
+            }
+          },
+          "required": [
+            "latest",
+            "temperature",
+            "series",
+            "rates",
+            "construction",
+            "brief"
+          ],
+          "title": "NationalBlock",
+          "type": "object"
+        },
+        "NationalConstruction": {
+          "properties": {
+            "housing_starts": {
+              "$ref": "#/$defs/ConstructionSeriesValue"
+            },
+            "permits": {
+              "$ref": "#/$defs/ConstructionSeriesValue"
+            },
+            "series": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "title": "Series",
+              "type": "object"
+            }
+          },
+          "required": [
+            "housing_starts",
+            "permits",
+            "series"
+          ],
+          "title": "NationalConstruction",
+          "type": "object"
+        },
+        "NationalRates": {
+          "properties": {
+            "dates": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Dates",
+              "type": "array"
+            },
+            "latest": {
+              "$ref": "#/$defs/RatesLatest"
+            },
+            "mortgage15": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": "Mortgage15",
+              "type": "array"
+            },
+            "mortgage30": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": "Mortgage30",
+              "type": "array"
+            }
+          },
+          "required": [
+            "dates",
+            "mortgage30",
+            "mortgage15",
+            "latest"
+          ],
+          "title": "NationalRates",
+          "type": "object"
+        },
+        "PermitsValue": {
+          "description": "Permits use a rolling-12-month YoY instead of yoy/mom/trend (\u00a75.1).",
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Value"
+            },
+            "yoy_12m": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Yoy 12M"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "PermitsValue",
+          "type": "object"
+        },
+        "RatesLatest": {
+          "properties": {
+            "mortgage30": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mortgage30"
+            },
+            "mortgage30_change_1w_pp": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mortgage30 Change 1W Pp"
+            },
+            "mortgage30_year_ago": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mortgage30 Year Ago"
+            }
+          },
+          "title": "RatesLatest",
+          "type": "object"
+        },
+        "RunMeta": {
+          "description": "Bookkeeping written into every agent's `meta` block.",
+          "properties": {
+            "agent": {
+              "title": "Agent",
+              "type": "string"
+            },
+            "batch_fallback": {
+              "default": false,
+              "title": "Batch Fallback",
+              "type": "boolean"
+            },
+            "cost_usd": {
+              "default": 0.0,
+              "title": "Cost Usd",
+              "type": "number"
+            },
+            "data_changed": {
+              "default": true,
+              "title": "Data Changed",
+              "type": "boolean"
+            },
+            "finished_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Finished At"
+            },
+            "stale": {
+              "default": false,
+              "title": "Stale",
+              "type": "boolean"
+            },
+            "started_at": {
+              "format": "date-time",
+              "title": "Started At",
+              "type": "string"
+            },
+            "status": {
+              "default": "ok",
+              "enum": [
+                "ok",
+                "partial",
+                "failed"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Warnings",
+              "type": "array"
+            }
+          },
+          "required": [
+            "agent",
+            "started_at"
+          ],
+          "title": "RunMeta",
+          "type": "object"
+        },
+        "TemperatureSummary": {
+          "properties": {
+            "basis": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Basis"
+            },
+            "label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Label"
+            },
+            "score": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Score"
+            }
+          },
+          "required": [
+            "score",
+            "label"
+          ],
+          "title": "TemperatureSummary",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "alerts": {
+          "items": {
+            "$ref": "#/$defs/AlertOut"
+          },
+          "title": "Alerts",
+          "type": "array"
+        },
+        "data_through": {
+          "format": "date",
+          "title": "Data Through",
+          "type": "string"
+        },
+        "headline": {
+          "title": "Headline",
+          "type": "string"
+        },
+        "key_stats": {
+          "items": {
+            "$ref": "#/$defs/KeyStat"
+          },
+          "title": "Key Stats",
+          "type": "array"
+        },
+        "meta": {
+          "$ref": "#/$defs/RunMeta"
+        },
+        "metric_registry": {
+          "items": {
+            "$ref": "#/$defs/MetricRegistryEntry"
+          },
+          "title": "Metric Registry",
+          "type": "array"
+        },
+        "metros": {
+          "items": {
+            "$ref": "#/$defs/MetroSummary"
+          },
+          "title": "Metros",
+          "type": "array"
+        },
+        "movers": {
+          "$ref": "#/$defs/Movers"
+        },
+        "national": {
+          "$ref": "#/$defs/NationalBlock"
+        },
+        "rates_as_of": {
+          "format": "date",
+          "title": "Rates As Of",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "meta",
+        "headline",
+        "key_stats",
+        "data_through",
+        "rates_as_of",
+        "metric_registry",
+        "national",
+        "metros",
+        "movers",
+        "alerts",
+        "sources"
+      ],
+      "title": "IndexOutput",
+      "type": "object"
+    },
+    "MetroDetailOutput": {
+      "$defs": {
+        "AffordabilityOut": {
+          "properties": {
+            "assumptions": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": "Assumptions",
+              "type": "object"
+            },
+            "income_year": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Income Year"
+            },
+            "median_household_income": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Median Household Income"
+            },
+            "payment_change_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Payment Change Pct"
+            },
+            "payment_now": {
+              "title": "Payment Now",
+              "type": "number"
+            },
+            "payment_to_income": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Payment To Income"
+            },
+            "payment_year_ago": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Payment Year Ago"
+            }
+          },
+          "required": [
+            "payment_now",
+            "assumptions"
+          ],
+          "title": "AffordabilityOut",
+          "type": "object"
+        },
+        "Brief": {
+          "properties": {
+            "citations": {
+              "items": {
+                "$ref": "#/$defs/Citation"
+              },
+              "title": "Citations",
+              "type": "array"
+            },
+            "generated_at": {
+              "format": "date-time",
+              "title": "Generated At",
+              "type": "string"
+            },
+            "key_points": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Key Points",
+              "type": "array"
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "narrative_source": {
+              "enum": [
+                "llm",
+                "template"
+              ],
+              "title": "Narrative Source",
+              "type": "string"
+            },
+            "reused": {
+              "default": false,
+              "title": "Reused",
+              "type": "boolean"
+            },
+            "text": {
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "text",
+            "narrative_source",
+            "generated_at"
+          ],
+          "title": "Brief",
+          "type": "object"
+        },
+        "Citation": {
+          "description": "A source attribution, attached to a brief or the sources list.",
+          "properties": {
+            "attribution": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Attribution"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "url": {
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "url"
+          ],
+          "title": "Citation",
+          "type": "object"
+        },
+        "FlagOut": {
+          "properties": {
+            "facts": {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "title": "Facts",
+              "type": "object"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "notable",
+                "major"
+              ],
+              "title": "Severity",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "severity"
+          ],
+          "title": "FlagOut",
+          "type": "object"
+        },
+        "MetricValue": {
+          "properties": {
+            "delta_format": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Delta Format"
+            },
+            "high_36m": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "High 36M"
+            },
+            "low_36m": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Low 36M"
+            },
+            "mom": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mom"
+            },
+            "pct_rank": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Pct Rank"
+            },
+            "trend_3m": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "up",
+                    "down",
+                    "flat"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Trend 3M"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Value"
+            },
+            "yoy": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Yoy"
+            },
+            "yoy_pct_rank": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Yoy Pct Rank"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "MetricValue",
+          "type": "object"
+        },
+        "PermitsValue": {
+          "description": "Permits use a rolling-12-month YoY instead of yoy/mom/trend (\u00a75.1).",
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Value"
+            },
+            "yoy_12m": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Yoy 12M"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "PermitsValue",
+          "type": "object"
+        },
+        "TemperatureDetail": {
+          "properties": {
+            "components": {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "title": "Components",
+              "type": "object"
+            },
+            "label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Label"
+            },
+            "score": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Score"
+            }
+          },
+          "required": [
+            "score",
+            "label"
+          ],
+          "title": "TemperatureDetail",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "affordability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AffordabilityOut"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "brief": {
+          "$ref": "#/$defs/Brief"
+        },
+        "cbsa": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cbsa"
+        },
+        "data_through": {
+          "format": "date",
+          "title": "Data Through",
+          "type": "string"
+        },
+        "flags": {
+          "items": {
+            "$ref": "#/$defs/FlagOut"
+          },
+          "title": "Flags",
+          "type": "array"
+        },
+        "lat": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lat"
+        },
+        "latest": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MetricValue"
+              },
+              {
+                "$ref": "#/$defs/PermitsValue"
+              }
+            ]
+          },
+          "title": "Latest",
+          "type": "object"
+        },
+        "lon": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lon"
+        },
+        "market_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Market Type"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "series": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "title": "Series",
+          "type": "object"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        },
+        "stale": {
+          "default": false,
+          "title": "Stale",
+          "type": "boolean"
+        },
+        "temperature": {
+          "$ref": "#/$defs/TemperatureDetail"
+        }
+      },
+      "required": [
+        "slug",
+        "name",
+        "cbsa",
+        "lat",
+        "lon",
+        "data_through",
+        "latest",
+        "temperature",
+        "market_type",
+        "flags",
+        "affordability",
+        "series",
+        "brief"
+      ],
+      "title": "MetroDetailOutput",
+      "type": "object"
+    }
+  },
+  "title": "real_estate"
+}

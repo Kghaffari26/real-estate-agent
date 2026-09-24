@@ -43,4 +43,66 @@ reachable, rerun `uv run python scripts/build_metro_config.py` — no code
 changes needed, it already does the name-based CBSA matching (not
 Redfin's look-alike code).
 
+## Needed from agents-core (blocking tasks 1 and 2)
+
+Cloned and read `Kghaffari26/agents-core@main` in full (its only branch —
+`git for-each-ref refs/remotes` shows just `origin/main`) plus its
+`CLAUDE.md` (no `README.md` exists in that repo). Findings:
+
+1. **No commit anywhere has `src/agents_core/{guards,registry}.py`.**
+   Checked every commit on every branch (4 commits, 1 branch) via
+   `git ls-tree -r <sha>`. This isn't a near-miss — the repo has never
+   used a `src/agents_core/` layout at all.
+2. **It's a different architecture, not just a different path.** The
+   repo's own `pyproject.toml` names the project `agents-hub` and sets
+   `[tool.uv] package = false` — it is not built to be pip-installed as a
+   dependency at all. Its `core/registry.py` hardcodes
+   `AGENT_IDS = ("real_estate", "macro", "grants", "repo_maint")` and
+   loads each one via `importlib.import_module(f"agents.{agent_id}.agent")`
+   **from inside its own tree** — i.e. it expects `real_estate`'s code to
+   physically live at `agents-core/agents/real_estate/agent.py`, exposing
+   a module-level `AGENT` instance that subclasses `core.agent.Agent`
+   (abstract `fetch(ctx)` / `transform(ctx, raw)` / `analyze(ctx, data)`
+   methods, an `AgentResult` return type, `ctx.llm`/`ctx.http` injected by
+   the runner). This is the monorepo design from
+   `docs/specs/BUILD_PLAN.md`, not a library other repos `uv add`.
+3. Its `.github/workflows/run-agent.yml` matches that model: `inputs:
+   agent, args` only (no `max_run_usd`/`site_repo`/`cache_path`), and its
+   `run` step is `uv run python -m core.runner "<agent>"` — it checks out
+   the *calling* repo and expects that repo to itself have `core/runner.py`.
+4. `core/llm.py` and `core/guards.py` exist (`text_guard`/`fields_guard`,
+   `ctx.llm.complete/.structured/.batch/.guard_batch`) but only as part of
+   that same non-installable monorepo — there is no version of them
+   reachable via `uv add`.
+
+Given this session's instructions say not to modify agents-core and to
+work around minimally rather than invent an http/llm/costs/guards/
+publish/runner module of my own, and given deleting the local
+`agents-core/` package with nothing compatible to replace it would break
+every test and the entire pipeline: **kept this repo's local
+`agents-core/` package** (built last session; already the exact
+`src/agents_core/` layout + entry-point contract described in tonight's
+instructions, just missing `llm.py`/`guards.py`, which were never asked
+for until tonight) as the working stopgap, and polled periodically for a
+real upstream commit matching tonight's spec (see below).
+
+**Consequence for task 2** (wiring briefs through `agents_core.llm`):
+not done. There is no installable `agents_core.llm`/`guards` anywhere to
+wire against, and writing one myself is explicitly against this
+session's rules. `agents/real_estate/analyze.py`'s existing seam
+(deterministic templates now, `narrative_source: "template"`) is
+unchanged and still fully tested.
+
+**What would unblock this**: either (a) `agents-core` publishes a
+`src/agents_core/` pip-installable package with `llm.py`/`guards.py`
+matching tonight's `fields_guard(facts, [...])` contract, or (b) explicit
+direction to instead rewrite this repo's agent to `agents-hub`'s
+`core.agent.Agent` contract and move it into that monorepo — a much
+larger change than "wire briefs through agents_core.llm."
+
+### Polling log
+
+Rechecked `Kghaffari26/agents-core` for a qualifying commit (see
+DECISIONS.md for timestamps of each check via `ScheduleWakeup`).
+
 (rest of this file fills in as later steps complete)

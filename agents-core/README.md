@@ -1,4 +1,4 @@
-# agents-core
+# agents-core (vendored copy — see naming note)
 
 Shared framework for the agents-hub family of scheduled data agents:
 HTTP caching (conditional GET + TTL cache), cost tracking, a JSON
@@ -8,16 +8,37 @@ agent registration via Python entry points.
 
 It ships no agents of its own — it's a dependency, not a standalone tool.
 
+> **Naming note:** a separate `Kghaffari26/agents-core` GitHub repo also
+> exists, but it's a different, incompatible architecture — a monorepo
+> (internally named "agents-hub") that expects each agent's code to live
+> physically inside it as a `core.agent.Agent` subclass, not something
+> installed via `uv add`. This package is real-estate-agent's *own* copy,
+> built independently to the `src/agents_core/` + entry-point contract
+> described in `../STATUS.md`. Don't confuse the two — see
+> `../STATUS.md`'s "Needed from agents-core" section for the full story
+> and what would need to change for this repo to actually depend on the
+> external one instead of vendoring this copy.
+
 ## Install
 
-As a git dependency (from another repo):
+As a local path dependency (how `real-estate-agent` itself uses it —
+see its root `pyproject.toml`'s `[tool.uv.sources]`):
 
-```bash
-uv add "git+https://github.com/Kghaffari26/real-estate-agent@v0.1.0#subdirectory=agents-core"
+```toml
+[project]
+dependencies = ["agents-core"]
+
+[tool.uv.sources]
+agents-core = { path = "agents-core", editable = true }
 ```
 
-(agents-core lives in a subdirectory of the `real-estate-agent` repo
-rather than its own top-level repo — see that repo's README for why.)
+As a git+subdirectory dependency, if you clone just this package out to
+somewhere else (untested since the naming note above surfaced — treat
+this as aspirational until verified):
+
+```bash
+uv add "git+https://github.com/Kghaffari26/real-estate-agent@<ref>#subdirectory=agents-core"
+```
 
 As a local path dependency (developing alongside an agent repo in the
 same checkout, as `real-estate-agent` itself does):
@@ -82,24 +103,18 @@ website framework, or a specific LLM provider.
 
 ## The reusable `run-agent.yml` workflow
 
-Call it from an agent repo's own workflow:
-
-```yaml
-jobs:
-  run:
-    uses: Kghaffari26/real-estate-agent/.github/workflows/run-agent.yml@v0.1.0
-    with:
-      agent: real_estate
-      max_run_usd: "0.50"
-    secrets: inherit
-```
-
-It checks out the calling repo, `uv sync`s it, runs `agents-run <agent>`,
-commits `data/` to `main`, force-pushes `public-data/` plus any exported
-JSON Schemas to a `data` branch, and — only if `SITE_DISPATCH_TOKEN` is
-set — sends a `repository_dispatch` (`agent-data-updated`) to the website
-repo so it can rebuild. See the workflow file itself for the full input
-list; it's a thin, generic wrapper, not agent-specific.
+**Removed.** A prior version of this package shipped its own
+`.github/workflows/run-agent.yml`, callable cross-repo. It was deleted
+because the real `Kghaffari26/agents-core` repo (see the naming note up
+top) now owns that name and has its *own* `run-agent.yml` — with a
+different, incompatible contract (`agent`/`args` inputs only, and it
+expects the calling repo to implement `python -m core.runner`, the
+`agents-hub` monorepo pattern, not this package's entry-point contract).
+`real-estate-agent`'s `.github/workflows/agent-real-estate.yml` currently
+calls that external workflow and documents exactly why it doesn't work
+yet — see `../STATUS.md`. If this package's own reusable workflow is
+needed again, it should be rebuilt to call `agents-run` directly rather
+than reusing the `run-agent.yml` name.
 
 ## Tests
 

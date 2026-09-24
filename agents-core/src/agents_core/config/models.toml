@@ -1,0 +1,21 @@
+# Default model tiers and pricing, shipped with agents-core. An agent
+# repo's own config/models.toml overrides these keys (a deep merge, not a
+# replace) — it only needs to specify what it wants to change.
+#
+# VERIFY current model IDs, prices, and the batch discount rate at
+# https://docs.claude.com before relying on this for real budget math —
+# pricing changes over time and these are placeholder defaults.
+
+[tiers]
+fast = "claude-haiku-4-5-20251001"
+smart = "claude-sonnet-5"
+
+[pricing."claude-haiku-4-5-20251001"]
+input_per_mtok = 1.00
+output_per_mtok = 5.00
+batch_discount = 0.5
+
+[pricing."claude-sonnet-5"]
+input_per_mtok = 3.00
+output_per_mtok = 15.00
+batch_discount = 0.5

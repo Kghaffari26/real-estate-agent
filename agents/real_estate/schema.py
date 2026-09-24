@@ -12,9 +12,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Literal
 
+from agents_core.schema import Citation, RunMeta
 from pydantic import BaseModel, Field
-
-from core.schema import Citation, RunMeta
 
 NarrativeSource = Literal["llm", "template"]
 GoodDirection = Literal["up", "down", "neutral"]

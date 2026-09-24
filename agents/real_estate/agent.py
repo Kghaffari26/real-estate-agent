@@ -3,7 +3,7 @@
     fetch (conditional) -> filter/normalize -> compute -> flags + temperature
         -> movers -> briefs (template, for now) -> validate -> publish
 
-Called by `core.runner`. No LLM calls are made anywhere in this build —
+Called by `agents_core.runner`. No LLM calls are made anywhere in this build —
 `agents/real_estate/analyze.py` is the seam where SPEC §7's Batch API path
 plugs in later; every brief's `narrative_source` is `"template"` until then.
 """
@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
+from agents_core.http import HTTPClient
+from agents_core.paths import publish_dir as default_publish_dir
+from agents_core.publish import PublishSizeError, publish_index, publish_item
+from agents_core.schema import RunMeta
 
 from agents.real_estate import (
     analyze,
@@ -57,9 +61,6 @@ from agents.real_estate.schema import (
     TemperatureDetail,
     TemperatureSummary,
 )
-from core.http import HTTPClient
-from core.publish import DEFAULT_SITE_DATA_DIR, PublishSizeError, publish_index, publish_item
-from core.schema import RunMeta
 
 AGENT_NAME = "real_estate"
 HISTORY_MONTHS = 36
@@ -104,7 +105,18 @@ def _compute_metro_metrics(
     return changes, permits
 
 
-def run(dry_run: bool = False, force_briefs: bool = False) -> RunMeta:
+def run(
+    dry_run: bool = False,
+    apply: bool = False,
+    extra_args: list[str] | None = None,
+    force_briefs: bool = False,
+) -> RunMeta:
+    """`apply` has no effect for this agent (it always writes when not
+    `dry_run`) — accepted for signature compatibility with agents-core's
+    generic `agents-run` CLI. `--force-briefs` in `extra_args` is
+    equivalent to passing `force_briefs=True` directly.
+    """
+    force_briefs = force_briefs or "--force-briefs" in (extra_args or [])
     started_at = datetime.now(UTC)
     warnings_list: list[str] = []
 
@@ -176,7 +188,7 @@ def run(dry_run: bool = False, force_briefs: bool = False) -> RunMeta:
     )
     national_rows = pl.scan_parquet(national_fetch.parquet_path).sort("period_end").collect().to_dicts()
 
-    metro_data_dir = Path(DEFAULT_SITE_DATA_DIR) / AGENT_NAME / "metros"
+    metro_data_dir = default_publish_dir() / AGENT_NAME / "metros"
 
     # -- per-metro computation ------------------------------------------
     per_metro_rows: dict[str, list[dict[str, Any]]] = {}
@@ -410,7 +422,7 @@ def run(dry_run: bool = False, force_briefs: bool = False) -> RunMeta:
         )
         any_source_changed = True
     else:
-        prior_index = _load_json(Path(DEFAULT_SITE_DATA_DIR) / AGENT_NAME / "latest.json")
+        prior_index = _load_json(default_publish_dir() / AGENT_NAME / "latest.json")
         prior_brief = (prior_index or {}).get("national", {}).get("brief")
         national_brief = analyze.reuse_brief(prior_brief) if prior_brief else analyze.generate_national_brief(
             national_facts, [a.model_dump() for a in alerts[:5]], {"have more price cuts than a year ago": price_drops_count}

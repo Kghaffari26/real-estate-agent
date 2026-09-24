@@ -13,8 +13,7 @@ import re
 from pathlib import Path
 
 import polars as pl
-
-from core.http import HTTPClient
+from agents_core.http import HTTPClient
 
 ZHVI_URL = (
     "https://files.zillowstatic.com/research/public_csvs/zhvi/"

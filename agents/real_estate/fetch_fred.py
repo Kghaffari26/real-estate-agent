@@ -1,7 +1,7 @@
 """Fetch FRED (Federal Reserve Economic Data) national series.
 
 A thin wrapper around FRED's `series/observations` endpoint, with the
-on-disk TTL cache from `core.http.HTTPClient` doing double duty as
+on-disk TTL cache from `agents_core.http.HTTPClient` doing double duty as
 change detection: if the cache hasn't expired, no request is made at all,
 and when one is made the raw observations are what determine whether a
 series actually moved since the last run (compared upstream against
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 
-from core.http import HTTPClient
+from agents_core.http import HTTPClient
 
 BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 

@@ -26,9 +26,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # run as a plain script, not a module
 
 import polars as pl  # noqa: E402
+from agents_core.http import HTTPClient  # noqa: E402
 
 from agents.real_estate import fetch_redfin, fetch_zillow  # noqa: E402
-from core.http import HTTPClient  # noqa: E402
 
 METROS_TOML_PATH = Path("config/metros.toml")
 TOP_N = 50

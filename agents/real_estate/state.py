@@ -1,6 +1,6 @@
 """Run state: source versions (etags/last-modified/data_through) and each
 metro's last-used facts hash, so unchanged inputs skip both re-fetching
-(handled by `core.http`'s own conditional-GET cache) and re-generating
+(handled by `agents_core.http`'s own conditional-GET cache) and re-generating
 briefs (SPEC_REAL_ESTATE.md §4).
 """
 

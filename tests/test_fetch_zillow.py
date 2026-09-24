@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 import pytest
 
 from agents.real_estate.fetch_zillow import ZillowFormatError, load_long
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "real_estate"
 
 WIDE_CSV = """RegionID,RegionName,2026-06-30,2026-07-31,2026-08-31
 1,"Houston, TX",300000,301000,302500
@@ -17,6 +20,17 @@ def _write(tmp_path, text: str = WIDE_CSV):
     path = tmp_path / "zillow_zhvi.csv"
     path.write_text(text)
     return path
+
+
+def test_load_long_reads_committed_fixture_csv():
+    path = FIXTURES_DIR / "zillow_zhvi_sample.csv"
+    long = load_long(path, value_name="zhvi", region_ids=None, history_months=40)
+
+    assert long.height == 9  # 3 regions * 3 month columns
+    houston_aug = long.filter(
+        (long["zillow_region_id"] == 102001) & (long["date"] == date(2026, 8, 31))
+    )
+    assert houston_aug["zhvi"][0] == 302500
 
 
 def test_load_long_melts_wide_to_long(tmp_path):

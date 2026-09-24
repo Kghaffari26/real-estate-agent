@@ -13,8 +13,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # run as a plain script, not a module
 
+from agents_core.http import HTTPClient  # noqa: E402
+
 from agents.real_estate import fetch_redfin, fetch_zillow  # noqa: E402
-from core.http import HTTPClient  # noqa: E402
 
 URLS: dict[str, str] = {
     "redfin_metro": fetch_redfin.METRO_URL,

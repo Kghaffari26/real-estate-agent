@@ -7,13 +7,15 @@ import httpx
 import polars as pl
 import pytest
 import respx
+from agents_core.http import HTTPClient
 
 from agents.real_estate.fetch_redfin import (
     COLUMN_RENAME,
     RedfinColumnsMissing,
     _filter_to_parquet,
 )
-from core.http import HTTPClient
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "real_estate"
 
 HEADER = [
     "PERIOD_BEGIN",
@@ -104,6 +106,24 @@ def test_filter_keeps_matching_rows_and_renames_columns(tmp_path):
     houston = df.filter(pl.col("region") == "Houston, TX metro area").row(0, named=True)
     assert houston["median_sale_price"] == 350000
     assert houston["homes_sold"] == 1200
+
+
+def test_filter_committed_fixture_tsv_keeps_only_matching_rows(tmp_path):
+    # tests/fixtures/real_estate/redfin_metro_sample.tsv.gz: 3 metros x
+    # All Residential/30-day/NSA (kept), plus rows covering other property
+    # types, durations, seasonal adjustment, and region types (all dropped).
+    gz_path = FIXTURES_DIR / "redfin_metro_sample.tsv.gz"
+    out_path = tmp_path / "redfin_metro.parquet"
+
+    _filter_to_parquet(gz_path, out_path, region_type="metro", history_months=36, tracked_regions=None)
+
+    df = pl.read_parquet(out_path)
+    assert df.height == 3
+    assert set(df["region"]) == {
+        "Houston, TX metro area",
+        "Atlanta, GA metro area",
+        "Denver, CO metro area",
+    }
 
 
 def test_filter_respects_tracked_regions(tmp_path):

@@ -13,7 +13,7 @@ import json
 import os
 from pathlib import Path
 
-from core.http import HTTPClient
+from agents_core.http import HTTPClient
 
 CACHE_PATH = Path("data/real_estate/acs_income.json")
 GEO_COLUMN = "metropolitan statistical area/micropolitan statistical area"

@@ -4,6 +4,8 @@ import json
 from datetime import date, datetime
 
 import pytest
+from agents_core.publish import PublishSizeError, write_json
+from agents_core.schema import Citation, RunMeta
 from pydantic import ValidationError
 
 from agents.real_estate.schema import (
@@ -28,8 +30,6 @@ from agents.real_estate.schema import (
     TemperatureDetail,
     TemperatureSummary,
 )
-from core.publish import PublishSizeError, write_json
-from core.schema import Citation, RunMeta
 
 
 def _run_meta() -> RunMeta:
@@ -197,7 +197,7 @@ def test_index_output_rejects_invalid_change_kind():
         IndexOutput.model_validate(payload)
 
 
-# -- core.publish.write_json size limits -----------------------------------
+# -- agents_core.publish.write_json size limits -----------------------------------
 
 
 def test_write_json_writes_file_under_the_limit(tmp_path):

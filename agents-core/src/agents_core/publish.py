@@ -1,4 +1,9 @@
-"""Publish validated JSON to `site/public/data/<agent>/`, with dated history."""
+"""Publish validated JSON to `<publish_dir>/<agent>/`, with dated history.
+
+`publish_dir` defaults to `agents_core.paths.publish_dir()` (itself
+`public-data/`, or `$AGENTS_CORE_PUBLISH_DIR`) — nothing here assumes any
+particular website's directory layout.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +14,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-DEFAULT_SITE_DATA_DIR = Path("site/public/data")
+from agents_core.paths import publish_dir as default_publish_dir
+
 DEFAULT_MAX_HISTORY = 52
 
 
@@ -42,7 +48,7 @@ def publish_index(
     agent: str,
     data: BaseModel | dict[str, Any],
     *,
-    site_data_dir: Path | str = DEFAULT_SITE_DATA_DIR,
+    publish_dir: Path | str | None = None,
     max_kb: float | None = None,
     keep_history: int = DEFAULT_MAX_HISTORY,
     run_date: date | None = None,
@@ -51,7 +57,8 @@ def publish_index(
     trimming history to `keep_history` files. Returns the published size in bytes.
     """
     payload = _dump(data)
-    agent_dir = Path(site_data_dir) / agent
+    base = Path(publish_dir) if publish_dir is not None else default_publish_dir()
+    agent_dir = base / agent
     size = write_json(agent_dir / "latest.json", payload, max_kb=max_kb)
 
     run_date = run_date or date.today()
@@ -66,13 +73,13 @@ def publish_item(
     slug: str,
     data: BaseModel | dict[str, Any],
     *,
-    site_data_dir: Path | str = DEFAULT_SITE_DATA_DIR,
+    publish_dir: Path | str | None = None,
     subdir: str = "",
     max_kb: float | None = None,
 ) -> int:
     """Write a per-item file, e.g. `<agent>/metros/<slug>.json`."""
     payload = _dump(data)
-    base = Path(site_data_dir) / agent
+    base = (Path(publish_dir) if publish_dir is not None else default_publish_dir()) / agent
     if subdir:
         base = base / subdir
     return write_json(base / f"{slug}.json", payload, max_kb=max_kb)

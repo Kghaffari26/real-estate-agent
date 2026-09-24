@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from agents.real_estate.fetch_permits import CbsaPermits, PermitsParseError, parse_cbsa_file
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "real_estate"
 
 # Minimal fixture matching the documented layout: a title line, a rule
 # line, then a header row (first cell "CSA") with CBSA, Name, and five
@@ -45,6 +49,20 @@ def test_parse_cbsa_file_returns_records_in_order():
             permits_5plus=272,
         ),
     ]
+
+
+def test_parse_cbsa_file_reads_committed_fixture_file():
+    text = (FIXTURES_DIR / "permits_cbsa_sample.txt").read_text()
+    records = parse_cbsa_file(text)
+
+    assert len(records) == 3
+    denver = next(r for r in records if r.cbsa == "19740")
+    assert denver.name == "Denver-Aurora-Lakewood CO"
+    assert denver.permits_total == 520
+    assert denver.permits_1unit == 360
+    assert denver.permits_2unit == 8
+    assert denver.permits_3to4unit == 6
+    assert denver.permits_5plus == 146
 
 
 def test_parse_cbsa_file_header_check_is_case_insensitive():

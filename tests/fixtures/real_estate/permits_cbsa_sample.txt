@@ -1,0 +1,6 @@
+Table 1. New Privately-Owned Housing Units Authorized Unadjusted By CBSA
+------------------------------------------------------------------------
+CSA,CBSA,Name,Bldgs,Units,Value,Bldgs,Units,Value,Bldgs,Units,Value,Bldgs,Units,Value,Bldgs,Units,Value
+122,26420,Houston-The Woodlands-Sugar Land TX,900,1200,100000,800,850,80000,10,20,1000,5,15,500,85,315,18500
+520,12060,Atlanta-Sandy Springs-Alpharetta GA,700,950,90000,600,650,60000,8,16,800,4,12,400,76,272,29200
+216,19740,Denver-Aurora-Lakewood CO,400,520,50000,350,360,36000,4,8,400,2,6,200,44,146,13600

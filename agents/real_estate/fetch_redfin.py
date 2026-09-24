@@ -29,8 +29,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import polars as pl
-
-from core.http import HTTPClient
+from agents_core.http import HTTPClient
 
 METRO_URL = (
     "https://redfin-public-data.s3.us-west-2.amazonaws.com/redfin_market_tracker/"

@@ -16,7 +16,50 @@ that spec, plus what's blocked and why: `STATUS.md`.
 
 ## Sample output
 
-SAMPLE_PLACEHOLDER
+From the first real run (2026-09-26), `public-data/metros/austin-tx.json`, abridged:
+
+```json
+{
+  "slug": "austin-tx",
+  "name": "Austin, TX",
+  "cbsa": "12420",
+  "data_through": "2026-05-31",
+  "latest": {
+    "median_sale_price": {
+      "value": 447540.0,
+      "yoy": 0.005707865168539383,
+      "trend_3m": "up"
+    },
+    "inventory": {
+      "value": 15220.0,
+      "yoy": -0.08873188839659918,
+      "trend_3m": "up"
+    }
+  },
+  "temperature": {
+    "score": 16,
+    "label": "Cold"
+  },
+  "market_type": "Balanced",
+  "flags": [
+    "rent_outpacing"
+  ],
+  "brief": {
+    "text": "Austin's rental market shows mixed signals through May 2026. Median home prices rose 0.6% year-over-year to $447,540, while inventory fell 8.9% to 15,220 listings. Rent declined 2.3% to $1,608/month, though rent growth is outpacing home values. The market remains balanced with 5.2 months of supply and a 97.6% sale-to-list ratio.",
+    "key_points": [
+      "Inventory down 8.9% year-over-year",
+      "Home prices up 0.6% to $447,540",
+      "Rent growth outpacing home values"
+    ],
+    "narrative_source": "llm",
+    "model": "claude-haiku-4-5-20251001",
+    "reused": true
+  }
+}
+```
+
+The brief is Claude's (Haiku 4.5, via the Batch API), and every number in it was checked
+against the facts `compute.py` produced before it was published.
 
 ## How it works
 
@@ -89,7 +132,19 @@ and force-pushes `public-data/` to the `data` branch.
 
 ## Costs
 
-COSTS_PLACEHOLDER
+The first real run (all 50 metro briefs plus the national brief, from an empty
+cache) cost **$0.0457**, logged in `data/costs.jsonl`:
+
+| Calls | Tier / mode | Cost |
+|---|---|---|
+| 50 metro briefs | fast (Haiku 4.5), Batch API | $0.0367 |
+| 2 guard retries | fast, synchronous | $0.0031 |
+| 1 national brief | smart (Sonnet 5), synchronous | $0.0059 |
+
+The immediate second run cost $0.00 (0 calls, every brief reused). Weekly
+runs where only the mortgage rate moved regenerate just the national brief
+(about $0.006). Every run is capped at `MAX_RUN_USD=0.50`
+(agents-core's `CostTracker` fails the run before it would cross that).
 
 ## Tests
 

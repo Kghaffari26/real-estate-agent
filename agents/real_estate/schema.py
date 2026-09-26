@@ -1,8 +1,11 @@
 """Pydantic output models — the site contract (SPEC_REAL_ESTATE.md §6).
 
-Exported to `schemas/real_estate.schema.json` (see
-`scripts/export_re_schema.py`) so the site and the pipeline can never
-silently drift apart.
+`IndexOutput` is the agent's `latest.json` (an `agents_core.schema.AgentOutput`,
+so its `meta` block is agents-core's shared `RunMeta`); `MetroDetailOutput` is
+each `metros/<slug>.json`. agents-core's runner publishes `IndexOutput`'s JSON
+Schema as `schema.json` on the data branch; `scripts/export_re_schema.py` also
+writes a combined index + metro-detail schema to `schemas/real_estate.schema.json`
+so the site and the pipeline can never silently drift apart.
 """
 
 from __future__ import annotations
@@ -12,10 +15,9 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Literal
 
-from agents_core.schema import Citation, RunMeta
+from agents_core.schema import AgentOutput, KeyStat, NarrativeSource
 from pydantic import BaseModel, Field
 
-NarrativeSource = Literal["llm", "template"]
 GoodDirection = Literal["up", "down", "neutral"]
 Trend = Literal["up", "down", "flat"]
 Severity = Literal["info", "notable", "major"]
@@ -40,13 +42,13 @@ class PermitsValue(BaseModel):
     yoy_12m: float | None = None
 
 
-class KeyStat(BaseModel):
-    label: str
-    value: float | int
-    format: str
-    delta: float | None = None
-    delta_format: str | None = None
-    good_direction: GoodDirection = "neutral"
+class Citation(BaseModel):
+    """A source attribution on a brief or in `sources` (§6.1). Deliberately not
+    agents-core's `Citation` (source/url/note): §6's shape is name/url/attribution."""
+
+    name: str
+    url: str
+    attribution: str | None = None
 
 
 class MetricRegistryEntry(BaseModel):
@@ -57,6 +59,13 @@ class MetricRegistryEntry(BaseModel):
     good_direction: GoodDirection
     source: str
     note: str | None = None
+
+
+class BriefDraft(BaseModel):
+    """What the LLM returns (structured output); code adds citations/metadata."""
+
+    text: str
+    key_points: list[str]
 
 
 class Brief(BaseModel):
@@ -176,8 +185,7 @@ class Movers(BaseModel):
     temperature_bottom: list[MoverEntry] = Field(default_factory=list)
 
 
-class IndexOutput(BaseModel):
-    meta: RunMeta
+class IndexOutput(AgentOutput):
     headline: str
     key_stats: list[KeyStat]
     data_through: date

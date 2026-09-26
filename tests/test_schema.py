@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
-from agents_core.publish import PublishSizeError, write_json
-from agents_core.schema import Citation, RunMeta
+from agents_core.schema import ModelUsage, RunMeta, Source
 from pydantic import ValidationError
 
+from agents.real_estate.agent import json_size
 from agents.real_estate.schema import (
     AffordabilityOut,
     AlertOut,
     Brief,
     CaseShiller,
+    Citation,
     ConstructionSeriesValue,
     FlagOut,
     IndexOutput,
@@ -35,10 +37,15 @@ from agents.real_estate.schema import (
 def _run_meta() -> RunMeta:
     return RunMeta(
         agent="real_estate",
-        started_at=datetime(2026, 9, 24, 12, 0, 0),
-        finished_at=datetime(2026, 9, 24, 12, 5, 0),
-        cost_usd=0.0,
+        schema_version="1.0.0",
+        run_id="2026-09-24T12-00-00Z-abc123",
+        started_at=datetime(2026, 9, 24, 12, 0, 0, tzinfo=UTC),
+        finished_at=datetime(2026, 9, 24, 12, 5, 0, tzinfo=UTC),
         status="ok",
+        data_changed=True,
+        cost_usd=0.0,
+        model_usage=ModelUsage(),
+        sources=[Source(name="Redfin", url="https://redfin.com", retrieved_at=datetime(2026, 9, 24, tzinfo=UTC))],
     )
 
 
@@ -197,33 +204,30 @@ def test_index_output_rejects_invalid_change_kind():
         IndexOutput.model_validate(payload)
 
 
-# -- agents_core.publish.write_json size limits -----------------------------------
+# -- published size accounting -------------------------------------------------
 
 
-def test_write_json_writes_file_under_the_limit(tmp_path):
-    path = tmp_path / "small.json"
-    size = write_json(path, {"a": 1}, max_kb=10)
-    assert path.exists()
-    assert size == len(json.dumps({"a": 1}, separators=(",", ":")).encode("utf-8"))
+def test_json_size_matches_compact_json_bytes():
+    assert json_size({"a": 1}) == len(json.dumps({"a": 1}, separators=(",", ":")).encode("utf-8"))
 
 
-def test_write_json_raises_publish_size_error_over_the_limit(tmp_path):
-    path = tmp_path / "big.json"
-    big_payload = {"data": "x" * 5000}
-    with pytest.raises(PublishSizeError):
-        write_json(path, big_payload, max_kb=1)
+def test_json_size_of_a_model_counts_utf8_bytes():
+    brief = _brief().model_copy(update={"text": "é" * 10})
+    assert json_size(brief) == len(json.dumps(brief.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False).encode())
 
 
-def test_write_json_does_not_write_file_when_over_the_limit(tmp_path):
-    path = tmp_path / "big.json"
-    big_payload = {"data": "x" * 5000}
-    with pytest.raises(PublishSizeError):
-        write_json(path, big_payload, max_kb=1)
-    assert not path.exists()
+def test_index_output_meta_is_agents_core_run_meta():
+    payload = _minimal_index_output().model_dump(mode="json")
+    assert payload["meta"]["finished_at"] == "2026-09-24T12:05:00Z"
+    payload["meta"]["warnings"] = []  # not part of the shared RunMeta
+    with pytest.raises(ValidationError):
+        IndexOutput.model_validate(payload)
 
 
-def test_write_json_no_limit_always_writes(tmp_path):
-    path = tmp_path / "unbounded.json"
-    big_payload = {"data": "x" * 5000}
-    write_json(path, big_payload, max_kb=None)
-    assert path.exists()
+def test_committed_json_schema_is_current(tmp_path):
+    from agents.real_estate.schema import export_json_schema
+
+    out = tmp_path / "schema.json"
+    export_json_schema(out)
+    committed = Path(__file__).parent.parent / "schemas" / "real_estate.schema.json"
+    assert out.read_text() == committed.read_text(), "run scripts/export_re_schema.py"

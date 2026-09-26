@@ -1,7 +1,7 @@
 """Fetch FRED (Federal Reserve Economic Data) national series.
 
 A thin wrapper around FRED's `series/observations` endpoint, with the
-on-disk TTL cache from `agents_core.http.HTTPClient` doing double duty as
+on-disk TTL cache from `agents_core.http.Http` doing double duty as
 change detection: if the cache hasn't expired, no request is made at all,
 and when one is made the raw observations are what determine whether a
 series actually moved since the last run (compared upstream against
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 
-from agents_core.http import HTTPClient
+from agents_core.http import Http
 
 BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 
@@ -32,7 +32,7 @@ class FredError(RuntimeError):
 
 
 def fetch_series(
-    client: HTTPClient,
+    http: Http,
     series_id: str,
     *,
     api_key: str | None = None,
@@ -50,7 +50,7 @@ def fetch_series(
         "file_type": "json",
         "observation_start": observation_start,
     }
-    data = client.get_json(BASE_URL, params=params, ttl_seconds=ttl_seconds)
+    data = http.get_json(BASE_URL, params=params, ttl_seconds=ttl_seconds)
     observations = data.get("observations")
     if observations is None:
         raise FredError(f"unexpected FRED response for {series_id}: {data}")
@@ -89,8 +89,8 @@ def value_n_days_before(
 
 
 def fetch_all_national(
-    client: HTTPClient, api_key: str | None = None
+    http: Http, api_key: str | None = None
 ) -> dict[str, list[dict[str, str]]]:
     """Fetch every series in `SERIES`. A failure on any one series propagates
     (unlike Zillow/permits, FRED has no optional-fallback path in the spec)."""
-    return {key: fetch_series(client, series_id, api_key=api_key) for key, series_id in SERIES.items()}
+    return {key: fetch_series(http, series_id, api_key=api_key) for key, series_id in SERIES.items()}

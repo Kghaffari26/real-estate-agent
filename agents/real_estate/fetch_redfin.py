@@ -12,12 +12,12 @@ IS_SEASONALLY_ADJUSTED as a bare true/false) were confirmed against a live
 pull of both files from the Redfin Data Center.
 
 `PARENT_METRO_REGION_METRO_CODE` is carried through as `redfin_metro_code`
-— it is Redfin's own internal metro identifier, close to but *not* the OMB
-CBSA code (confirmed against known CBSA codes: Redfin gives Chicago
-16984 vs. the real CBSA 16980, Los Angeles 31084 vs. 31080, New York
-35614 vs. 35620). Never join it against Census or ACS data as if it were
-a CBSA code; `config/metros.toml`'s hand-reviewed `cbsa` field is the only
-trustworthy CBSA source in this codebase.
+— it is often the OMB CBSA code, but for Redfin's metro *divisions* it's the
+division code (Chicago 16984 in CBSA 16980, Los Angeles 31084 in 31080, New
+York 35614 in 35620), and some are pre-2023 codes (Cleveland 17460, now
+17410). Never join it against Census or ACS data as if it were a CBSA code;
+`config/metros.toml`'s `cbsa` field (Census Gazetteer name match, see
+`scripts/build_metro_config.py`) is the only trustworthy CBSA source here.
 """
 
 from __future__ import annotations
@@ -29,7 +29,9 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import polars as pl
-from agents_core.http import HTTPClient
+from agents_core.http import Http
+
+from agents.real_estate.download import DownloadResult, download
 
 METRO_URL = (
     "https://redfin-public-data.s3.us-west-2.amazonaws.com/redfin_market_tracker/"
@@ -110,12 +112,12 @@ class FetchResult:
     data_through: str | None  # ISO date of the latest PERIOD_END, if known
 
 
-def download_metro_file(client: HTTPClient, force: bool = False):
-    return client.download(METRO_URL, METRO_GZ_PATH, force=force)
+def download_metro_file(http: Http, force: bool = False) -> DownloadResult:
+    return download(http, METRO_URL, METRO_GZ_PATH, force=force)
 
 
-def download_national_file(client: HTTPClient, force: bool = False):
-    return client.download(NATIONAL_URL, NATIONAL_GZ_PATH, force=force)
+def download_national_file(http: Http, force: bool = False) -> DownloadResult:
+    return download(http, NATIONAL_URL, NATIONAL_GZ_PATH, force=force)
 
 
 def _assert_columns(columns: list[str]) -> None:
@@ -199,13 +201,13 @@ def _filter_to_parquet(
 
 
 def fetch_metro(
-    client: HTTPClient,
+    http: Http,
     *,
     tracked_regions: set[str] | None = None,
     history_months: int = 36,
     force: bool = False,
 ) -> FetchResult:
-    dl = download_metro_file(client, force=force)
+    dl = download_metro_file(http, force=force)
     if not dl.modified and METRO_PARQUET_PATH.exists():
         data_through = (
             pl.scan_parquet(METRO_PARQUET_PATH).select(pl.col("period_end").max()).collect()[0, 0]
@@ -222,12 +224,12 @@ def fetch_metro(
 
 
 def fetch_national(
-    client: HTTPClient,
+    http: Http,
     *,
     history_months: int = 36,
     force: bool = False,
 ) -> FetchResult:
-    dl = download_national_file(client, force=force)
+    dl = download_national_file(http, force=force)
     if not dl.modified and NATIONAL_PARQUET_PATH.exists():
         data_through = (
             pl.scan_parquet(NATIONAL_PARQUET_PATH).select(pl.col("period_end").max()).collect()[0, 0]

@@ -1,9 +1,8 @@
 """Fetch Zillow Research's metro ZHVI and ZORI CSVs.
 
 Both are wide CSVs: one row per region (keyed by Zillow's `RegionID`), one
-column per month (`YYYY-MM-DD`). Small enough for a plain cached download
-(no conditional-GET bookkeeping needed, unlike the much larger Redfin
-file). This module melts them to long format and keeps only the tracked
+column per month (`YYYY-MM-DD`). Downloaded with the same conditional GET as Redfin's files
+(`agents/real_estate/download.py`). This module melts them to long format and keeps only the tracked
 RegionIDs and the trailing `history_months` months.
 """
 
@@ -13,7 +12,9 @@ import re
 from pathlib import Path
 
 import polars as pl
-from agents_core.http import HTTPClient
+from agents_core.http import Http
+
+from agents.real_estate.download import DownloadResult, download
 
 ZHVI_URL = (
     "https://files.zillowstatic.com/research/public_csvs/zhvi/"
@@ -32,12 +33,12 @@ class ZillowFormatError(RuntimeError):
     """The CSV doesn't look like a Zillow Research wide export."""
 
 
-def download_zhvi(client: HTTPClient, force: bool = False):
-    return client.download(ZHVI_URL, ZHVI_CSV_PATH, force=force)
+def download_zhvi(http: Http, force: bool = False) -> DownloadResult:
+    return download(http, ZHVI_URL, ZHVI_CSV_PATH, force=force)
 
 
-def download_zori(client: HTTPClient, force: bool = False):
-    return client.download(ZORI_URL, ZORI_CSV_PATH, force=force)
+def download_zori(http: Http, force: bool = False) -> DownloadResult:
+    return download(http, ZORI_URL, ZORI_CSV_PATH, force=force)
 
 
 def load_long(

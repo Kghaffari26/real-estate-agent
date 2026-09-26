@@ -1,16 +1,13 @@
 """Evals for the real estate agent's briefs (SPEC_REAL_ESTATE.md §11).
 
 Runs entirely offline against `evals/real_estate/fixtures.py` — no
-network or LLM calls. Evaluates whatever `analyze.generate_metro_brief`/
-`generate_national_brief` currently produce; today that's always the
-deterministic templates (`narrative_source: "template"`, see
-STATUS.md — the LLM path isn't wired up yet), but nothing here assumes
-which one it is.
+network or LLM calls. Evaluates `analyze.generate_metro_brief`/
+`generate_national_brief`, i.e. the deterministic template briefs every LLM
+brief falls back to (`narrative_source: "template"`).
 
-The spec's "Flag coverage" eval calls for a fast-tier LLM judge; since no
-LLM is wired up (and evals must stay free/offline per this session's cost
-rules), that check is a keyword-based substitute here and is reported
-honestly as a lower-confidence proxy, not a drop-in replacement.
+The spec's "Flag coverage" eval calls for a fast-tier LLM judge; to keep the
+suite free and offline that check is a keyword-based substitute here and is
+reported honestly as a lower-confidence proxy, not a drop-in replacement.
 
     uv run python -m evals.real_estate.run
 """

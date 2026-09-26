@@ -7,8 +7,9 @@ import httpx
 import polars as pl
 import pytest
 import respx
-from agents_core.http import HTTPClient
+from agents_core.http import Http, HttpError
 
+from agents.real_estate.download import download
 from agents.real_estate.fetch_redfin import (
     COLUMN_RENAME,
     RedfinColumnsMissing,
@@ -203,24 +204,49 @@ def test_download_reports_modified_true_on_200_then_false_on_304(tmp_path):
     url = "https://example.com/redfin_metro_market_tracker.tsv000.gz"
     dest = tmp_path / "cache" / "redfin_metro_market_tracker.tsv.gz"
 
-    respx.get(url).mock(
+    route = respx.get(url).mock(
         return_value=httpx.Response(
             200,
             content=b"some,gzipped,bytes",
             headers={"ETag": '"abc123"', "Last-Modified": "Wed, 01 Sep 2026 00:00:00 GMT"},
         )
     )
-    with HTTPClient(cache_dir=tmp_path / "http_cache") as client:
-        first = client.download(url, dest)
+    with Http(cache_dir=tmp_path / "http_cache") as http:
+        first = download(http, url, dest)
         assert first.modified is True
         assert first.status_code == 200
         assert first.etag == '"abc123"'
         assert dest.read_bytes() == b"some,gzipped,bytes"
 
-        respx.get(url).mock(return_value=httpx.Response(304))
-        second = client.download(url, dest)
+        route.mock(return_value=httpx.Response(304))
+        second = download(http, url, dest)
         assert second.modified is False
         assert second.status_code == 304
+        # the conditional headers came from the first response
+        sent = route.calls.last.request.headers
+        assert sent["If-None-Match"] == '"abc123"'
+        assert sent["If-Modified-Since"] == "Wed, 01 Sep 2026 00:00:00 GMT"
         # dest untouched, still has the original content and the etag carries over
         assert dest.read_bytes() == b"some,gzipped,bytes"
         assert second.etag == '"abc123"'
+    # Large files never go through Http's base64 JSON cache.
+    assert not (tmp_path / "http_cache").exists()
+
+
+@respx.mock
+def test_download_force_skips_conditional_headers(tmp_path):
+    url = "https://example.com/f.gz"
+    dest = tmp_path / "f.gz"
+    route = respx.get(url).mock(return_value=httpx.Response(200, content=b"x", headers={"ETag": '"e"'}))
+    with Http(cache_dir=tmp_path / "http_cache") as http:
+        download(http, url, dest)
+        download(http, url, dest, force=True)
+    assert "If-None-Match" not in route.calls.last.request.headers
+
+
+@respx.mock
+def test_download_304_without_a_local_file_raises(tmp_path):
+    url = "https://example.com/f.gz"
+    respx.get(url).mock(return_value=httpx.Response(304))
+    with Http(cache_dir=tmp_path / "http_cache") as http, pytest.raises(HttpError):
+        download(http, url, tmp_path / "missing.gz")

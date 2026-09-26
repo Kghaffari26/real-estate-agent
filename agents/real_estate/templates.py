@@ -1,9 +1,9 @@
 """Deterministic headline and brief generation (SPEC_REAL_ESTATE.md §5.6,
-§7.6). In this build these are the *only* brief path — no LLM calls are
-made anywhere in the pipeline — so every brief's `narrative_source` is
-`"template"`. `agents/real_estate/analyze.py` is the seam where the
-spec's Batch API path (§7) plugs in later without changing this module's
-contract: a facts dict in, `{"text": ..., "key_points": [...]}` out.
+§7.6). The headline is always built here (never by the LLM). The briefs are
+the template fallback `agents/real_estate/analyze.py` uses when an LLM brief
+fails the number guard twice (`narrative_source: "template"`), and what the
+offline evals exercise. Contract: a facts dict in, `{"text": ..., "key_points":
+[...]}` out.
 """
 
 from __future__ import annotations

@@ -13,7 +13,7 @@ import json
 import os
 from pathlib import Path
 
-from agents_core.http import HTTPClient
+from agents_core.http import Http
 
 CACHE_PATH = Path("data/real_estate/acs_income.json")
 GEO_COLUMN = "metropolitan statistical area/micropolitan statistical area"
@@ -24,7 +24,7 @@ class AcsIncomeError(RuntimeError):
 
 
 def fetch_income_by_cbsa(
-    client: HTTPClient, year: int, api_key: str | None = None
+    http: Http, year: int, api_key: str | None = None
 ) -> dict[str, int]:
     """Returns `{cbsa_code: median_household_income}` for every metro/micro
     area the ACS 1-year API reports (SPEC §3.5)."""
@@ -34,7 +34,15 @@ def fetch_income_by_cbsa(
     if api_key:
         params["key"] = api_key
 
-    rows = client.get_json(url, params=params, ttl_seconds=3600 * 24 * 365)
+    # No Http TTL cache: results are cached in CACHE_PATH instead, and a cached
+    # error page (the key is excluded from Http's cache key) would outlive a fix.
+    response = http.get(url, params=params, ttl_seconds=0)
+    try:
+        rows = response.json()
+    except ValueError as exc:
+        # The API redirects keyless/invalid-key requests to an HTML page.
+        hint = "" if api_key else " (the Census API now requires CENSUS_API_KEY)"
+        raise AcsIncomeError(f"ACS {year}: non-JSON response{hint}") from exc
     if not rows or len(rows) < 2:
         raise AcsIncomeError(f"unexpected ACS response: {rows!r}")
     header, *data_rows = rows

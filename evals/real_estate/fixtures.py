@@ -2,10 +2,11 @@
 flat, missing-Zillow, and big-inventory-surge scenarios, plus 2 national
 facts dicts, for `evals/real_estate/run.py`.
 
-These evaluate whatever's behind `analyze.generate_metro_brief`/
-`generate_national_brief` today — currently always the deterministic
-templates (`narrative_source: "template"`), since no LLM path is wired up
-yet (see STATUS.md). The fixtures and checks don't assume which one it is.
+These evaluate the deterministic template briefs (`analyze.generate_metro_brief`/
+`generate_national_brief`) — the fallback behind every LLM brief — so the
+suite stays free and offline. The LLM path's guard/fallback wiring is covered by
+`tests/test_analyze_batch.py`; its real output is checked by the number guard
+on every run.
 """
 
 from __future__ import annotations

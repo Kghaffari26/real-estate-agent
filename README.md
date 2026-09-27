@@ -7,7 +7,7 @@ in Python. Claude writes the narrative (a brief per metro, a national summary,
 and a tool-using **metro investigator** that explains *why* a market is moving),
 and every sentence it writes is checked number-by-number against the computed
 facts before it's published. Built on
-[`agents-core`](https://github.com/Kghaffari26/agents-core) **v0.3.0**, publishing
+[`agents-core`](https://github.com/Kghaffari26/agents-core) **v0.3.1**, publishing
 to its data-branch contract for a portfolio site.
 
 ## Highlights
@@ -40,7 +40,7 @@ to its data-branch contract for a portfolio site.
   | investigator (trajectory) | 6 | 1.000 | required/forbidden tools, max steps, stop reason, guard, 4–6 sentences, cites trigger: all 1.000; **LLM-judge quality 0.833** | $0.123 |
 
   A PR workflow (`.github/workflows/evals.yml` → agents-core's
-  `run-evals.yml@v0.3.0`, $0.25 cap per suite) fails on a score drop over 0.10.
+  `run-evals.yml@v0.3.1`, $0.25 cap per suite, $0.40 total) fails on a score drop over 0.10.
   The 6 investigator trajectories are recorded and replay offline in `pytest`.
 - **Tracing.** Every run publishes `trace.json` (`agents_core.tracing`): spans for
   each phase, this agent's `fetch:redfin` / `metro_briefs` / `national_brief` /
@@ -139,7 +139,7 @@ fetch (conditional GET) → filter/normalize → compute (YoY/MoM/trend/
 ## Setup
 
 ```bash
-uv sync                 # Python 3.12; installs agents-core v0.3.0 from git
+uv sync                 # Python 3.12; installs agents-core v0.3.1 from git
 cp .env.example .env    # ANTHROPIC_API_KEY (or AGENTS_ANTHROPIC_API_KEY), FRED_API_KEY, CENSUS_API_KEY
 ```
 
@@ -168,7 +168,7 @@ public-data/
 ```
 
 In CI, `.github/workflows/agent-real-estate.yml` runs this weekly (Fridays
-08:00 PT) through agents-core's reusable `run-agent.yml@v0.3.0`. That workflow
+08:00 PT) through agents-core's reusable `run-agent.yml@v0.3.1`. That workflow
 declares no permissions of its own, so the calling job grants
 `contents: write`; no `issues: write`, because this agent opens no issues. It
 restores the `data` branch into `public-data/`, runs the agent, commits `data/`

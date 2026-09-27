@@ -3,6 +3,17 @@
 Last updated 2026-09-27 by an unattended Claude Code session. Judgment calls
 are logged one per line in `DECISIONS.md` ("Session 4").
 
+## agents-core v0.3.1 (2026-09-27, session 5)
+
+- Pinned `tag = "v0.3.1"` (locked to `dba5e86`); workflows use
+  `run-agent.yml@v0.3.1` and `run-evals.yml@v0.3.1`.
+- `evals.yml` adds `total_max_usd: "0.40"` across all three suites (keeps
+  `max_usd: "0.25"` per suite), so a worst-case gate run is $0.40, not $0.75.
+- Nothing else to remove: this repo never set a `temperature` (tier, call or
+  judge) and never had a spend-splitting eval wrapper, so no fake asserted
+  `kwargs["temperature"]` and no live smoke call was needed ($0 spent).
+- 232 tests and ruff pass; the replayed investigator trajectories still match.
+
 ## Summary
 
 **Done this session:**

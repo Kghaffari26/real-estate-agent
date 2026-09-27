@@ -1,7 +1,7 @@
 # real-estate-agent
 
 A single scheduled data agent (`real_estate`) built on the external
-[`agents-core`](https://github.com/Kghaffari26/agents-core) framework (v0.3.0).
+[`agents-core`](https://github.com/Kghaffari26/agents-core) framework (v0.3.1).
 Full design: `docs/specs/SPEC_REAL_ESTATE.md` (§6.3 covers the investigator
 and the other additive fields; `docs/specs/BUILD_PLAN.md` shows how this fits a
 larger multi-agent plan). Current status against the spec, including what's
@@ -34,7 +34,7 @@ real-estate-agent/
 └── tests/                  # HTTP mocked (respx), fake or replayed Anthropic client, fixtures in tests/fixtures/
 ```
 
-The framework is **`agents-core` v0.3.0**, installed from git by tag
+The framework is **`agents-core` v0.3.1**, installed from git by tag
 (`pyproject.toml`; it requires Python 3.12). Its README/CHANGELOG define the
 agent contract. Don't modify or vendor it here; if it's missing something,
 list it in `STATUS.md`'s "Needed from agents-core".
@@ -50,10 +50,10 @@ publishes to `public-data/`: `latest.json`, `metros/<slug>.json`,
 `costs-summary.json`, `schema.json`, `trace.json`, `trace.schema.json`.
 
 `.github/workflows/agent-real-estate.yml` calls agents-core's reusable
-`run-agent.yml@v0.3.0`. That workflow restores the `data` branch into
+`run-agent.yml@v0.3.1`. That workflow restores the `data` branch into
 `public-data/`, runs the agent, commits `data/` back to the branch and
 force-pushes `public-data/` to the `data` branch. `.github/workflows/evals.yml`
-calls `run-evals.yml@v0.3.0` on pull requests. **The reusable workflows declare
+calls `run-evals.yml@v0.3.1` on pull requests. **The reusable workflows declare
 no permissions**; each calling job must grant exactly what it needs:
 - `contents: write` for the agent;
 - `issues: write` only if the agent ever calls `ctx.alert` (it doesn't);
@@ -145,7 +145,7 @@ no permissions**; each calling job must grant exactly what it needs:
 ## Commands
 
 ```bash
-uv sync                                        # install (agents-core v0.3.0 from git)
+uv sync                                        # install (agents-core v0.3.1 from git)
 uv run agents-run real_estate --dry-run        # fetch + compute, per-metro table + investigation targets, zero LLM calls
 uv run agents-run real_estate                  # real run (briefs + investigations), publishes to public-data/
 uv run agents-run real_estate --force-briefs   # regenerate every brief and investigation regardless of hashes

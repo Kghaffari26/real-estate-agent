@@ -54,3 +54,11 @@ One line per consequential judgment call made while working unattended.
 - Eval gate: `regression_threshold` 0.10 rather than the default 0.05, because one judge step on one of 6 cases moves the mean by 0.042. $0.25 cap per suite (a full investigator run is ~$0.13).
 - Recorded the 6 investigator trajectories from the live eval run and replay them in pytest with `ReplayClient(strict=True)`. They're re-recorded whenever the eval runs with `RE_SAVE_TRAJECTORIES`.
 - Pushed to `main` as asked, fast-forwarding from the session branch `claude/hopeful-ride-1go4a0`, which was pushed as well.
+
+## Session 5 (2026-09-27): agents-core v0.3.1
+
+- Pinned with `tag = "v0.3.1"` (uv wrote `rev =`; switched to `tag` to match the previous pin).
+- No temperature to re-enable: none was ever set here (no tier override, no per-call value, both `LLMJudge`s use tier defaults), and I didn't add one, since that would change judge scores and need an eval re-baseline outside this task. So no live smoke call was made ($0).
+- No spend-splitting wrapper existed to replace; added `total_max_usd: "0.40"` to `evals.yml` anyway (per-suite $0.25 stays) because it bounds the gate at $0.40 instead of 3 × $0.25, with headroom over a ~$0.16 full run.
+- Didn't append an eval history line: nothing in the prompts, tools or guards changed, and the replay tests confirm the recorded trajectories still pass on v0.3.1.
+- Pushed to `main` as asked, fast-forwarding from the session branch `claude/kind-brown-pj1pdt`, which was pushed as well.

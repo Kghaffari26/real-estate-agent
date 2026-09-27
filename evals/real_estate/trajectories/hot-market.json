@@ -16,11 +16,11 @@
       },
       "content": [
         {
-          "text": "I'll investigate why St. Louis's median price is up 7.0% YoY. Let me start by examining the metro's recent history, comparing it to peers, and checking national context.",
+          "text": "I'll investigate why St. Louis is experiencing a 7.0% YoY median price increase. Let me gather data on the metro's conditions, peer comparisons, and national context.",
           "type": "text"
         },
         {
-          "id": "toolu_01MgwCUKDwH9a1kJWYvXCs5Z",
+          "id": "toolu_01Cybvd9DXNGmBVvsczh6SzB",
           "caller": {
             "type": "direct"
           },
@@ -39,7 +39,7 @@
           "type": "tool_use"
         },
         {
-          "id": "toolu_01D8tsFzFyc42kWZLxa24ght",
+          "id": "toolu_016JcKq9TJz4NqtqJUA7KZ7G",
           "caller": {
             "type": "direct"
           },
@@ -51,31 +51,7 @@
           "type": "tool_use"
         },
         {
-          "id": "toolu_01VEhgSMi3peqCo8Ef6agz3W",
-          "caller": {
-            "type": "direct"
-          },
-          "input": {
-            "slug": "st-louis-mo",
-            "metric": "homes_sold"
-          },
-          "name": "compare_to_peers",
-          "type": "tool_use"
-        },
-        {
-          "id": "toolu_01A4y8SzgZLp9hs1MKepEYAg",
-          "caller": {
-            "type": "direct"
-          },
-          "input": {
-            "slug": "st-louis-mo",
-            "metric": "inventory"
-          },
-          "name": "compare_to_peers",
-          "type": "tool_use"
-        },
-        {
-          "id": "toolu_01YanzgSYCVAfCBBXSF37Jao",
+          "id": "toolu_01UWMCQrMJfAHp6MZL7aodtQ",
           "caller": {
             "type": "direct"
           },
@@ -83,18 +59,29 @@
             "series": [
               "median_sale_price",
               "homes_sold",
-              "inventory",
-              "median_dom"
+              "new_listings",
+              "inventory"
             ]
           },
           "name": "get_national_context",
+          "type": "tool_use"
+        },
+        {
+          "id": "toolu_01UGBinnSjXEeWTdrR9oypiV",
+          "caller": {
+            "type": "direct"
+          },
+          "input": {
+            "weeks": 52
+          },
+          "name": "get_rate_history",
           "type": "tool_use"
         }
       ],
       "stop_reason": "tool_use",
       "usage": {
-        "input_tokens": 2178,
-        "output_tokens": 400,
+        "input_tokens": 2234,
+        "output_tokens": 316,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0
       }
@@ -113,22 +100,11 @@
       },
       "content": [
         {
-          "text": "Now let me look at mortgage rates to understand the financing context, and examine similar episodes in St. Louis's own history:",
+          "text": "Let me look deeper into similar episodes to understand the demand-supply dynamics better.",
           "type": "text"
         },
         {
-          "id": "toolu_01VvT3HJe6sTNMWMzUrRVHfp",
-          "caller": {
-            "type": "direct"
-          },
-          "input": {
-            "weeks": 52
-          },
-          "name": "get_rate_history",
-          "type": "tool_use"
-        },
-        {
-          "id": "toolu_01TAaVbFbqF8zk19WCeD7B79",
+          "id": "toolu_01GvtmStGzrA2hgiJBQKhMkK",
           "caller": {
             "type": "direct"
           },
@@ -143,8 +119,8 @@
       "stop_reason": "tool_use",
       "usage": {
         "input_tokens": 7,
-        "output_tokens": 144,
-        "cache_creation_input_tokens": 4407,
+        "output_tokens": 97,
+        "cache_creation_input_tokens": 4501,
         "cache_read_input_tokens": 0
       }
     },
@@ -162,19 +138,20 @@
       },
       "content": [
         {
-          "text": "Now I have a comprehensive picture. Let me analyze the data:\n\n**Key findings:**\n\n1. **Median price growth outpaces peers**: St. Louis's 7.0% YoY median price increase ranks #1 among its 6-metro peer group, which saw median 3.7% YoY growth. The current median price of $305,000 is at a 36-month high.\n\n2. **Supply-demand dynamic**: Despite strong price growth, homes sold fell 11.3% YoY (worse than peer median of -3.0%), while inventory actually grew 3.9% YoY (slightly below peer median 4.3%). This counterintuitive pattern—rising prices despite falling sales and modest inventory growth—suggests demand weakness.\n\n3. **Days on market normalized**: Median DOM is 21 days YoY (down 1.0 day from year-ago), returning to pre-pandemic levels, which indicates prices may have risen to clear shorter-term supply rather than reflect sustained demand strength.\n\n4. **Monthly payment stress**: The flags note monthly payment is up 15% YoY. Mortgage rates rose from 6.34% a year ago to 7.03% currently, a 0.69pp increase. This financing pressure likely dampened sales volume.\n\n5. **National context**: Nationally, median price is only up 2.2% YoY with inventory down 9.0% YoY. St. Louis's inventory growth (+3.9%) and stronger price appreciation (+7.0%) diverges from the tighter national picture.\n\n6. **Historical episodes**: Similar 7.0% YoY price moves occurred in 2025-04, 2025-07, and 2025-05, suggesting St. Louis has sustained elevated price growth over recent months, though peaking at 12.7% in August 2024.\n\nThe price growth appears driven by reduced supply relative to local demand, but that demand itself is weakening (sales down 11.3%). The combination of higher rates driving up monthly payments and falling sales volume suggests prices are adjusting upward to a new equilibrium in a less active market.",
+          "text": "Now I have comprehensive data. Let me analyze what's driving St. Louis's 7.0% median price increase:\n\n**Key Findings:**\n\n1. **Price Growth is Regional Leader**: St. Louis's 7.0% YoY price increase ranks it #1 among its five Midwest peers (Warren MI at 3.3%, Kansas City at 4.6%, Indianapolis at 2.8%, Columbus at 3.7%, Cincinnati at 4.8%). Its peer median is 3.7%, so St. Louis is outperforming.\n\n2. **Supply-Demand Imbalance**: \n   - Homes sold: -11.3% YoY (down significantly)\n   - New listings: -19.7% YoY (sharper decline)\n   - Inventory: +3.9% YoY (modest increase)\n   - Days on market: 21 days (only +1 day YoY, essentially unchanged)\n\n3. **National Context**: National median price is up only 2.2% YoY, while homes sold are down 4.6% and new listings down 6.9%. St. Louis is materially outpacing national appreciation despite similar demand weakness.\n\n4. **Rate Environment**: Mortgage rates have risen from 6.34% in early October 2025 to 7.03% currently, adding to affordability pressure.\n\n5. **Recent Month Volatility**: After bottoming at 275,000 in December 2025, prices rebounded sharply to 305,000 in May 2026 (a 10.9% single-month jump).\n\nThe data suggests this is a supply-driven story. While homes sold fell -11.3% nationally matched only by similar declines elsewhere, new listings declined even more steeply at -19.7%, creating the tightest supply relative to demand in St. Louis compared to its peers. Despite modest inventory growth, the severely constrained flow of new supply combined with falling sales volume creates upward price pressure.",
           "type": "text"
         },
         {
-          "id": "toolu_01Dx4pRDJozBBdNzHtTqjvuc",
+          "id": "toolu_01H5QTL6k6gajvF2NQ2GwEPR",
           "caller": {
             "type": "direct"
           },
           "input": {
-            "explanation": "St. Louis's median price of $305,000 is up 7.0% year-over-year, leading its five Midwest peers (which averaged 3.7% growth). This price appreciation occurs despite homes sold falling 11.3% YoY, indicating weakening transaction volume. Inventory grew modestly 3.9% YoY, nearly matching peer growth of 4.3%, while median days on market normalized to 21 days. The 15% rise in monthly payments—driven by mortgage rates increasing from 6.34% to 7.03% over the past year—likely dampened buyer demand. Unlike the national market where inventory fell 9.0% YoY, St. Louis's modest inventory growth coupled with sharply declining sales suggests prices have risen to clear available supply rather than reflect strong demand, representing a market adjustment to higher financing costs.",
+            "explanation": "St. Louis's 7.0% median price appreciation is the strongest among its five Midwest peers, which are averaging 3.7% YoY growth. The primary driver is a supply-demand imbalance: while homes sold fell 11.3% YoY, new listings declined even more sharply at 19.7% YoY, creating particularly tight inventory relative to demand compared to peer metros. Inventory itself rose 3.9% YoY but remains constrained relative to falling new supply, and days on market at 21 days shows no material loosening despite reduced sales volume. This supply-constrained dynamic is pushing prices upward even as the national market sees prices up only 2.2% YoY with similar demand weakness. Rising mortgage rates to 7.03% add pressure to affordability, potentially explaining why homes sold declined more steeply than new listings fell, creating an unusual supply squeeze that sustains price growth.",
             "cited_metrics": [
               "median_sale_price",
               "homes_sold",
+              "new_listings",
               "inventory",
               "median_dom"
             ]
@@ -185,10 +162,10 @@
       ],
       "stop_reason": "tool_use",
       "usage": {
-        "input_tokens": 7,
-        "output_tokens": 757,
-        "cache_creation_input_tokens": 1236,
-        "cache_read_input_tokens": 4407
+        "input_tokens": 5,
+        "output_tokens": 750,
+        "cache_creation_input_tokens": 371,
+        "cache_read_input_tokens": 4501
       }
     }
   ]

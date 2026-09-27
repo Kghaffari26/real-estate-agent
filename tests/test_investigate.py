@@ -137,6 +137,10 @@ def test_finish_requires_4_to_6_sentences_and_known_metric_keys():
         inv.InvestigationDraft(explanation="One. Two. Three.", cited_metrics=["inventory"])
     with pytest.raises(ValidationError):
         inv.InvestigationDraft(explanation=ok, cited_metrics=["mortgage_vibes"])
+    # computed multiples are rejected even when the number matches some fact
+    for bad in ("4.3 times", "3x", "twice", "three times"):
+        with pytest.raises(ValidationError, match="multiples"):
+            inv.InvestigationDraft(explanation=f"Prices grew {bad} the peers. B. C. D.", cited_metrics=["inventory"])
     # decimals and "U.S." don't end sentences
     assert inv.count_sentences("Prices fell 3.1% in the U.S. market. Inventory rose. A. B.") == 4
     assert inv.count_sentences("St. Louis prices rose. Ft. Myers too. Supply fell. Sales held.") == 4
@@ -300,4 +304,5 @@ def test_recorded_trajectories_replay_deterministically(case_id, tmp_path, monke
     assert set(case.expected["required_tools"]) <= set(result.tools_called())
     assert not set(case.expected["forbidden_tools"]) & set(result.tools_called())
     assert 4 <= inv.count_sentences(result.result.explanation) <= 6
-    assert verify_numbers(result.result.explanation, guard_facts({"task": inv.task_facts(target, world), "seen": box.seen})).ok
+    facts = guard_facts({"task": inv.task_facts(target, world), "seen": box.seen})
+    assert verify_numbers(result.result.explanation, facts, allow=inv.GUARD_ALLOW_LOOP).ok

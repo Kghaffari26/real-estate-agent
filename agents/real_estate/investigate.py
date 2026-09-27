@@ -41,13 +41,15 @@ from agents.real_estate import compute
 from agents.real_estate import metrics as metric_registry
 from agents.real_estate.analyze import GUARD_ALLOW, guard_facts
 
-PROMPT_VERSION = "investigator-2026-09-27.3"
+PROMPT_VERSION = "investigator-2026-09-27.4"
 MAX_TARGETS = 3
 TIER = "fast"
 MAX_TOKENS = 1200
 BUDGET = LoopBudget(max_steps=8, max_usd=0.05, max_seconds=180)
 N_PEERS = 5
 MIN_SENTENCES, MAX_SENTENCES = 4, 6
+# The tools' own fixed windows (find_similar_episodes searches "the past 36 months").
+GUARD_ALLOW_LOOP = (*GUARD_ALLOW, "36 months", "36-month")
 
 MetricKey = Literal[
     "median_sale_price",
@@ -426,7 +428,7 @@ def build_tools(box: Toolbox) -> list[Any]:
 SYSTEM = """\
 You investigate why one U.S. metro housing market is moving, for a public dashboard.
 - Use the tools to look at the metro's own history, its peers in the same region, the national picture and (if relevant) mortgage rates. Look before you explain; don't call the same tool twice with the same input.
-- Use only numbers the tools returned, written exactly as returned (you may round to fewer decimals). Never calculate new numbers: no differences, sums, ratios, averages or conversions.
+- Use only numbers the tools returned, written exactly as returned (you may round to fewer decimals). Never calculate new numbers: no differences, sums, ratios, multiples ("3 times", "twice"), averages or conversions.
 - Percent changes are "%", changes in shares (fields named yoy_pp) are "pp", day changes are "days".
 - Explain drivers the data supports (supply vs. demand, local vs. regional vs. national, rates). Say plainly when the data can't tell.
 - Call a level high, low or minimal only when a tool result gives the comparison (peers, the nation, the metro's own history).
@@ -438,6 +440,12 @@ You investigate why one U.S. metro housing market is moving, for a public dashbo
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"(])")
 # Abbreviations whose period doesn't end a sentence ("St. Louis", "Ft. Myers", "U.S.").
 _ABBREV = re.compile(r"\b(St|Ft|Mt|Jr|Sr|vs|U\.S)\.(?=\s)")
+
+
+_MULTIPLE = re.compile(
+    r"\b\d+(?:\.\d+)?\s*(?:x|times)\b|\b(?:twice|double|triple|(?:two|three|four|five|ten)\s+times)\b",
+    re.IGNORECASE,
+)
 
 
 def _sentences(text: str) -> list[str]:
@@ -469,6 +477,13 @@ class InvestigationDraft(BaseModel):
         n = count_sentences(v)
         if not MIN_SENTENCES <= n <= MAX_SENTENCES:
             raise ValueError(f"explanation must be {MIN_SENTENCES}-{MAX_SENTENCES} sentences, got {n}")
+        multiple = _MULTIPLE.search(v)
+        if multiple:
+            # No tool returns a multiple, so "4.3 times" is arithmetic, even when 4.3
+            # happens to match some other number the number guard knows.
+            raise ValueError(
+                f"don't compute multiples ({multiple.group(0)!r}); state both figures instead"
+            )
         return v.strip()
 
 
@@ -515,7 +530,7 @@ def build_loop(
 
     def guard(draft: InvestigationDraft) -> GuardResult:
         # Rebuilt per call: the facts are everything the tools have returned so far.
-        return fields_guard(guard_facts({"task": facts, "seen": box.seen}), ["explanation"], allow=GUARD_ALLOW)(
+        return fields_guard(guard_facts({"task": facts, "seen": box.seen}), ["explanation"], allow=GUARD_ALLOW_LOOP)(
             draft
         )
 

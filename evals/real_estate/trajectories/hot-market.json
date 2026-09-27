@@ -16,11 +16,11 @@
       },
       "content": [
         {
-          "text": "I'll investigate why St. Louis is experiencing a 7.0% YoY median price increase. Let me gather data on the metro's conditions, peer comparisons, and national context.",
+          "text": "I'll investigate why St. Louis's median price is up 7.0% YoY. Let me start by gathering data on the metro's recent trends, comparing it to peers, and checking national context.",
           "type": "text"
         },
         {
-          "id": "toolu_01Cybvd9DXNGmBVvsczh6SzB",
+          "id": "toolu_01MYSCwAfjxmEZPn1NUVSm55",
           "caller": {
             "type": "direct"
           },
@@ -31,7 +31,7 @@
               "homes_sold",
               "new_listings",
               "inventory",
-              "median_dom"
+              "months_of_supply"
             ],
             "months": 13
           },
@@ -39,7 +39,7 @@
           "type": "tool_use"
         },
         {
-          "id": "toolu_016JcKq9TJz4NqtqJUA7KZ7G",
+          "id": "toolu_01A2JSTMzkmJN4q4HQtBGJnv",
           "caller": {
             "type": "direct"
           },
@@ -51,7 +51,7 @@
           "type": "tool_use"
         },
         {
-          "id": "toolu_01UWMCQrMJfAHp6MZL7aodtQ",
+          "id": "toolu_019PSrCjuJLMR46kZSTrYSo2",
           "caller": {
             "type": "direct"
           },
@@ -60,14 +60,15 @@
               "median_sale_price",
               "homes_sold",
               "new_listings",
-              "inventory"
+              "inventory",
+              "months_of_supply"
             ]
           },
           "name": "get_national_context",
           "type": "tool_use"
         },
         {
-          "id": "toolu_01UGBinnSjXEeWTdrR9oypiV",
+          "id": "toolu_014AUHKapFMsUfKck6y54hd4",
           "caller": {
             "type": "direct"
           },
@@ -80,8 +81,8 @@
       ],
       "stop_reason": "tool_use",
       "usage": {
-        "input_tokens": 2234,
-        "output_tokens": 316,
+        "input_tokens": 2244,
+        "output_tokens": 329,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0
       }
@@ -100,11 +101,11 @@
       },
       "content": [
         {
-          "text": "Let me look deeper into similar episodes to understand the demand-supply dynamics better.",
+          "text": "Now let me look at similar episodes to understand whether this price surge is unusual for St. Louis historically.",
           "type": "text"
         },
         {
-          "id": "toolu_01GvtmStGzrA2hgiJBQKhMkK",
+          "id": "toolu_018veaW1gvr42an2gPBfFbW6",
           "caller": {
             "type": "direct"
           },
@@ -119,8 +120,8 @@
       "stop_reason": "tool_use",
       "usage": {
         "input_tokens": 7,
-        "output_tokens": 97,
-        "cache_creation_input_tokens": 4501,
+        "output_tokens": 102,
+        "cache_creation_input_tokens": 4580,
         "cache_read_input_tokens": 0
       }
     },
@@ -138,22 +139,22 @@
       },
       "content": [
         {
-          "text": "Now I have comprehensive data. Let me analyze what's driving St. Louis's 7.0% median price increase:\n\n**Key Findings:**\n\n1. **Price Growth is Regional Leader**: St. Louis's 7.0% YoY price increase ranks it #1 among its five Midwest peers (Warren MI at 3.3%, Kansas City at 4.6%, Indianapolis at 2.8%, Columbus at 3.7%, Cincinnati at 4.8%). Its peer median is 3.7%, so St. Louis is outperforming.\n\n2. **Supply-Demand Imbalance**: \n   - Homes sold: -11.3% YoY (down significantly)\n   - New listings: -19.7% YoY (sharper decline)\n   - Inventory: +3.9% YoY (modest increase)\n   - Days on market: 21 days (only +1 day YoY, essentially unchanged)\n\n3. **National Context**: National median price is up only 2.2% YoY, while homes sold are down 4.6% and new listings down 6.9%. St. Louis is materially outpacing national appreciation despite similar demand weakness.\n\n4. **Rate Environment**: Mortgage rates have risen from 6.34% in early October 2025 to 7.03% currently, adding to affordability pressure.\n\n5. **Recent Month Volatility**: After bottoming at 275,000 in December 2025, prices rebounded sharply to 305,000 in May 2026 (a 10.9% single-month jump).\n\nThe data suggests this is a supply-driven story. While homes sold fell -11.3% nationally matched only by similar declines elsewhere, new listings declined even more steeply at -19.7%, creating the tightest supply relative to demand in St. Louis compared to its peers. Despite modest inventory growth, the severely constrained flow of new supply combined with falling sales volume creates upward price pressure.",
+          "text": "Now I have comprehensive data. Let me analyze what's driving the 7.0% YoY price increase in St. Louis:\n\n**Key Observations:**\n\n1. **St. Louis's price surge is the largest among Midwest peers** - At 7.0% YoY, St. Louis outpaces peer median of 3.7%, and ranks 1st among its 5 closest peers (Warren, Kansas City, Indianapolis, Columbus, Cincinnati).\n\n2. **Supply-demand dynamics show tightening** - While homes_sold is down 11.3% YoY and new_listings are down 19.7% YoY, inventory grew 3.9% YoY. However, the months_of_supply remains relatively low at 2.1 months (unchanged at 0.3 months above year-ago), suggesting a tight seller's market.\n\n3. **St. Louis's price growth significantly exceeds national trends** - The national median_sale_price is up just 2.2% YoY, and mortgage rates have risen 0.69pp to 7.03%, which typically constrains demand. Yet St. Louis prices are accelerating.\n\n4. **Recent price momentum is strong** - May 2026 median price of $305,000 represents the 36-month high and a sharp jump from January's $255,000. This recent surge (from February onward) appears sharper than historical patterns for St. Louis.\n\n5. **Demand weakness amid rising rates** - Despite mortgage rates climbing from 5.98% to 7.03% over the past several months, St. Louis homes_sold fell 11.3% YoY. This suggests prices are rising despite lower transaction volume, indicating constrained supply relative to remaining demand.\n\n6. **Regional divergence** - While the Midwest peers show moderating price growth (3.3% to 4.8% YoY), St. Louis is moving much faster, suggesting either local supply tightness or demand strength specific to this market.",
           "type": "text"
         },
         {
-          "id": "toolu_01H5QTL6k6gajvF2NQ2GwEPR",
+          "id": "toolu_01QzhpAYphQm2UAJkAwgVTNc",
           "caller": {
             "type": "direct"
           },
           "input": {
-            "explanation": "St. Louis's 7.0% median price appreciation is the strongest among its five Midwest peers, which are averaging 3.7% YoY growth. The primary driver is a supply-demand imbalance: while homes sold fell 11.3% YoY, new listings declined even more sharply at 19.7% YoY, creating particularly tight inventory relative to demand compared to peer metros. Inventory itself rose 3.9% YoY but remains constrained relative to falling new supply, and days on market at 21 days shows no material loosening despite reduced sales volume. This supply-constrained dynamic is pushing prices upward even as the national market sees prices up only 2.2% YoY with similar demand weakness. Rising mortgage rates to 7.03% add pressure to affordability, potentially explaining why homes sold declined more steeply than new listings fell, creating an unusual supply squeeze that sustains price growth.",
+            "explanation": "St. Louis's median sale price is up 7.0% YoY, significantly outpacing Midwest peers (median 3.7%) and national growth (2.2%), making it the top mover among its five closest peers. This acceleration occurs despite national headwinds: mortgage rates have risen 0.69pp to 7.03%, and St. Louis homes_sold fell 11.3% YoY, indicating demand weakness. However, new_listings dropped 19.7% YoY while inventory grew only 3.9% YoY, leaving months_of_supply at 2.1—tight relative to the 3.1 months nationally. The sharp May 2026 price of $305,000 marks a 36-month high, reflecting recent upward momentum from January's $255,000. Supply constraint appears to be the dominant driver: falling sales volume and sharply lower new inventory are pushing prices higher despite rising rates and weaker purchase activity, a pattern that differs notably from the more moderate price growth across Midwest peers.",
             "cited_metrics": [
               "median_sale_price",
               "homes_sold",
               "new_listings",
               "inventory",
-              "median_dom"
+              "months_of_supply"
             ]
           },
           "name": "finish",
@@ -163,9 +164,9 @@
       "stop_reason": "tool_use",
       "usage": {
         "input_tokens": 5,
-        "output_tokens": 750,
-        "cache_creation_input_tokens": 371,
-        "cache_read_input_tokens": 4501
+        "output_tokens": 775,
+        "cache_creation_input_tokens": 376,
+        "cache_read_input_tokens": 4580
       }
     }
   ]

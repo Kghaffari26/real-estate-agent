@@ -16,11 +16,11 @@
       },
       "content": [
         {
-          "text": "I'll investigate why Pittsburgh's median price is up 7.8% YoY. Let me start by examining the metro's own trends, comparing it to regional peers, and looking at the broader context.",
+          "text": "I'll investigate why Pittsburgh's median home price is up 7.8% YoY. Let me gather data on the metro's recent history, peer comparison, and national context.",
           "type": "text"
         },
         {
-          "id": "toolu_01HG47B9VKdHhmoUVwMKRCNt",
+          "id": "toolu_01PepQewNpVu7mgA4JU4d8A9",
           "caller": {
             "type": "direct"
           },
@@ -39,7 +39,7 @@
           "type": "tool_use"
         },
         {
-          "id": "toolu_01NskJbZur6nNyZJ8C6e4WZD",
+          "id": "toolu_015xwoY9SNy5v1cM45v2bmL6",
           "caller": {
             "type": "direct"
           },
@@ -51,7 +51,7 @@
           "type": "tool_use"
         },
         {
-          "id": "toolu_01UKhfSUaLDjTmWUfcrJYjqH",
+          "id": "toolu_01E3sgDVkRGsQJ7dbWhyNxLn",
           "caller": {
             "type": "direct"
           },
@@ -59,7 +59,6 @@
             "series": [
               "median_sale_price",
               "homes_sold",
-              "new_listings",
               "inventory",
               "months_of_supply"
             ]
@@ -68,7 +67,7 @@
           "type": "tool_use"
         },
         {
-          "id": "toolu_012E3fkhD6EbX64mGr5yXjyw",
+          "id": "toolu_01Nb5QwvxUVeLcouKHxF9Fgd",
           "caller": {
             "type": "direct"
           },
@@ -81,8 +80,8 @@
       ],
       "stop_reason": "tool_use",
       "usage": {
-        "input_tokens": 2237,
-        "output_tokens": 328,
+        "input_tokens": 2247,
+        "output_tokens": 318,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0
       }
@@ -101,56 +100,27 @@
       },
       "content": [
         {
-          "text": "Let me dig deeper into the supply-demand dynamics with additional metrics:",
+          "text": "Let me look at similar episodes in Pittsburgh's history to understand if this price move is typical:",
           "type": "text"
         },
         {
-          "id": "toolu_01DeGYUsH1LRYZt4Cas4Tspw",
+          "id": "toolu_01QPaoz7ubEXopX3UELNbR4E",
           "caller": {
             "type": "direct"
           },
           "input": {
             "slug": "pittsburgh-pa",
-            "metrics": [
-              "median_dom",
-              "avg_sale_to_list",
-              "sold_above_list"
-            ],
-            "months": 13
+            "metric": "median_sale_price"
           },
-          "name": "get_metro_series",
-          "type": "tool_use"
-        },
-        {
-          "id": "toolu_0142ApFcGwb67p3raNcvWJej",
-          "caller": {
-            "type": "direct"
-          },
-          "input": {
-            "slug": "pittsburgh-pa",
-            "metric": "homes_sold"
-          },
-          "name": "compare_to_peers",
-          "type": "tool_use"
-        },
-        {
-          "id": "toolu_01ACG7d9sLioHgameeMSd4E3",
-          "caller": {
-            "type": "direct"
-          },
-          "input": {
-            "slug": "pittsburgh-pa",
-            "metric": "inventory"
-          },
-          "name": "compare_to_peers",
+          "name": "find_similar_episodes",
           "type": "tool_use"
         }
       ],
       "stop_reason": "tool_use",
       "usage": {
         "input_tokens": 7,
-        "output_tokens": 248,
-        "cache_creation_input_tokens": 4567,
+        "output_tokens": 100,
+        "cache_creation_input_tokens": 4543,
         "cache_read_input_tokens": 0
       }
     },
@@ -168,60 +138,22 @@
       },
       "content": [
         {
-          "text": "Now I have a comprehensive picture. Let me analyze the data:\n\n**Pittsburgh's Price Growth Analysis:**\n\n1. **Price: +7.8% YoY** - Pittsburgh leads its peer group (median peers: +1.8%)\n2. **Sales: -7.3% YoY** - Down, but better than peer median (-10.5%)\n3. **Inventory: +5.2% YoY** - Up, roughly in line with peers (+4.7% median)\n4. **New Listings: +0.6% YoY** - Essentially flat\n5. **Months of Supply: 3.7 months** - Up 0.4 months YoY, still relatively tight\n\n**National Context:**\n- Median price: +2.2% YoY\n- Homes sold: -4.6% YoY\n- Inventory: -9.0% YoY (nationwide tightness)\n\n**Market Dynamics:**\n- Mortgage rates have risen from 6.34% to 7.03% over the past year (+0.69pp)\n- Pittsburgh's homes sold declined -7.3%, but inventory rose +5.2%\n- Despite lower sales volume, prices still rose 7.8%\n- Median DOM at 50 days (unchanged YoY) and 30.8% sold above list (down -1.3pp) show typical market conditions\n- The task flags note: \"Rent growth outpacing home values\" and \"Monthly payment +16% YoY\"\n\nThe price growth despite falling sales appears driven by a **supply-demand mismatch at different price points**: while overall sales fell, inventory rose only modestly (+5.2%), and inventory remains relatively tight at 3.7 months of supply. Pittsburgh's price appreciation (+7.8%) significantly outpaces the national trend (+2.2%), and leads all peers, suggesting that homes in Pittsburgh are relatively in-demand compared to regional alternatives, even as broader sales decline. The rising monthly payment burden (+16% YoY per the flags) is consistent with higher prices despite modestly elevated mortgage rates—buyers are paying more for homes in this market.",
+          "text": "Now I have a clear picture. Let me analyze the key drivers:\n\n**Supply & Demand Dynamics:**\n- Pittsburgh's median price is up 7.8% YoY to $275,000, substantially outpacing the peer median of 1.8% and the national increase of 2.2%\n- Homes sold fell 7.3% YoY while inventory rose 5.2% YoY—a seemingly loosening market\n- New listings grew 0.6% YoY while inventory expanded to 7,677 units (5.2% above year-ago)\n- Months of supply is 3.7 months (up 0.4 from last year), suggesting more availability\n\n**Why prices still rose despite looser supply conditions:**\nThe task flags show \"Monthly payment +16% YoY\"—mortgage rates climbed sharply. The 30-year rate went from 6.34% to 7.03% over the past year, a 69 bp increase. This reduced buyer purchasing power even as inventory grew, likely suppressing buyer demand further and limiting the price decline one might expect from rising supply and falling sales.\n\n**Regional and local context:**\nPittsburgh's 7.8% price growth ranks 1st among its 5 Northeast peers. The similar episodes show Pittsburgh had stronger price momentum from August 2024 through December 2025 (peaking at 15.4% YoY), so current 7.8% growth, while high compared to peers, is moderating from that earlier surge. The market still had this momentum even as sales declined.\n\nThe price increase appears to reflect a market where supply has loosened but mortgage rates remain elevated, maintaining pricing power for sellers in a city that previously saw much stronger appreciation.",
           "type": "text"
         },
         {
-          "id": "toolu_01Nwmd3LMdrjzqKF6xBsBGdQ",
+          "id": "toolu_017LqyqcVHLmYuw6mYVqeGZL",
           "caller": {
             "type": "direct"
           },
           "input": {
-            "slug": "pittsburgh-pa",
-            "metric": "median_sale_price"
-          },
-          "name": "find_similar_episodes",
-          "type": "tool_use"
-        }
-      ],
-      "stop_reason": "tool_use",
-      "usage": {
-        "input_tokens": 7,
-        "output_tokens": 567,
-        "cache_creation_input_tokens": 1437,
-        "cache_read_input_tokens": 4567
-      }
-    },
-    {
-      "request": {
-        "tools": [
-          "compare_to_peers",
-          "find_similar_episodes",
-          "get_metro_series",
-          "get_national_context",
-          "get_rate_history",
-          "finish"
-        ],
-        "n_messages": 7
-      },
-      "content": [
-        {
-          "text": "The historical context shows that Pittsburgh has seen price appreciation cycles before (a 17-month run peaking at +15.4% in the 2024-08 to 2025-12 period), and the current 7.8% falls within that range. Now I have enough to complete my analysis.",
-          "type": "text"
-        },
-        {
-          "id": "toolu_016suceH7iStnEgmcR4G3MGz",
-          "caller": {
-            "type": "direct"
-          },
-          "input": {
-            "explanation": "Pittsburgh's median sale price is up 7.8% year-over-year, outpacing both the national median price growth of 2.2% and its regional peers' median of 1.8%, making it the top performer in the Northeast peer group. Despite homes sold declining 7.3% locally and 4.6% nationally, Pittsburgh's inventory grew only 5.2% while remaining relatively tight at 3.7 months of supply, and new listings increased just 0.6%. This supply-demand imbalance—falling sales volume paired with modest inventory growth—supported continued price appreciation in the market. Mortgage rates rose 0.69pp over the past year to 7.03%, yet Pittsburgh still achieved stronger price growth than peers and the nation, suggesting sustained local demand relative to available homes. The task data notes monthly payments are up 16% year-over-year while rent growth outpaces home values, indicating buyers are willing to pay significantly more despite higher financing costs.",
+            "explanation": "Pittsburgh's median home price rose 7.8% YoY to $275,000, outpacing all five Northeast peers (whose median YoY change was 1.8%) and more than tripling the national 2.2% gain. Despite homes sold declining 7.3% YoY and inventory growing 5.2% YoY—conditions that typically constrain price growth—prices held firm due to the sharp 69 basis point increase in 30-year mortgage rates from 6.34% to 7.03% over the past year. This rate jump reduced buyer purchasing power significantly, limiting demand even as supply loosened, which preserved seller pricing power. Pittsburgh's price growth, though substantial, represents moderation from an earlier surge (15.4% peak in late 2024), as the market cools from its prior momentum. The 3.7 months of supply and rising inventory suggest the market is becoming less tight, yet elevated rates continue supporting prices despite the sales decline.",
             "cited_metrics": [
               "median_sale_price",
               "homes_sold",
               "inventory",
-              "new_listings",
-              "months_of_supply"
+              "months_of_supply",
+              "new_listings"
             ]
           },
           "name": "finish",
@@ -231,9 +163,9 @@
       "stop_reason": "tool_use",
       "usage": {
         "input_tokens": 5,
-        "output_tokens": 373,
-        "cache_creation_input_tokens": 768,
-        "cache_read_input_tokens": 6004
+        "output_tokens": 697,
+        "cache_creation_input_tokens": 301,
+        "cache_read_input_tokens": 4543
       }
     }
   ]

@@ -23,5 +23,5 @@ data/cache/real_estate/*
 # committed: they're run state that run-agent.yml commits back after each run.
 public-data/
 
-evals/results/*
-!evals/results/.gitkeep
+# evals/results/<date>.json and evals/history.jsonl (agents_core.evals) ARE committed:
+# the history is the regression baseline, the results hold per-case scores.

@@ -420,6 +420,108 @@ The pydantic models in `agents/real_estate/schema.py` are the source of truth, e
 
 `id: "real_estate"`, `route: "/real-estate"`, `expected_interval_hours: 168`, `next_run_hint: "Fridays 08:00 PT"`, `items_count: 50`.
 
+### 6.3 Additive fields (schema 1.1.0): metro investigations, alert figures, warnings
+
+Added 2026-09-27 (`schema_version` 1.0.0 → 1.1.0). **Every field here is additive and
+has a default**, so an index or metro file published under 1.0.0 still validates and
+no §6.1/§6.2 field changed meaning. The models are `Investigation`,
+`InvestigationSummary` and `AlertMetro` in `agents/real_estate/schema.py`, exported to
+`schemas/real_estate.schema.json`.
+
+**Metro investigations.** Each run, the metro investigator
+(`agents/real_estate/investigate.py`, an `agents_core.agent_loop.AgentLoop`) explains
+*why* up to 3 metros are moving:
+
+- **Targets:** metros with a **new `major` flag** (major in the latest month, not
+  major a month earlier), largest market (`homes_sold_12m`) first; if there are none,
+  the **top mover** (largest absolute median-sale-price YoY).
+- **Tools** (read-only, over the same computed series the metro files publish, in the
+  facts dicts' human units): `get_metro_series(slug, metrics, months)`,
+  `compare_to_peers(slug, metric)` (the 5 metros closest by `homes_sold_12m` in the
+  same Census region), `get_national_context(series)`, `get_rate_history(weeks)`
+  (offered only when rate data exists), `find_similar_episodes(slug, metric)` (past
+  36 months), and `finish(explanation, cited_metrics)`.
+- **Budget:** 8 model calls and $0.05 per investigation (fast tier), inside the run's
+  `MAX_RUN_USD`. A budget stop is a graceful partial result: the template is
+  published and the stop reason recorded.
+- **Guards:** `finish` must be 4–6 sentences, cite known metric keys, and state no
+  computed multiples ("3 times", "twice"); the explanation then goes through the number
+  guard against everything the tools returned in that run. One retry, then the
+  deterministic template (`narrative_source: "template"`). Citations of metrics the
+  model never looked at are dropped.
+- **Reuse:** like briefs, an investigation is reused (`reused: true`, zero LLM calls)
+  while its inputs' hash (the whole investigator snapshot + target + prompt version,
+  in `state.json`) is unchanged. Without an API key it's the template, and not cached.
+
+`metros/<slug>.json` gains `investigation` (`null` for metros not investigated this run):
+
+```json
+"investigation": {
+  "slug": "pittsburgh-pa",
+  "name": "Pittsburgh, PA",
+  "trigger": "top_mover",              // or "new_major_flag"
+  "trigger_flag": null,                // the flag id, for new_major_flag
+  "trigger_label": "Median price +7.8% YoY",
+  "explanation": "4-6 sentences on why this is happening",
+  "cited_metrics": ["median_sale_price", "homes_sold", "inventory"],
+  "narrative_source": "llm",           // "template" when the guard/budget/key fell back
+  "model": "claude-haiku-4-5-20251001",
+  "stop_reason": "finished",           // agents_core LoopResult.stop_reason, or "not_run"
+  "steps": 4,
+  "tools_called": ["get_metro_series", "compare_to_peers", "get_national_context"],
+  "cost_usd": 0.0192,
+  "prompt_version": "investigator-2026-09-27.4",
+  "generated_at": "2026-09-27T00:45:45Z",
+  "reused": false
+}
+```
+
+`latest.json` gains `investigations` (`[]` when there are no targets), in target order:
+
+```json
+"investigations": [
+  {
+    "slug": "pittsburgh-pa",
+    "name": "Pittsburgh, PA",
+    "trigger": "top_mover",
+    "trigger_label": "Median price +7.8% YoY",
+    "summary": "The explanation's first sentence (≤ 240 chars).",
+    "cited_metrics": ["median_sale_price", "homes_sold", "inventory"],
+    "narrative_source": "llm",
+    "stop_reason": "finished"
+  }
+]
+```
+
+**Alert figures.** `alerts[].label` is now the group's **threshold** ("Inventory down
+≥20% YoY"), not the first metro's figure, and `alerts[].severity` is the highest in the
+group. Each alert gains `metros`, one entry per slug (same order as `slugs`) with the
+metro's own figure:
+
+```json
+{ "flag": "inventory_drop", "label": "Inventory down ≥20% YoY", "severity": "notable",
+  "slugs": ["jacksonville-fl", "miami-fl"],
+  "metros": [
+    { "slug": "jacksonville-fl", "name": "Jacksonville, FL", "label": "Inventory -24% YoY", "value": -0.2416, "severity": "notable" },
+    { "slug": "miami-fl", "name": "Miami, FL", "label": "Inventory -20% YoY", "value": -0.2036, "severity": "notable" }
+  ] }
+```
+
+**Shared meta.** `meta.warnings` (agents-core ≥ 0.2.0) lists this run's degraded
+sources, stale metros, trimming and fallbacks in plain language (§10's "log a warning
+in meta"); `meta.meta_schema_version` is `"1.1.0"`.
+
+**Conformance notes (no shape change).** `metros[].latest.<metric>` in the index is
+exactly §6.1's `{value, yoy}` (it had been serializing 7 extra always-null keys), and
+every `delta_format` is one of agents-core's standard `StatFormat`s: day differences
+(`median_dom`) are `count_signed`, month differences (`months_of_supply`) `decimal1`.
+
+**Tracing.** Not part of `latest.json`: agents-core writes `trace.json` (+
+`trace.schema.json`) next to it after every run, with spans for each phase, this
+agent's `fetch:redfin`/`metro_briefs`/`national_brief`/`investigations` steps, every
+LLM call, tool call and guard check, and `manifest-entry.json` carries a
+`trace_summary`.
+
 ---
 
 ## 7. LLM usage

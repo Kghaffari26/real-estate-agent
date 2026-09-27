@@ -1,106 +1,135 @@
 # Status
 
-Last updated 2026-09-26 by an unattended Claude Code session. Judgment calls
-are logged one per line in `DECISIONS.md` (see "Session 3").
+Last updated 2026-09-27 by an unattended Claude Code session. Judgment calls
+are logged one per line in `DECISIONS.md` ("Session 4").
 
 ## Summary
 
-**Done this session** (every task that was blocked on agents-core):
+**Done this session:**
 
-- **(a) agents-core v0.1.0 replaces the local stand-ins.** The vendored
-  `agents-core/` folder is deleted. The agent now depends on
-  `agents-core @ git+https://github.com/Kghaffari26/agents-core@v0.1.0`
-  (tag; locked to `b0a292d`). HTTP (`agents_core.http`), LLM
-  (`agents_core.llm`), costs, guards, publish and the runner all come from it.
-  Python moved to 3.12 because agents-core requires it. Large-file conditional
-  GETs are a thin helper (`agents/real_estate/download.py`) built on
-  `agents_core.http.Http`.
-- **(b) Registered through the `agents_core.agents` entry point.**
-  `real_estate = "agents.real_estate.agent:AGENT"`, where `AGENT` is a
-  `RealEstateAgent(agents_core.agent.Agent)` with fetch, transform and
-  analyze steps. `uv run agents-run --list`, `agents-run real_estate
-  --dry-run` and `agents-run real_estate` all work against live data.
-- **(c) LLM briefs through `agents_core.llm`.**
-  - Metro briefs: fast tier (Haiku 4.5) through the Batch API, using
-    `ctx.llm.batch` and then `ctx.llm.guard_batch`.
-  - National brief: smart tier (Sonnet 5), synchronous.
-  - Both use `guard=fields_guard(facts, ["text", "key_points"])`. A failing
-    brief gets one retry, then falls back to the existing `templates.py`
-    brief.
-  - The brief-hash caching is kept. Briefs are now also cached in
-    `data/real_estate/briefs.json`, so a fresh CI checkout can reuse them.
-  - If the batch times out, the requests run synchronously instead (§7.4).
-- **(d) Publishes the agents-core data-branch contract to `public-data/`**:
-  `latest.json`, `metros/<slug>.json`, `history/YYYY-MM-DD.json`,
-  `manifest-entry.json`, `costs-summary.json` and `schema.json`. The §6 body
-  shapes are unchanged. `meta` is now agents-core's shared `RunMeta`, which
-  is what §6.1's "shared meta block" means.
-- **(e) Workflow.** `.github/workflows/agent-real-estate.yml` calls
-  `Kghaffari26/agents-core/.github/workflows/run-agent.yml@v0.1.0` with
-  `agent: real_estate`, `max_run_usd: "0.50"`,
-  `site_repo: Kghaffari26/agents-hub`, `cache_path: data/cache/real_estate`
-  and `secrets: inherit`. The `force_briefs` dispatch input maps to
-  `extra_args: --force-briefs`. The local `.github/workflows/run-agent.yml`
-  was already gone; it isn't in the tree.
-- **Name-based CBSA matching is kept and tightened.** Candidates must now be
-  Metropolitan areas and match on both state and principal city. The old
-  `startswith` match would have mapped Columbus, OH to Columbus, GA-AL.
-- **Sources re-verified and `build_metro_config.py` re-run.** All sources are
-  reachable now. Results: CBSA and centroid 50/50, Zillow RegionID 41/50,
-  REVIEW lines down from 200 to 29 (listed below).
-- **One real run with LLM briefs**, then an immediate second run. Details
-  below.
-- Tests: **200 passed**, ruff clean, evals 100% on all SPEC §11 checks
-  (template path).
+- **agents-core v0.3.0** (`tag = "v0.3.0"`, locked to `bcfb9c5`). Every local
+  workaround v0.2.0 made unnecessary is gone:
+  - warnings: `ctx.warn` → `meta.warnings`
+  - downloads: `Http.download`; `download.py` deleted
+  - ACS: `get_json`, no `ttl_seconds=0`
+  - batch timeout: `on_timeout="sync"`, 5 at a time
+  - data-branch restore: briefs are reused from the previous published output;
+    `briefs.json` deleted
+  - workflow: `run-agent.yml@v0.3.0`, with the calling job granting
+    `contents: write`
+  - no HTTP caps, token passthrough or per-tier temperature existed here to
+    remove
+- **agents-hub fixes:**
+  - With no Anthropic key the run publishes templates, `status: ok` and a
+    warning. It used to crash. Covered by a test, and a live no-key run published
+    at $0.
+  - Every `delta_format` is an agents-core `StatFormat`: `median_dom` is
+    `count_signed`, `months_of_supply` is `decimal1`.
+- **STATUS/agents-hub items:**
+  - Alert groups: the label is the threshold ("Inventory down ≥20% YoY") and
+    each metro has its own figure in `alerts[].metros`.
+  - Index size: the check counts `meta.warnings`, and §10 trimming is tested.
+    The live overflow was fixed by making `metros[].latest` match §6.1 exactly:
+    **85 KB**, down from 147.5 KiB.
+  - The state file is under the configured data dir.
+- **(A) Tracing.** The runner publishes `trace.json` and `trace.schema.json`,
+  and `manifest-entry.json` has a `trace_summary`. The agent adds spans:
+  `fetch:redfin`, `metro_briefs`, `national_brief`, `investigations`. The loop,
+  LLM, tool, HTTP and guard spans come from agents-core.
+- **(B) Evals on `agents_core.evals`.** Three suites in
+  `evals/real_estate/suites.py` append to `evals/history.jsonl`, and
+  `.github/workflows/evals.yml` calls `run-evals.yml@v0.3.0` with
+  `contents: read`, a $0.25 cap per suite, and a 0.10 regression threshold.
+- **(C) Metro investigator** (`agents/real_estate/investigate.py`, spec §6.3):
+  - Runs an `AgentLoop` for up to 3 new-major-flag metros, else the top mover.
+  - 5 tools plus `finish`; 8 steps and $0.05 per investigation.
+  - Guards: number guard over all tool outputs, 4–6 sentences, known metric keys,
+    no computed multiples; template fallback.
+  - Published additively: `metros/<slug>.json` → `investigation` and
+    `latest.json` → `investigations`.
+  - Trajectory evals on 6 fixture metros, with the 6 recorded trajectories
+    replayed in pytest.
+- **(D)** `docs/case-studies.md`: 5 incidents with commit links.
+- **(E)** README: Highlights and Demo sections.
+- Tests: **232 passed**, ruff clean (200 before this session).
 
-**Anthropic spend this session: $0.048**, under the $1 cap:
+**Anthropic spend this session: $0.599**, under the $1.50 cap. From
+`data/costs.jsonl` and `data/eval_costs.jsonl`, entries dated 2026-09-27:
 
-- $0.0457 for the real run (`data/costs.jsonl`).
-- $0.0022 for a one-call-per-tier smoke test before the run.
+| What | Cost |
+|---|---:|
+| Live agent runs | $0.158 |
+| Eval suites (incl. one single-case smoke run) | $0.441 |
 
-## Real run report (2026-09-26)
+Live runs:
+- Failed size check (see case study 1): $0.060
+- Full regeneration: $0.059
+- Reuse run: $0
+- 2 investigation-only reruns after prompt changes: $0.020 + $0.019
 
-`uv run agents-run real_estate` against live Redfin, Zillow and FRED data,
-starting from an empty brief cache:
+Eval runs:
+- Smoke: $0.025
+- LLM briefs: $0.033
+- Investigator: 3 × ~$0.13
 
-- **Cost: $0.0457**, 53 calls, 3m14s wall time, most of it waiting on the
-  batch. From `data/costs.jsonl`:
-  - 50 metro briefs, fast tier, Batch API: **$0.0367**
-  - 2 guard retries, fast tier, synchronous: **$0.0031**
-  - 1 national brief, smart tier: **$0.0059**
-- **Tokens (`meta.model_usage`):**
-  - fast: 36,503 in / 8,010 out
-  - smart: 1,219 in / 348 out
-- **Number guard:** 48 of 50 metro briefs passed on the first attempt. The
-  other 2 passed after one retry:
-  - north-port-fl wrote "$420,000" for $419,990.
-  - oklahoma-city-ok wrote a rent figure that wasn't in the facts.
+## Live run report (2026-09-27)
 
-  Both are logged in `data/guard_failures.jsonl`. All 51 published briefs
-  are `narrative_source: "llm"`.
-- **Output sizes:**
+`uv run agents-run real_estate` against live Redfin, Zillow and FRED data (Redfin
+data through 2026-05-31; 30-yr rate 7.03% as of 2026-09-24):
 
-  | File | Size | Limit |
-  |---|---|---|
-  | `latest.json` | 151,014 B (147.5 KiB) | 150 KiB (**tight**) |
-  | `metros/*.json` (50 files) | 8.7–10.4 KB each | 40 KB |
-  | `history/2026-09-26.json` | 151,014 B (copy of the index) | — |
-  | `manifest-entry.json` | 684 B | — |
-  | `costs-summary.json` | 114 B | — |
-  | `schema.json` | 11.9 KB | — |
+- **Full regeneration** (no previous output locally): 55 calls, **$0.0586**.
+  - 50 metro briefs through the Batch API; 1 guard retry (`oakland-ca` quoted
+    "4" and "6")
+  - the national brief, smart tier
+  - 1 investigation: Pittsburgh, top mover, 3 steps, $0.0136
+- **Immediate second run:** 0 LLM calls, $0, `data_changed: false`. All 50
+  briefs, the national brief and the investigation were reused (SPEC §13 ✅).
+- **After an investigator prompt change**, only the investigation regenerated:
+  4 steps, 8 tool calls, $0.0192. Everything else was reused.
+- **No new major flags this month** (the only major-capable flags,
+  `inventory_surge` ≥50% and `price_decline` ≤−8%, fired nowhere), so the top
+  mover was investigated.
+- **Output sizes:** `latest.json` 87,097 B (limit 150 KiB), metro files
+  8.7–11.9 KB (limit 40 KB), `trace.json` 15.9 KB.
+- **`meta.warnings`** (both expected):
+  - permits skipped (the Census BPS monthly file is unverified)
+  - ACS income unavailable (needs `CENSUS_API_KEY`)
+- **No-key run** (a separate publish dir): status ok, $0, template briefs and
+  investigation, plus the no-key warning.
 
-  The index grew from 140KB, mostly because of Zillow data and
-  `meta.sources`. The next addition will trigger §10's trimming.
-- **Second run:** 0 LLM calls, $0.00, `data_changed: false`. Every brief was
-  `reused: true` (SPEC §13 ✅).
-- **Warnings on both runs:**
-  - Permits were skipped: the Census BPS monthly file is still unverified.
-  - ACS income was unavailable. The Census API now redirects keyless
-    requests, and there's no `CENSUS_API_KEY` here, so `payment_to_income`
-    is null.
-- **Data freshness:** Redfin's tracker files were last modified 2026-06-02,
-  so `data_through` is 2026-05-31. FRED rates are current (30-yr 7.03% as of
-  2026-09-24).
+## Evals
+
+Latest scores (`evals/history.jsonl`, `evals/results/2026-09-27.json`):
+
+| Suite | Cases | Pass rate | Scores | Cost |
+|---|---:|---:|---|---:|
+| `real_estate-template-briefs` | 14 | 1.000 | number_fidelity, units, no_advice_style, length, flag_coverage_keyword: all 1.000 | $0 |
+| `real_estate-llm-briefs` | 12 | 1.000 | the above, plus guard_first_try 1.000 and flag_coverage_judge 1.000 | $0.033 |
+| `real_estate-investigator` | 6 | 1.000 | required_tools_called, forbidden_tools_not_called, max_steps, stop_reason, guard_passed, sentences_4_to_6, cites_trigger_metric: all 1.000; quality_judge **0.833** | $0.123 |
+
+Investigator history across the three prompt versions (`.2` → `.3` → `.4`):
+quality_judge 0.917 → 0.833 → 0.833, with the trajectory scores at 1.000 each
+time. With 6 cases on a 1–5 scale, one case moving a step changes the mean by
+0.042, so that change is noise-level. The judge also missed the two reasoning
+problems that a person reading the output caught (case studies 3–4).
+
+## Known gaps and next steps
+
+1. **The LLM judge isn't calibrated.** `LLMJudge.calibrate()` needs human-scored
+   examples, and none exist yet (see DECISIONS). The judge also scored a
+   backwards-reasoning explanation 0.75.
+2. **No eval case invites a computed multiple** (case study 3). `finish` rejects
+   multiples now, but a case where "N times" is tempting would lock that in.
+3. **§6 rule "round ratios to 4 decimals at publish time"** isn't applied to
+   `latest`/`series` values (e.g. `yoy: 0.022072973728276324`). This predates
+   this session and would cut the payload further. Alert values are rounded.
+4. **Checking size before spending.** The size check runs after the LLM calls,
+   so an oversized run still pays for its briefs. The index now has ~63 KB of
+   headroom.
+5. **The first CI run will regenerate every brief** (about $0.06): this repo has
+   no `data` branch yet, so there's no previous output to reuse.
+6. The spec's ≥48 Zillow IDs, permits and ACS income are unchanged from
+   Session 3 (see below).
 
 ## Network verification (`scripts/verify_re_sources.py`)
 
@@ -161,81 +190,43 @@ covers the whole CBSA while the Redfin series covers the division.
 
 ## Needed from agents-core
 
-Nothing blocked the migration. These gaps were worked around, and would be
-better fixed upstream (agents-core wasn't modified):
+Nothing is blocked. Every gap listed in Session 3 was fixed in v0.2.0:
+`RunMeta.warnings`, `Http.download`, no cached error pages, and concurrent sync
+fallback. One observation for upstream:
 
-1. **`RunMeta` has no `warnings` (or `batch_fallback`) field.** It's
-   `extra="forbid"`, so SPEC §10's "log a warning in meta" can't be
-   published. For now warnings go to the run log and to
-   `data/real_estate/state.json` → `last_run`, which run-agent.yml commits.
-   A `warnings: list[str] = []` on `RunMeta` would fix this.
-2. **`Http` has no conditional-GET download.** Its cache stores bodies as
-   base64 inside JSON, which doesn't suit a 106MB file, and a 304 surfaces
-   as `HttpError(status=304)`. `download.py` works around it; a
-   `Http.download(url, dest)` upstream would let other agents share it.
-3. **`Http`'s TTL cache excludes secret params from the cache key.** An
-   error page cached while a key was missing is therefore served after the
-   key is added. ACS works around this with `ttl_seconds=0`. A fix upstream
-   would be to not cache non-JSON responses to `get_json`, or to key on
-   whether a secret is present.
-4. **The batch-timeout fallback runs sequentially.** `LLM` is synchronous,
-   so SPEC §7.4's "concurrency 5" isn't available. Minor: it only matters
-   when a batch times out.
-
-## Evals (SPEC §11)
-
-`uv run python -m evals.real_estate.run` runs offline and free against the
-template briefs, which are the fallback behind every LLM brief. Results:
-100% on number fidelity, units, style/no-advice, length, flag coverage
-(keyword proxy), and both national checks.
-
-The LLM path is covered two ways:
-
-- **Mocked:** `tests/test_analyze_batch.py` covers batch success, partial
-  failure, guard retry, guard fallback, batch timeout, and the national
-  brief. `tests/test_agent_run.py` runs the agent end to end through
-  agents-core's runner offline: every data-branch file, second run with zero
-  calls, and `--force-briefs`.
-- **Live:** the number guard checks every live brief (see the run report).
-
-The spec's LLM-judge flag-coverage eval is still a keyword proxy, to keep
-the eval suite free.
+- **The number guard matches values, not provenance.** A computed "4.3 times"
+  passed because 4.3 appeared elsewhere in the facts (case study 3). This agent
+  now rejects multiples in its own `finish` validator. An optional
+  "no multiples/ratios" check in `agents_core.guards` would help every agent.
 
 ## §13 acceptance criteria
 
 | Criterion | Status |
 |---|---|
-| `build_metro_config.py` → 50 metros with Redfin region + CBSA, ≥48 with Zillow ID | **Partial.** 50/50 Redfin, 50/50 CBSA and centroid. Zillow 41/50: the 9 gaps are Redfin divisions that Zillow doesn't publish, so the spec's ≥48 isn't reachable for this metro set. |
-| `--dry-run` fetches/filters/computes, prints per-metro table, zero LLM calls | ✅ (live, and in `test_agent_run.py`) |
-| Real run publishes index ≤150KB + 50 metro files ≤40KB, all validated | ✅ 147.5 KiB / 8.7–10.4 KB. The runner validates against `IndexOutput`, and `MetroDetailOutput` models are what gets written. |
-| Immediate second run makes zero LLM calls | ✅ Live: 0 calls, $0. |
-| Mortgage-rate change regenerates only the national brief | ✅ by construction: metro hashes and prompts exclude rates, the national hash includes them. Not exercised live, since the rate didn't move between the two runs. |
-| Affordability numbers match the site calculator | N/A (no site yet). The shared vector ($400k @ 6.5%/30y → $2,528.27) passes. |
-| Tests pass, evals meet §11 thresholds | ✅ 200 tests, ruff clean, evals 100%. |
-| `/real-estate` page renders | N/A (site is out of scope). |
+| `build_metro_config.py` → 50 metros with Redfin region + CBSA, ≥48 with Zillow ID | **Partial**, unchanged: 50/50 Redfin, 50/50 CBSA and centroid, Zillow 41/50 (the 9 are Redfin divisions Zillow doesn't publish). |
+| `--dry-run` fetches/filters/computes, prints per-metro table, zero LLM calls | ✅ (live, and in `test_agent_run.py`); it now also prints the investigation targets. |
+| Real run publishes index ≤150KB + 50 metro files ≤40KB, all validated | ✅ 87 KB / 8.7–11.9 KB. |
+| Immediate second run makes zero LLM calls | ✅ Live: 0 calls, $0 (briefs *and* investigations reused). |
+| Mortgage-rate change regenerates only the national brief | ✅ for briefs, by construction. Investigations also rerun on a rate change, by design (DECISIONS). |
+| Affordability numbers match the site calculator | N/A (no site yet). The shared vector passes. |
+| Tests pass, evals meet §11 thresholds | ✅ 232 tests, ruff clean, all three suites at pass rate 1.000. |
+| `/real-estate` page renders | N/A (site out of scope). |
 
 ## Things you must do by hand
 
-1. **Repo secrets** (Settings → Secrets → Actions on `real-estate-agent`):
-   - `ANTHROPIC_API_KEY`. The reusable workflow passes this exact name; it
-     doesn't read `AGENTS_ANTHROPIC_API_KEY`.
-   - `FRED_API_KEY`.
-   - `CENSUS_API_KEY`: free at https://api.census.gov/data/key_signup.html,
-     and now required for ACS income.
-   - Optionally `SITE_DISPATCH_TOKEN`, if `Kghaffari26/agents-hub` should be
-     notified.
-2. **Give Actions push rights.** run-agent.yml pushes to this branch
-   (`data/`) and force-pushes the `data` branch. Actions needs "Read and
-   write permissions", and branch protection on `main` must allow the bot's
-   commit.
-3. **Review the 29 `# REVIEW` lines** above, especially whether division
-   metros sharing a parent centroid is acceptable for the map.
-4. **Census permits** stay disabled until someone verifies the monthly BPS
-   CBSA file URL and layout (`agents/real_estate/fetch_permits.py`).
-5. **Watch `latest.json`'s size.** It's at 147.5 of 150 KiB.
-6. **Alert labels are per-flag, not per-group.** An alert's label is taken
-   from the first flagged metro, e.g. "Inventory -24.2% YoY" for a group of
-   4 metros. The national brief then says things like "4 metros recorded
-   inventory declines of 24%". This predates this session; worth a
-   group-neutral label in `flags.py` later (it would change the published
-   `alerts[].label` text, not the shape).
+1. **Repo secrets** (Settings → Secrets → Actions): `ANTHROPIC_API_KEY` (also used
+   by the eval PR gate), `FRED_API_KEY`, `CENSUS_API_KEY` (free, needed for ACS
+   income), and optionally `SITE_DISPATCH_TOKEN`. Without `ANTHROPIC_API_KEY` the
+   weekly run still publishes templates with a warning, but the LLM eval suites
+   fail (score 0), so the PR gate goes red.
+2. **Actions permissions.** The workflows now declare their own grants
+   (`contents: write` for the agent, `contents: read` for evals). The repo's
+   Actions setting must still allow `contents: write` for `GITHUB_TOKEN`, and
+   branch protection on `main` must let the bot push `data/`.
+3. **Tag check.** agents-core's README says `v0.3.0` must be tagged by a human.
+   It is (`uv` resolved it to `bcfb9c5`), so nothing to do unless it's moved.
+4. **Review the 29 `# REVIEW` lines** above.
+5. **Census permits** stay disabled until the monthly BPS CBSA file URL/layout is
+   verified (`agents/real_estate/fetch_permits.py`).
+6. **Optionally label ~10 investigator outputs** (1–5) so the LLM judge can be
+   calibrated (`LLMJudge.calibrate`).

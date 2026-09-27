@@ -133,3 +133,66 @@ def evaluate_flags(
             )
 
     return flags
+
+
+SEVERITY_RANK = {"info": 0, "notable": 1, "major": 2}
+
+
+def group_label(flag_id: str, thresholds: dict[str, float]) -> str:
+    """The label for an alert *group* across metros: the flag's threshold (e.g.
+    "Inventory down ≥20% YoY"), never one metro's figure. Each metro in the group
+    carries its own label and value (`build_alerts`)."""
+    t = thresholds
+    labels = {
+        "inventory_surge": f"Inventory up ≥{t.get('inventory_surge_yoy', 0.25):.0%} YoY",
+        "inventory_drop": f"Inventory down ≥{abs(t.get('inventory_drop_yoy', -0.20)):.0%} YoY",
+        "price_decline": f"Median price down ≥{abs(t.get('price_decline_yoy', -0.03)):.0%} YoY",
+        "price_surge": f"Median price up ≥{t.get('price_surge_yoy', 0.08):.0%} YoY",
+        "price_36m_high": "36-month high median sale price",
+        "price_36m_low": "36-month low median sale price",
+        "price_cuts_high": "Price cuts at a 36-month high",
+        "slowing": f"Days on market up ≥{t.get('slowing_dom_days', 10):.0f} days YoY",
+        "buyers_market": "Crossed into a buyer's market",
+        "sellers_market": "Crossed into a seller's market",
+        "rent_outpacing": "Rent growth outpacing home values",
+        "permits_boom": f"Permits up ≥{t.get('permits_swing_12m', 0.30):.0%} YoY (12mo)",
+        "permits_bust": f"Permits down ≥{t.get('permits_swing_12m', 0.30):.0%} YoY (12mo)",
+        "payment_jump": f"Monthly payment up ≥{t.get('payment_jump', 0.10):.0%} YoY",
+    }
+    return labels.get(flag_id, flag_id.replace("_", " ").capitalize())
+
+
+def build_alerts(
+    flags_by_slug: dict[str, list[Flag]],
+    names: dict[str, str],
+    thresholds: dict[str, float],
+) -> list[dict[str, object]]:
+    """§5.4's alerts strip: `notable`/`major` flags grouped by flag id across metros,
+    largest group first. The group's label is its threshold and its severity the
+    highest in the group; every metro keeps its own label, value and severity."""
+    groups: dict[str, list[tuple[str, Flag]]] = {}
+    for slug, flags in flags_by_slug.items():
+        for f in flags:
+            if f.severity in ("notable", "major"):
+                groups.setdefault(f.id, []).append((slug, f))
+    alerts = []
+    for fid, members in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+        alerts.append(
+            {
+                "flag": fid,
+                "label": group_label(fid, thresholds),
+                "severity": max((f.severity for _, f in members), key=SEVERITY_RANK.__getitem__),
+                "slugs": [slug for slug, _ in members],
+                "metros": [
+                    {
+                        "slug": slug,
+                        "name": names.get(slug, slug),
+                        "label": f.label,
+                        "value": next(iter(f.facts.values()), None),
+                        "severity": f.severity,
+                    }
+                    for slug, f in members
+                ],
+            }
+        )
+    return alerts

@@ -2,7 +2,7 @@
 (SPEC_REAL_ESTATE.md §3.5), for the affordability `payment_to_income` ratio.
 
 Refreshed at most once a year, so results are cached to
-`data/real_estate/acs_income.json` and reused otherwise. Optional: if the
+`<data dir>/real_estate/acs_income.json` and reused otherwise. Optional: if the
 fetch fails, callers should treat missing income as null and skip
 `payment_to_income` for that metro rather than fail the run.
 """
@@ -13,9 +13,9 @@ import json
 import os
 from pathlib import Path
 
+from agents_core import settings
 from agents_core.http import Http
 
-CACHE_PATH = Path("data/real_estate/acs_income.json")
 GEO_COLUMN = "metropolitan statistical area/micropolitan statistical area"
 
 
@@ -34,11 +34,10 @@ def fetch_income_by_cbsa(
     if api_key:
         params["key"] = api_key
 
-    # No Http TTL cache: results are cached in CACHE_PATH instead, and a cached
-    # error page (the key is excluded from Http's cache key) would outlive a fix.
-    response = http.get(url, params=params, ttl_seconds=0)
+    # get_json never caches a non-JSON body, and agents-core's cache key records
+    # whether the key was sent, so an error page can't outlive adding the key.
     try:
-        rows = response.json()
+        rows = http.get_json(url, params=params)
     except ValueError as exc:
         # The API redirects keyless/invalid-key requests to an HTML page.
         hint = "" if api_key else " (the Census API now requires CENSUS_API_KEY)"
@@ -64,14 +63,21 @@ def fetch_income_by_cbsa(
     return out
 
 
-def load_cached(path: Path = CACHE_PATH) -> tuple[dict[str, int], int | None]:
+def cache_path() -> Path:
+    """Under the configured data dir (`AGENTS_CORE_DATA_DIR`, default `data/`)."""
+    return settings.data_dir() / "real_estate" / "acs_income.json"
+
+
+def load_cached(path: Path | None = None) -> tuple[dict[str, int], int | None]:
     """Returns `(income_by_cbsa, year)` from the cache, or `({}, None)`."""
+    path = path or cache_path()
     if not path.exists():
         return {}, None
     data = json.loads(path.read_text())
     return data.get("income_by_cbsa", {}), data.get("year")
 
 
-def save_cache(income_by_cbsa: dict[str, int], year: int, path: Path = CACHE_PATH) -> None:
+def save_cache(income_by_cbsa: dict[str, int], year: int, path: Path | None = None) -> None:
+    path = path or cache_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"year": year, "income_by_cbsa": income_by_cbsa}, indent=2))

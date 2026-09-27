@@ -13,10 +13,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from agents_core.schema import StatFormat
+
 Format = Literal["currency", "count", "decimal1", "days", "percent"]
 ChangeKind = Literal["ratio", "pp", "diff"]
 GoodDirection = Literal["up", "down", "neutral"]
 Source = Literal["redfin", "zillow", "census_bps", "fred"]
+
+# `diff` metrics' delta format by unit (agents-core has no days_signed/months_signed).
+DIFF_DELTA_FORMATS: dict[str, StatFormat] = {
+    "days": "count_signed",
+    "months": "decimal1",
+    "pp": "pp_signed",
+}
 
 
 @dataclass(frozen=True)
@@ -33,12 +42,16 @@ class Metric:
     unit: str | None = None  # for "diff" metrics: what the delta is measured in (days, months, pp)
 
     @property
-    def delta_format(self) -> str:
-        return {
-            "ratio": "percent_signed",
-            "pp": "pp_signed",
-            "diff": f"{self.unit}_signed" if self.unit else "diff_signed",
-        }[self.change_kind]
+    def delta_format(self) -> StatFormat:
+        """One of agents-core's standard `StatFormat`s, so every consumer of the
+        data-branch contract can render it: a difference in days (DOM) is a signed
+        count, a difference in months (months of supply) a one-decimal number
+        (the sign shows on decreases), a difference in rate points is pp."""
+        if self.change_kind == "ratio":
+            return "percent_signed"
+        if self.change_kind == "pp":
+            return "pp_signed"
+        return DIFF_DELTA_FORMATS.get(self.unit or "", "count_signed")
 
     def to_site_dict(self) -> dict[str, object]:
         d: dict[str, object] = {

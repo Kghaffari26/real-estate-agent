@@ -3,29 +3,35 @@ registered under the `agents_core.agents` entry point (see `pyproject.toml`):
 
     fetch      conditional GETs (Redfin, Zillow), FRED, ACS income    -- no LLM
     transform  filter/normalize -> compute -> flags + temperature
-               -> movers -> facts dicts                               -- no LLM
-    analyze    briefs (LLM for changed facts, cache otherwise) -> assemble
+               -> movers -> facts dicts -> investigator world/targets -- no LLM
+    analyze    briefs (LLM for changed facts, previous output otherwise)
+               -> metro investigations (agent loop, §6.3) -> assemble
                latest.json + metros/<slug>.json, enforce size limits
 
-agents-core's runner validates the result against `IndexOutput`, adds `meta`,
-and publishes `latest.json`, `metros/`, `history/`, `manifest-entry.json`,
-`costs-summary.json` and `schema.json` to `public-data/`. `--dry-run` stops
-after `transform`, so it makes zero LLM calls and publishes nothing.
+agents-core's runner validates the result against `IndexOutput`, adds `meta`
+(including `meta.warnings`, from `ctx.warn`), and publishes `latest.json`,
+`metros/`, `history/`, `manifest-entry.json`, `costs-summary.json`,
+`schema.json`, `trace.json` and `trace.schema.json` to `public-data/`.
+`--dry-run` stops after `transform`, so it makes zero LLM calls and publishes
+nothing. Without an Anthropic API key the run still publishes (status ok):
+every new narrative is the deterministic template, with a warning.
 """
 
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
 import polars as pl
+from agents_core import tracing
 from agents_core.agent import Agent, AgentResult, RunContext
 from agents_core.http import HostPolicy, Http
+from agents_core.llm import LLM, LLMError
 from agents_core.schema import RunMeta, Source
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from agents.real_estate import (
     analyze,
@@ -34,6 +40,7 @@ from agents.real_estate import (
     fetch_income,
     fetch_redfin,
     fetch_zillow,
+    investigate,
     templates,
     transform,
 )
@@ -42,7 +49,7 @@ from agents.real_estate import movers as movers_mod
 from agents.real_estate import state as state_mod
 from agents.real_estate import temperature as temperature_mod
 from agents.real_estate.config import Metro, Settings, load_metros, load_settings
-from agents.real_estate.flags import Flag, evaluate_flags
+from agents.real_estate.flags import Flag, build_alerts, evaluate_flags
 from agents.real_estate.schema import (
     AffordabilityOut,
     AlertOut,
@@ -52,6 +59,8 @@ from agents.real_estate.schema import (
     ConstructionSeriesValue,
     FlagOut,
     IndexOutput,
+    Investigation,
+    InvestigationSummary,
     KeyStat,
     MetricRegistryEntry,
     MetricValue,
@@ -88,6 +97,13 @@ NATIONAL_SERIES_KEYS = (
 # §10: an oversized index first drops national.series beyond the core 6.
 CORE_NATIONAL_SERIES_KEYS = NATIONAL_SERIES_KEYS[:6]
 FORCE_BRIEFS_FLAG = "--force-briefs"
+NO_KEY_WARNING = (
+    "No Anthropic API key (ANTHROPIC_API_KEY or AGENTS_ANTHROPIC_API_KEY): new briefs and"
+    " investigations use deterministic templates"
+)
+# latest.json is measured with a representative meta block before the runner adds
+# the real one (whose timestamps/cost digits can differ slightly): keep this margin.
+INDEX_SIZE_MARGIN_BYTES = 512
 
 INDEX_SOURCES = [
     Citation(
@@ -111,6 +127,32 @@ INDEX_SOURCES = [
 class PublishSizeError(RuntimeError):
     """A published file is still over its `config/real_estate.toml` size limit
     after the §10 trimming steps. Fails the run (the previous data stays)."""
+
+
+def llm_available(llm: LLM) -> bool:
+    """False when there's no Anthropic key (and no injected client, as in tests):
+    the run then publishes templates instead of failing."""
+    try:
+        llm.client  # noqa: B018 - builds the SDK client; raises without a key
+    except RuntimeError:
+        return False
+    return True
+
+
+def fit_index(
+    body: dict[str, Any], measure: Callable[[dict[str, Any]], int], limit_bytes: int
+) -> tuple[dict[str, Any], list[str]]:
+    """§10: an index over `max_index_kb` drops `national.series` metrics beyond the
+    core 6, then fails with `PublishSizeError` if it's still too large. Returns the
+    (possibly trimmed) body and the warnings to publish."""
+    if measure(body) <= limit_bytes:
+        return body, []
+    national = body["national"]
+    national.series = {k: v for k, v in national.series.items() if k == "dates" or k in CORE_NATIONAL_SERIES_KEYS}
+    size = measure(body)
+    if size > limit_bytes:
+        raise PublishSizeError(f"latest.json is {size} bytes after trimming (limit {limit_bytes})")
+    return body, [f"latest.json over {limit_bytes} bytes: dropped national.series beyond the core 6 (§10)"]
 
 
 def _series(df_rows: list[dict[str, Any]], key: str) -> list[tuple[date, float | None]]:
@@ -139,6 +181,32 @@ def _compute_metro_metrics(
         )
     permits = {key: compute.compute_permits(_series(rows, key)) for key in PERMIT_KEYS}
     return changes, permits
+
+
+def _prior_major_flag_ids(rows: list[dict[str, Any]], thresholds: dict[str, float]) -> set[str]:
+    """Flag ids that were already `major` a month earlier (the data minus its latest
+    month), so the investigator only picks up *new* major flags. Only the inventory
+    surge and price decline flags can be major, so only those inputs are needed."""
+    if len(rows) < 2:
+        return set()
+    prior = rows[:-1]
+    flags = evaluate_flags(
+        inventory_yoy=compute.compute_metric_series(_series(prior, "inventory"), "ratio").yoy,
+        median_sale_price_yoy=compute.compute_metric_series(_series(prior, "median_sale_price"), "ratio").yoy,
+        median_sale_price_high_36m=None,
+        median_sale_price_low_36m=None,
+        price_drops_yoy=None,
+        price_drops_high_36m=None,
+        median_dom_yoy=None,
+        months_of_supply_value=None,
+        months_of_supply_prior=None,
+        zori_yoy=None,
+        zhvi_yoy=None,
+        permits_yoy_12m=None,
+        payment_change_pct=None,
+        thresholds=thresholds,
+    )
+    return {f.id for f in flags if f.severity == "major"}
 
 
 def json_size(obj: BaseModel | dict[str, Any]) -> int:
@@ -179,6 +247,7 @@ class MetroComputed:
     affordability: compute.Affordability | None
     flags: list[Flag]
     facts: dict[str, Any]
+    new_major_flags: list[Flag] = field(default_factory=list)
 
 
 @dataclass
@@ -200,6 +269,8 @@ class Computed:
     key_stats: list[KeyStat]
     national_facts: dict[str, Any]
     m30_latest: tuple[str, float] | None
+    world: investigate.World | None = None
+    targets: list[investigate.Target] = field(default_factory=list)
 
 
 # ---- the agent -------------------------------------------------------------
@@ -209,7 +280,7 @@ class RealEstateAgent(Agent):
     id = AGENT_NAME
     name = "Real Estate Market Agent"
     route = "/real-estate"
-    schema_version = "1.0.0"
+    schema_version = "1.1.0"  # 1.1.0: §6.3 investigations, per-metro alert figures (additive)
     expected_interval_hours = 168
     next_run_hint = "Fridays 08:00 PT"
     history_keep = 52
@@ -229,16 +300,23 @@ class RealEstateAgent(Agent):
         now = datetime.now(UTC)
         http = ctx.http
 
-        metro_fetch = fetch_redfin.fetch_metro(
-            http, tracked_regions={m.redfin_region for m in metros}, history_months=HISTORY_MONTHS
-        )
-        national_fetch = fetch_redfin.fetch_national(http, history_months=HISTORY_MONTHS)
+        with tracing.span("custom", "fetch:redfin") as sp:
+            metro_fetch = fetch_redfin.fetch_metro(
+                http, tracked_regions={m.redfin_region for m in metros}, history_months=HISTORY_MONTHS
+            )
+            national_fetch = fetch_redfin.fetch_national(http, history_months=HISTORY_MONTHS)
+            sp.set(
+                metro_modified=metro_fetch.modified,
+                national_modified=national_fetch.modified,
+                data_through=metro_fetch.data_through,
+            )
         out = Fetched(
             metros=metros,
             settings=settings,
             metro_fetch=metro_fetch,
             national_fetch=national_fetch,
             any_source_changed=metro_fetch.modified or national_fetch.modified,
+            warnings=ctx.warnings,  # published as meta.warnings; also printed by --dry-run
         )
         out.sources += [
             Source(name="Redfin metro market tracker", url=fetch_redfin.METRO_URL, retrieved_at=now),
@@ -255,7 +333,7 @@ class RealEstateAgent(Agent):
                 out.any_source_changed |= zhvi_dl.modified
                 out.sources.append(Source(name="Zillow ZHVI", url=fetch_zillow.ZHVI_URL, retrieved_at=now))
             except Exception as exc:  # noqa: BLE001 - optional source, degrade per SPEC §10
-                out.warnings.append(f"zhvi fetch/parse failed: {exc}")
+                ctx.warn(f"zhvi fetch/parse failed: {exc}")
             try:
                 zori_dl = fetch_zillow.download_zori(http)
                 out.zori_long = fetch_zillow.load_long(
@@ -264,13 +342,13 @@ class RealEstateAgent(Agent):
                 out.any_source_changed |= zori_dl.modified
                 out.sources.append(Source(name="Zillow ZORI", url=fetch_zillow.ZORI_URL, retrieved_at=now))
             except Exception as exc:  # noqa: BLE001
-                out.warnings.append(f"zori fetch/parse failed: {exc}")
+                ctx.warn(f"zori fetch/parse failed: {exc}")
 
         if settings.use_permits:
             # fetch_permits.py's parser is ready, but the exact monthly Census BPS
             # file layout/URL hasn't been verified against a live file (see its
             # docstring); degrade to null permits per SPEC §10 rather than guess.
-            out.warnings.append(
+            ctx.warn(
                 "permits fetch skipped: the Census BPS monthly CBSA file URL/layout is unverified"
             )
 
@@ -299,7 +377,7 @@ class RealEstateAgent(Agent):
                     )
                 )
             else:
-                out.warnings.append(f"ACS income unavailable; payment_to_income is null: {acs_error}")
+                ctx.warn(f"ACS income unavailable; payment_to_income is null: {acs_error}")
 
         try:
             out.fred_series = fetch_fred.fetch_all_national(http)
@@ -310,7 +388,7 @@ class RealEstateAgent(Agent):
                 out.fred_changed = True
                 out.any_source_changed = True
         except Exception as exc:  # noqa: BLE001 - degrade rather than fail the whole run
-            out.warnings.append(f"FRED fetch failed: {exc}")
+            ctx.warn(f"FRED fetch failed: {exc}")
         return out
 
     # -- transform -------------------------------------------------------------
@@ -337,7 +415,7 @@ class RealEstateAgent(Agent):
             rows_by_slug[m.slug] = rows
             changes_by_slug[m.slug], permits_by_slug[m.slug] = _compute_metro_metrics(rows)
             if not rows:
-                raw.warnings.append(f"{m.slug}: missing from the latest Redfin data; publishing stale")
+                ctx.warn(f"{m.slug}: missing from the latest Redfin data; publishing stale")
 
         for key in STANDARD_METRO_KEYS:
             compute.add_percentile_ranks({slug: changes_by_slug[slug][key] for slug in changes_by_slug})
@@ -484,6 +562,7 @@ class RealEstateAgent(Agent):
                 payment_now=affordability.payment_now if affordability else None,
                 payment_change_pct=affordability.payment_change_pct if affordability else None,
             )
+            prior_major = _prior_major_flag_ids(rows, settings.flags)
             computed_metros[m.slug] = MetroComputed(
                 metro=m,
                 rows=rows,
@@ -494,19 +573,17 @@ class RealEstateAgent(Agent):
                 affordability=affordability,
                 flags=flag_list,
                 facts=facts,
+                new_major_flags=[f for f in flag_list if f.severity == "major" and f.id not in prior_major],
             )
 
         # -- alerts, movers, headline ------------------------------------------
-        alert_groups: dict[str, list[str]] = defaultdict(list)
-        alert_meta: dict[str, tuple[str, str]] = {}
-        for slug, mc in computed_metros.items():
-            for f in mc.flags:
-                if f.severity in ("notable", "major"):
-                    alert_groups[f.id].append(slug)
-                    alert_meta.setdefault(f.id, (f.label, f.severity))
         alerts = [
-            AlertOut(flag=fid, label=alert_meta[fid][0], severity=alert_meta[fid][1], slugs=slugs)
-            for fid, slugs in sorted(alert_groups.items(), key=lambda kv: -len(kv[1]))
+            AlertOut.model_validate(a)
+            for a in build_alerts(
+                {slug: mc.flags for slug, mc in computed_metros.items()},
+                {slug: mc.metro.name for slug, mc in computed_metros.items()},
+                settings.flags,
+            )
         ]
 
         raw_movers = movers_mod.compute_movers(
@@ -592,6 +669,18 @@ class RealEstateAgent(Agent):
             },
         }
 
+        world = self._build_world(
+            computed_metros, global_data_through, national_series, national_temperature, rates
+        )
+        targets = investigate.select_targets(
+            world,
+            {
+                slug: [investigate.WorldFlag(id=f.id, label=f.label, severity=f.severity) for f in mc.new_major_flags]
+                for slug, mc in computed_metros.items()
+            },
+            {slug: mc.changes["median_sale_price"].yoy for slug, mc in computed_metros.items()},
+        )
+
         return Computed(
             fetched=raw,
             metros=computed_metros,
@@ -610,6 +699,44 @@ class RealEstateAgent(Agent):
             key_stats=key_stats,
             national_facts=national_facts,
             m30_latest=m30_latest,
+            world=world,
+            targets=targets,
+        )
+
+    def _build_world(
+        self,
+        metros: dict[str, MetroComputed],
+        global_through: date | None,
+        national_series: dict[str, list[Any]],
+        national_temperature: temperature_mod.Temperature,
+        rates: NationalRates,
+    ) -> investigate.World:
+        """The investigator's read-only snapshot (§6.3): the same computed series
+        the metro files publish, so its tools never see a number the site doesn't."""
+        world_metros = {}
+        for slug, mc in metros.items():
+            series = self._metro_series(mc, global_through, HISTORY_MONTHS)
+            world_metros[slug] = investigate.WorldMetro(
+                slug=slug,
+                name=mc.metro.name,
+                region=investigate.region_for(mc.metro.name),
+                homes_sold_12m=compute.trailing_sum(_series(mc.rows, "homes_sold")),
+                dates=series["dates"],
+                series={k: series[k] for k in investigate.METRIC_KEYS if k in series},
+                flags=[investigate.WorldFlag(id=f.id, label=f.label, severity=f.severity) for f in mc.flags],
+            )
+        return investigate.World(
+            data_through=(global_through or date.today()).isoformat(),
+            metros=world_metros,
+            national_dates=national_series.get("dates", []),
+            national_series={k: v for k, v in national_series.items() if k != "dates"},
+            national_temperature={
+                "label": national_temperature.label,
+                "score": national_temperature.score,
+                "relative_to": "its own 3-year history",
+            },
+            rate_dates=rates.dates,
+            mortgage30=rates.mortgage30,
         )
 
     def summarize_dry_run(self, data: Computed) -> str:
@@ -625,6 +752,7 @@ class RealEstateAgent(Agent):
                 f"  {','.join(f.id for f in mc.flags)}"
             )
         lines.append(f"headline: {data.headline}")
+        lines += [f"investigate: {t.slug} ({t.trigger}: {t.trigger_label})" for t in data.targets]
         lines += [f"warning: {w}" for w in data.fetched.warnings]
         return "\n" + "\n".join(lines)
 
@@ -634,36 +762,42 @@ class RealEstateAgent(Agent):
         raw, settings = data.fetched, data.fetched.settings
         force_briefs = FORCE_BRIEFS_FLAG in ctx.extra_args
         state = state_mod.State.load()
-        cache = state_mod.BriefCache.load()
-        warnings = list(raw.warnings)
+        previous = state_mod.Previous.load()
         any_changed = raw.any_source_changed
+        llm_ok = llm_available(ctx.llm)
+        if not llm_ok:
+            ctx.warn(NO_KEY_WARNING)
 
-        # -- metro briefs: reuse on an unchanged facts hash, else one batch --------
+        # -- metro briefs: reuse the previous output on an unchanged facts hash --------
         briefs: dict[str, Brief] = {}
         to_generate: dict[str, dict[str, Any]] = {}
         hashes: dict[str, str] = {}
-        for slug, mc in data.metros.items():
-            changed, hashes[slug] = state_mod.facts_changed(
-                state, slug, analyze.metro_cache_facts(mc.facts)
-            )
-            any_changed |= changed
-            cached = None if force_briefs else cache.get(slug, hashes[slug])
-            if cached is not None:
-                briefs[slug] = analyze.reuse_brief(cached)
+        with tracing.span("custom", "metro_briefs") as sp:
+            for slug, mc in data.metros.items():
+                changed, hashes[slug] = state_mod.facts_changed(state, slug, analyze.metro_cache_facts(mc.facts))
+                any_changed |= changed
+                prior = None if force_briefs else self._reuse(state.brief_hashes, slug, hashes[slug], previous.brief(slug))
+                if prior is not None:
+                    briefs[slug] = prior
+                else:
+                    to_generate[slug] = mc.facts
+            ctx.log.info("metro briefs: %d reused, %d to generate", len(briefs), len(to_generate))
+            if llm_ok:
+                generated, batch_fallback = analyze.llm_metro_briefs(
+                    ctx.llm, to_generate, batch_timeout_seconds=settings.batch_poll_timeout_min * 60
+                )
+                if batch_fallback:
+                    ctx.warn("metro brief batch timed out; agents-core reran it synchronously")
+                for slug, brief in generated.items():
+                    briefs[slug] = brief
+                    state.brief_hashes[slug] = hashes[slug]
             else:
-                to_generate[slug] = mc.facts
-        ctx.log.info("metro briefs: %d reused, %d to generate", len(briefs), len(to_generate))
-        generated, batch_fallback = analyze.llm_metro_briefs(
-            ctx.llm, to_generate, batch_timeout_seconds=settings.batch_poll_timeout_min * 60
-        )
-        if batch_fallback:
-            warnings.append("metro brief batch timed out; ran synchronously (batch_fallback)")
-        for slug, brief in generated.items():
-            briefs[slug] = brief
-            cache.put(slug, hashes[slug], brief.model_dump(mode="json"))
-            state.brief_hashes[slug] = hashes[slug]
+                for slug, facts in to_generate.items():
+                    briefs[slug] = analyze.generate_metro_brief(facts, reused=False)
+                    state.brief_hashes.pop(slug, None)  # regenerate once a key is set
+            sp.set(reused=len(data.metros) - len(to_generate), generated=len(to_generate), llm=llm_ok)
 
-        # -- national brief ------------------------------------------------------
+        # -- national brief ------------------------------------------------------------
         alerts_dicts = [a.model_dump() for a in data.alerts]
         mover_counts = {"have more price cuts than a year ago": data.price_drops_count}
         national_input = analyze.build_national_input(
@@ -673,27 +807,69 @@ class RealEstateAgent(Agent):
             mover_counts,
             total_metros=len(data.metros),
         )
-        national_changed, national_hash = state_mod.facts_changed(state, "national", national_input)
-        cached_national = None if force_briefs else cache.get("national", national_hash)
-        if cached_national is not None:
-            national_brief = analyze.reuse_brief(cached_national)
-        else:
-            any_changed |= national_changed
-            national_brief = analyze.llm_national_brief(
-                ctx.llm,
-                national_input,
-                lambda: analyze.template_national_draft(data.national_facts, alerts_dicts, mover_counts),
+        with tracing.span("custom", "national_brief") as sp:
+            national_changed, national_hash = state_mod.facts_changed(state, "national", national_input)
+            prior_national = (
+                None
+                if force_briefs
+                else self._reuse(state.brief_hashes, "national", national_hash, previous.brief("national"))
             )
-            cache.put("national", national_hash, national_brief.model_dump(mode="json"))
-            state.brief_hashes["national"] = national_hash
+            if prior_national is not None:
+                national_brief = prior_national
+            elif llm_ok:
+                any_changed |= national_changed
+                national_brief = analyze.llm_national_brief(
+                    ctx.llm,
+                    national_input,
+                    lambda: analyze.template_national_draft(data.national_facts, alerts_dicts, mover_counts),
+                )
+                state.brief_hashes["national"] = national_hash
+            else:
+                any_changed |= national_changed
+                national_brief = analyze.generate_national_brief(data.national_facts, alerts_dicts, mover_counts)
+                state.brief_hashes.pop("national", None)
+            sp.set(reused=prior_national is not None, narrative_source=national_brief.narrative_source)
 
-        # -- assemble -------------------------------------------------------------
+        # -- metro investigations (§6.3): an agent loop per target ---------------------
+        investigations: dict[str, Investigation] = {}
+        new_hashes: dict[str, str] = {}
+        if data.world is not None and data.targets:
+            world_hash = state_mod.hash_facts(
+                {"world": data.world.model_dump(mode="json"), "prompt_version": investigate.PROMPT_VERSION}
+            )
+            with tracing.span("custom", "investigations", targets=[t.slug for t in data.targets]) as sp:
+                for target in data.targets:
+                    inv_hash = state_mod.hash_facts({"world": world_hash, "target": target.model_dump()})
+                    prior = (
+                        None
+                        if force_briefs
+                        else state_mod.reusable(
+                            state.investigation_hashes, target.slug, inv_hash, previous.investigation(target.slug)
+                        )
+                    )
+                    investigation = self._reuse_investigation(prior)
+                    if investigation is not None:
+                        new_hashes[target.slug] = inv_hash
+                    else:
+                        any_changed = True
+                        investigation, reusable_later = self._investigate(ctx, data.world, target, llm_ok)
+                        if reusable_later:
+                            new_hashes[target.slug] = inv_hash
+                    investigations[target.slug] = investigation
+                sp.set(
+                    reused=sum(i.reused for i in investigations.values()),
+                    llm=sum(i.narrative_source == "llm" for i in investigations.values()),
+                )
+        state.investigation_hashes = new_hashes
+
+        # -- assemble ---------------------------------------------------------------------
         files: dict[str, BaseModel] = {}
         summaries: list[MetroSummary] = []
         for slug, mc in data.metros.items():
             summary, detail = self._metro_outputs(mc, briefs[slug], data.global_data_through)
+            detail.investigation = investigations.get(slug)
             if json_size(detail) > settings.max_metro_kb * 1024:
-                warnings.append(f"{slug}: metro file too large, trimming to {TRIMMED_HISTORY_MONTHS} months")
+                ctx.warn(f"{slug}: metro file too large, trimming to {TRIMMED_HISTORY_MONTHS} months")
                 detail.series = self._metro_series(mc, data.global_data_through, TRIMMED_HISTORY_MONTHS)
                 if json_size(detail) > settings.max_metro_kb * 1024:
                     raise PublishSizeError(f"metros/{slug}.json is {json_size(detail)} bytes after trimming")
@@ -701,25 +877,18 @@ class RealEstateAgent(Agent):
             files[f"metros/{slug}.json"] = detail
 
         body = self._index_body(data, national_brief, summaries)
-        if self._index_size(ctx, body, raw.sources) > settings.max_index_kb * 1024:
-            warnings.append("index too large; dropping national.series beyond the core 6")
-            body["national"].series = {
-                k: v for k, v in body["national"].series.items() if k == "dates" or k in CORE_NATIONAL_SERIES_KEYS
-            }
-            size = self._index_size(ctx, body, raw.sources)
-            if size > settings.max_index_kb * 1024:
-                raise PublishSizeError(f"latest.json is {size} bytes after trimming")
+        body["investigations"] = [self._investigation_summary(i) for i in investigations.values()]
+        limit = int(settings.max_index_kb * 1024) - INDEX_SIZE_MARGIN_BYTES
+        body, size_warnings = fit_index(body, lambda b: self._index_size(ctx, b, raw.sources), limit)
+        for w in size_warnings:
+            ctx.warn(w)
 
-        # -- run state (committed back to main by run-agent.yml) --------------------
-        for w in warnings:
-            ctx.log.warning("%s", w)
+        # -- run state (committed back to the default branch by run-agent.yml) ------------
         state.sources["redfin_metro"] = {"data_through": raw.metro_fetch.data_through}
         state.sources["redfin_national"] = {"data_through": raw.national_fetch.data_through}
         if data.m30_latest:
             state.sources.setdefault("fred", {})["MORTGAGE30US"] = f"{data.m30_latest[0]}:{data.m30_latest[1]}"
-        state.last_run = {"run_id": ctx.run_id, "warnings": warnings, "batch_fallback": batch_fallback}
         state.save()
-        cache.save()
 
         return AgentResult(
             body=body,
@@ -729,6 +898,71 @@ class RealEstateAgent(Agent):
             data_changed=any_changed,
             items_count=len(data.metros),
             files=files,
+        )
+
+    # -- narrative reuse and investigations ------------------------------------------
+
+    @staticmethod
+    def _reuse(hashes: dict[str, str], key: str, facts_hash: str, prior: dict[str, Any] | None) -> Brief | None:
+        """The previous published brief for `key`, if it came from these facts."""
+        found = state_mod.reusable(hashes, key, facts_hash, prior)
+        if found is None:
+            return None
+        try:
+            return analyze.reuse_brief(found)
+        except ValidationError:
+            return None
+
+    @staticmethod
+    def _reuse_investigation(prior: dict[str, Any] | None) -> Investigation | None:
+        if prior is None:
+            return None
+        try:
+            return Investigation.model_validate({**prior, "reused": True})
+        except ValidationError:
+            return None
+
+    @staticmethod
+    def _investigate(
+        ctx: RunContext, world: investigate.World, target: investigate.Target, llm_ok: bool
+    ) -> tuple[Investigation, bool]:
+        """Runs the investigator loop for one target. Returns the investigation and
+        whether it may be reused on unchanged data (not when it's a template because
+        the key was missing or the loop stopped early: those retry next run)."""
+        slug = target.slug
+
+        def template(result: Any = None) -> Investigation:
+            draft = investigate.template_investigation(world, target)
+            return Investigation.model_validate(investigate.investigation_record(target, result, draft, "template"))
+
+        if not llm_ok:
+            return template(), False
+        try:
+            result = investigate.run_investigation(ctx.llm, world, target)
+        except LLMError as exc:
+            ctx.warn(f"investigation {slug}: unusable LLM response ({exc}); published the template")
+            return template(), False
+        if result.ok and result.result is not None:
+            source = result.narrative_source or "llm"
+            if source == "template":
+                ctx.warn(f"investigation {slug}: number guard failed after a retry; published the template")
+            record = investigate.investigation_record(target, result, result.result, source)
+            return Investigation.model_validate(record), True
+        ctx.warn(f"investigation {slug} stopped ({result.stop_reason}) after {result.steps} steps; published the template")
+        return template(result), False
+
+    @staticmethod
+    def _investigation_summary(inv: Investigation) -> InvestigationSummary:
+        first = investigate.first_sentence(inv.explanation)
+        return InvestigationSummary(
+            slug=inv.slug,
+            name=inv.name,
+            trigger=inv.trigger,
+            trigger_label=inv.trigger_label,
+            summary=first[:240],
+            cited_metrics=inv.cited_metrics,
+            narrative_source=inv.narrative_source,
+            stop_reason=inv.stop_reason,
         )
 
     # -- assembly helpers ---------------------------------------------------------
@@ -839,6 +1073,7 @@ class RealEstateAgent(Agent):
         """latest.json's size with a representative `meta` block (the runner adds
         the real one after `analyze`; it differs only in a few digits)."""
         meta = RunMeta(
+            warnings=list(ctx.warnings),
             agent=self.id,
             schema_version=self.schema_version,
             run_id=ctx.run_id,

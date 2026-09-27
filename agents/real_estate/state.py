@@ -1,13 +1,16 @@
-"""Run state: source versions (etags/last-modified/data_through), each
-metro's last-used facts hash, and the briefs themselves, so unchanged inputs
-skip both re-fetching (`agents/real_estate/download.py`'s conditional GET)
-and re-generating briefs (SPEC_REAL_ESTATE.md §4).
+"""Run state and the previous published output.
 
-Both files live under `data/real_estate/`, which agents-core's `run-agent.yml`
-commits back to the default branch after every run. The brief cache is kept
-there rather than read back from the published `metros/<slug>.json` because a
-fresh CI checkout doesn't have `public-data/` (it lives on the `data` branch),
-so a hash match alone would have nothing to reuse.
+`State` (`<data dir>/real_estate/state.json`, committed back to the default
+branch by agents-core's `run-agent.yml`) holds source versions and, for every
+brief and investigation, the SHA-256 of the facts it was generated from
+(SPEC_REAL_ESTATE.md §4).
+
+The briefs and investigations themselves are reused from the *previous
+published output* (`Previous`): since agents-core v0.2.0 the reusable workflow
+restores the `data` branch into the publish dir before each run, so the last
+`latest.json` and `metros/<slug>.json` are there in CI too. A narrative is
+reused only when its facts hash in `State` matches *and* the previous output
+still has it; otherwise it's regenerated.
 """
 
 from __future__ import annotations
@@ -18,76 +21,99 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-STATE_PATH = Path("data/real_estate/state.json")
-BRIEFS_PATH = Path("data/real_estate/briefs.json")
+from agents_core import settings
+
+
+def state_path() -> Path:
+    """Under the configured data dir (`AGENTS_CORE_DATA_DIR`, default `data/`)."""
+    return settings.data_dir() / "real_estate" / "state.json"
 
 
 @dataclass
 class State:
     sources: dict[str, Any] = field(default_factory=dict)
     brief_hashes: dict[str, str] = field(default_factory=dict)
-    # The last published run's id, warnings (SPEC §10's degraded sources, stale
-    # metros) and whether the metro batch fell back to synchronous calls.
-    # agents-core's shared RunMeta has no field for either, so they're kept here.
-    last_run: dict[str, Any] = field(default_factory=dict)
+    investigation_hashes: dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def load(cls, path: Path = STATE_PATH) -> State:
+    def load(cls, path: Path | None = None) -> State:
+        path = path or state_path()
         if not path.exists():
             return cls()
         data = json.loads(path.read_text())
         return cls(
             sources=data.get("sources", {}),
             brief_hashes=data.get("brief_hashes", {}),
-            last_run=data.get("last_run", {}),
+            investigation_hashes=data.get("investigation_hashes", {}),
         )
 
-    def save(self, path: Path = STATE_PATH) -> None:
+    def save(self, path: Path | None = None) -> None:
+        path = path or state_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"sources": self.sources, "brief_hashes": self.brief_hashes, "last_run": self.last_run}
+        payload = {
+            "sources": self.sources,
+            "brief_hashes": self.brief_hashes,
+            "investigation_hashes": self.investigation_hashes,
+        }
         path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
-def hash_facts(facts: dict[str, Any]) -> str:
+def hash_facts(facts: Any) -> str:
     """Stable hash of a facts dict (§7.2); `sort_keys=True` makes key order
     irrelevant so equivalent facts always hash the same."""
     canonical = json.dumps(facts, sort_keys=True, default=str)
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def facts_changed(state: State, key: str, facts: dict[str, Any]) -> tuple[bool, str]:
+def facts_changed(state: State, key: str, facts: Any) -> tuple[bool, str]:
     """Returns `(changed, new_hash)` for the given cache key (a metro slug,
     or `"national"`)."""
     new_hash = hash_facts(facts)
     return state.brief_hashes.get(key) != new_hash, new_hash
 
 
-@dataclass
-class BriefCache:
-    """`{key: {"hash": facts hash, "brief": published Brief dict}}`, keyed like
-    `State.brief_hashes` (a metro slug, or `"national"`)."""
+def _read_json(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
 
-    entries: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+@dataclass
+class Previous:
+    """The previous run's published output, read from the publish dir (restored
+    from the `data` branch in CI). Empty on a first run or a fresh local checkout."""
+
+    root: Path
 
     @classmethod
-    def load(cls, path: Path = BRIEFS_PATH) -> BriefCache:
-        if not path.exists():
-            return cls()
-        try:
-            return cls(entries=json.loads(path.read_text()))
-        except json.JSONDecodeError:
-            return cls()
+    def load(cls) -> Previous:
+        return cls(settings.publish_dir())
 
-    def save(self, path: Path = BRIEFS_PATH) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.entries, indent=1, sort_keys=True) + "\n")
+    def metro(self, slug: str) -> dict[str, Any] | None:
+        return _read_json(self.root / "metros" / f"{slug}.json")
 
-    def get(self, key: str, facts_hash: str) -> dict[str, Any] | None:
-        """The cached brief for `key`, only if it was generated from `facts_hash`."""
-        entry = self.entries.get(key)
-        if entry and entry.get("hash") == facts_hash:
-            return entry.get("brief")
-        return None
+    def latest(self) -> dict[str, Any] | None:
+        return _read_json(self.root / "latest.json")
 
-    def put(self, key: str, facts_hash: str, brief: dict[str, Any]) -> None:
-        self.entries[key] = {"hash": facts_hash, "brief": brief}
+    def brief(self, key: str) -> dict[str, Any] | None:
+        """The published `brief` block for a metro slug, or `"national"`."""
+        if key == "national":
+            doc = self.latest()
+            return (doc or {}).get("national", {}).get("brief")
+        return (self.metro(key) or {}).get("brief")
+
+    def investigation(self, slug: str) -> dict[str, Any] | None:
+        return (self.metro(slug) or {}).get("investigation")
+
+
+def reusable(
+    state_hashes: dict[str, str], key: str, facts_hash: str, prior: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """`prior` if it was generated from `facts_hash`, else None."""
+    if prior and state_hashes.get(key) == facts_hash:
+        return prior
+    return None

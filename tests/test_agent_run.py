@@ -1,8 +1,10 @@
 """End to end through agents-core's own runner, offline: mocked Redfin downloads
 (respx) and a fake Anthropic client. Covers the agents-core data-branch contract
 (latest.json, metros/, history/, manifest-entry.json, costs-summary.json,
-schema.json), the §6 shapes, and SPEC §13's "an immediate second run makes zero
-LLM calls" via the brief cache in data/real_estate/.
+schema.json, trace.json), the §6 shapes, and SPEC §13's "an immediate second run
+makes zero LLM calls": briefs and investigations are reused from the previous
+published output (restored from the data branch in CI) when their facts hashes in
+data/real_estate/state.json match.
 """
 
 from __future__ import annotations
@@ -82,12 +84,20 @@ max_metro_kb = 40
 """
 
 
+EXPLANATION = (
+    "Prices kept rising at a steady pace. Supply stayed tight relative to sales. Peers in the"
+    " region moved the same way. The data can't isolate a single local cause."
+)
+
+
 class FakeClient:
     """Answers every metro brief in the batch and the national brief with text that
-    has no numbers (so it always passes the guard); counts every request."""
+    has no numbers (so it always passes the guard); drives the investigator loop
+    (one get_metro_series call, then finish); counts every request."""
 
     def __init__(self) -> None:
         self.requests = 0
+        self.loop_requests = 0
         brief = {"text": "Prices were little changed and the market stayed balanced.", "key_points": ["Steady"]}
         usage = SimpleNamespace(input_tokens=500, output_tokens=50, cache_creation_input_tokens=0, cache_read_input_tokens=0)
         message = SimpleNamespace(
@@ -108,7 +118,31 @@ class FakeClient:
             self.requests += 1
             return SimpleNamespace(**vars(message), parsed_output=output_format.model_validate(brief))
 
+        def create_message(**params):  # the agent loop (LLM.converse)
+            self.requests += 1
+            self.loop_requests += 1
+            messages = params["messages"]
+            if len(messages) == 1:
+                content = messages[0]["content"]  # the cache breakpoint makes it a block list
+                text = content if isinstance(content, str) else content[0]["text"]
+                slug = text.split("slug `")[1].split("`")[0]
+                block = SimpleNamespace(
+                    type="tool_use",
+                    id=f"t{self.loop_requests}",
+                    name="get_metro_series",
+                    input={"slug": slug, "metrics": ["median_sale_price", "inventory"], "months": 13},
+                )
+            else:
+                block = SimpleNamespace(
+                    type="tool_use",
+                    id=f"t{self.loop_requests}",
+                    name="finish",
+                    input={"explanation": EXPLANATION, "cited_metrics": ["median_sale_price", "inventory"]},
+                )
+            return SimpleNamespace(content=[block], usage=usage, stop_reason="tool_use")
+
         self.messages = SimpleNamespace(
+            create=create_message,
             parse=parse,
             batches=SimpleNamespace(
                 create=create,
@@ -155,55 +189,119 @@ def test_real_run_publishes_the_data_branch_contract_then_reuses_briefs(workdir)
     _mock_redfin()
     client = FakeClient()
     assert _run(workdir, client) == 0
-    assert client.requests == 3  # 2 metro briefs in one batch + the national brief
+    # 2 metro briefs in one batch + the national brief + a 2-step investigation
+    assert client.requests == 5 and client.loop_requests == 2
 
     pub = workdir / "public-data"
     latest = json.loads((pub / "latest.json").read_text())
     index = IndexOutput.model_validate(latest)
     assert index.meta.agent == "real_estate"
     assert index.meta.cost_usd > 0
-    assert index.meta.model_usage.fast.input_tokens == 1000
+    assert index.meta.model_usage.fast.input_tokens == 2000  # 2 batch items + 2 loop steps
+    assert index.meta.warnings == ["FRED fetch failed: FRED_API_KEY is not set"]
     assert index.national.brief.narrative_source == "llm"
     assert index.national.brief.model == "claude-sonnet-5"
     assert [m.slug for m in index.metros] == ["alpha-tx", "beta-tx"]
+    # No new major flag in the fixture data: the top mover is investigated.
+    [summary] = index.investigations
+    assert summary.trigger == "top_mover" and summary.narrative_source == "llm"
+    assert summary.summary == "Prices kept rising at a steady pace."
     for slug in ("alpha-tx", "beta-tx"):
         detail = MetroDetailOutput.model_validate_json((pub / "metros" / f"{slug}.json").read_text())
         assert detail.brief.narrative_source == "llm"
         assert detail.brief.model == "claude-haiku-4-5-20251001"
         assert detail.brief.reused is False
         assert len(detail.series["dates"]) == 36
+        assert detail.latest["median_dom"].delta_format == "count_signed"
+        assert detail.latest["months_of_supply"].delta_format == "decimal1"
+    inv = MetroDetailOutput.model_validate_json((pub / "metros" / f"{summary.slug}.json").read_text()).investigation
+    assert inv is not None and inv.explanation == EXPLANATION
+    assert inv.tools_called == ["get_metro_series"]  # finish is the result, not a tool call
+    assert inv.stop_reason == "finished" and inv.steps == 2 and inv.cost_usd > 0
+    assert inv.cited_metrics == ["median_sale_price", "inventory"]
     assert len(list((pub / "history").glob("*.json"))) == 1
     manifest = json.loads((pub / "manifest-entry.json").read_text())
     assert manifest["id"] == "real_estate" and manifest["route"] == "/real-estate"
     assert manifest["items_count"] == 2 and manifest["expected_interval_hours"] == 168
+    assert manifest["trace_summary"]["steps"] == 2 and manifest["trace_summary"]["tool_calls"] == 1
     assert json.loads((pub / "costs-summary.json").read_text())["runs"] == 1
     assert json.loads((pub / "schema.json").read_text())["title"] == "IndexOutput"
-    # Run state that run-agent.yml commits back to main
+    # Tracing (agents_core.tracing): every phase plus this agent's own spans.
+    trace = json.loads((pub / "trace.json").read_text())
+    names = {(sp["kind"], sp["name"]) for sp in trace["spans"]}
+    for expected in [
+        ("phase", "fetch"), ("phase", "analyze"), ("custom", "fetch:redfin"), ("custom", "metro_briefs"),
+        ("custom", "national_brief"), ("custom", "investigations"), ("agent_loop", f"investigate:{summary.slug}"),
+        ("tool_call", "get_metro_series"),
+    ]:  # fmt: skip
+        assert expected in names, expected
+    assert (pub / "trace.schema.json").exists()
+    # Run state that run-agent.yml commits back to main: hashes only, no brief cache.
     assert (workdir / "data" / "costs.jsonl").exists()
-    assert set(json.loads((workdir / "data" / "real_estate" / "briefs.json").read_text())) == {
-        "alpha-tx", "beta-tx", "national"
-    }  # fmt: skip
+    state = json.loads((workdir / "data" / "real_estate" / "state.json").read_text())
+    assert set(state["brief_hashes"]) == {"alpha-tx", "beta-tx", "national"}
+    assert set(state["investigation_hashes"]) == {summary.slug}
+    assert not (workdir / "data" / "real_estate" / "briefs.json").exists()
 
-    # A fresh checkout has no public-data/ (it lives on the data branch): the
-    # brief cache in data/real_estate/ alone must be enough to reuse every brief.
-    import shutil
-
-    shutil.rmtree(pub)
+    # Second run on the restored publish dir: everything is reused, zero LLM calls.
     second = FakeClient()
     assert _run(workdir, second) == 0
     assert second.requests == 0
-    latest2 = IndexOutput.model_validate_json((workdir / "public-data" / "latest.json").read_text())
+    latest2 = IndexOutput.model_validate_json((pub / "latest.json").read_text())
     assert latest2.meta.data_changed is False
     assert latest2.meta.cost_usd == 0
     assert latest2.national.brief.reused is True
-    detail2 = MetroDetailOutput.model_validate_json((workdir / "public-data" / "metros" / "alpha-tx.json").read_text())
+    assert latest2.investigations == index.investigations
+    detail2 = MetroDetailOutput.model_validate_json((pub / "metros" / "alpha-tx.json").read_text())
     assert detail2.brief.reused is True
     assert detail2.brief.text == "Prices were little changed and the market stayed balanced."
+    inv2 = MetroDetailOutput.model_validate_json((pub / "metros" / f"{summary.slug}.json").read_text()).investigation
+    assert inv2 is not None and inv2.reused is True and inv2.explanation == EXPLANATION
 
     # --force-briefs regenerates everything
     third = FakeClient()
     assert _run(workdir, third, "--force-briefs") == 0
-    assert third.requests == 3
+    assert third.requests == 5
+
+    # Without the previous output (a local checkout with no data branch), the hashes
+    # alone can't reuse anything: every narrative is regenerated.
+    import shutil
+
+    shutil.rmtree(pub)
+    fourth = FakeClient()
+    assert _run(workdir, fourth) == 0
+    assert fourth.requests == 5
+
+
+@respx.mock
+def test_without_an_api_key_the_run_publishes_templates_with_a_warning(workdir, monkeypatch):
+    """agents-hub: no Anthropic key must not crash the run. Every narrative falls back
+    to the template, status is ok, meta.warnings says why, and the hashes aren't
+    stored, so the first run with a key regenerates them."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("AGENTS_ANTHROPIC_API_KEY", raising=False)
+    _mock_redfin()
+    with Http(cache_dir=workdir / ".cache" / "http") as http:
+        assert runner.run(AGENT, http=http) == 0
+    pub = workdir / "public-data"
+    index = IndexOutput.model_validate_json((pub / "latest.json").read_text())
+    assert index.meta.status == "ok"
+    assert index.meta.cost_usd == 0
+    assert any("No Anthropic API key" in w for w in index.meta.warnings)
+    assert index.national.brief.narrative_source == "template"
+    [summary] = index.investigations
+    assert summary.narrative_source == "template" and summary.stop_reason == "not_run"
+    detail = MetroDetailOutput.model_validate_json((pub / "metros" / f"{summary.slug}.json").read_text())
+    assert detail.brief.narrative_source == "template"
+    assert detail.investigation is not None
+    assert 4 <= len(detail.investigation.explanation.split(". ")) <= 6
+    state = json.loads((workdir / "data" / "real_estate" / "state.json").read_text())
+    assert state["brief_hashes"] == {} and state["investigation_hashes"] == {}
+
+    # A later run with a key regenerates every narrative with the LLM.
+    client = FakeClient()
+    assert _run(workdir, client) == 0
+    assert client.requests == 5
 
 
 @respx.mock

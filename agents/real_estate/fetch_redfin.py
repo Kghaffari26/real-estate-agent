@@ -29,9 +29,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import polars as pl
-from agents_core.http import Http
-
-from agents.real_estate.download import DownloadResult, download
+from agents_core.http import DownloadResult, Http
 
 METRO_URL = (
     "https://redfin-public-data.s3.us-west-2.amazonaws.com/redfin_market_tracker/"
@@ -113,11 +111,11 @@ class FetchResult:
 
 
 def download_metro_file(http: Http, force: bool = False) -> DownloadResult:
-    return download(http, METRO_URL, METRO_GZ_PATH, force=force)
+    return http.download(METRO_URL, METRO_GZ_PATH, force=force)
 
 
 def download_national_file(http: Http, force: bool = False) -> DownloadResult:
-    return download(http, NATIONAL_URL, NATIONAL_GZ_PATH, force=force)
+    return http.download(NATIONAL_URL, NATIONAL_GZ_PATH, force=force)
 
 
 def _assert_columns(columns: list[str]) -> None:

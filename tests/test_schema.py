@@ -219,9 +219,66 @@ def test_json_size_of_a_model_counts_utf8_bytes():
 def test_index_output_meta_is_agents_core_run_meta():
     payload = _minimal_index_output().model_dump(mode="json")
     assert payload["meta"]["finished_at"] == "2026-09-24T12:05:00Z"
-    payload["meta"]["warnings"] = []  # not part of the shared RunMeta
+    # agents-core >= v0.2.0: warnings live in meta (always present, usually empty)
+    assert payload["meta"]["warnings"] == [] and payload["meta"]["meta_schema_version"] == "1.1.0"
+    payload["meta"]["batch_fallback"] = True  # not a declared meta field
     with pytest.raises(ValidationError):
         IndexOutput.model_validate(payload)
+
+
+def test_new_fields_are_additive_with_defaults():
+    """§6.3 investigations and per-metro alert figures are optional: an index or metro
+    file published before them still validates."""
+    payload = _minimal_index_output().model_dump(mode="json")
+    payload.pop("investigations", None)
+    for alert in payload["alerts"]:
+        alert.pop("metros", None)
+    assert IndexOutput.model_validate(payload).investigations == []
+
+
+def test_every_published_delta_format_is_an_agents_core_stat_format():
+    from typing import get_args
+
+    from agents_core.schema import StatFormat
+
+    from agents.real_estate import metrics
+
+    standard = set(get_args(StatFormat))
+    for m in metrics.METRICS:
+        assert m.delta_format in standard, (m.key, m.delta_format)
+    assert metrics.get("median_dom").delta_format == "count_signed"
+    assert metrics.get("months_of_supply").delta_format == "decimal1"
+    with pytest.raises(ValidationError):
+        MetricValue(value=1, delta_format="days_signed")
+
+
+def test_fit_index_trims_national_series_beyond_the_core_6_then_fails():
+    from types import SimpleNamespace
+
+    from agents.real_estate.agent import (
+        CORE_NATIONAL_SERIES_KEYS,
+        NATIONAL_SERIES_KEYS,
+        PublishSizeError,
+        fit_index,
+    )
+
+    def body():
+        series = {"dates": ["2026-05-31"], **{k: [1.0] * 100 for k in NATIONAL_SERIES_KEYS}}
+        return {"national": SimpleNamespace(series=series)}
+
+    def measure(b):
+        return 100 * len(b["national"].series)
+
+    # under the limit: untouched, no warning
+    b, warnings = fit_index(body(), measure, 10_000)
+    assert len(b["national"].series) == 9 and warnings == []
+    # over it: the non-core series go (§10) and it says so
+    b, warnings = fit_index(body(), measure, 800)
+    assert set(b["national"].series) == {"dates", *CORE_NATIONAL_SERIES_KEYS}
+    assert len(warnings) == 1 and "§10" in warnings[0]
+    # still over after trimming: fail rather than publish an oversized index
+    with pytest.raises(PublishSizeError):
+        fit_index(body(), measure, 500)
 
 
 def test_committed_json_schema_is_current(tmp_path):

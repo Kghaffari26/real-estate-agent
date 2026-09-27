@@ -3,6 +3,54 @@
   "definitions": {
     "IndexOutput": {
       "$defs": {
+        "AlertMetro": {
+          "description": "One metro in an alert group, with its own figure (the group label is a threshold).",
+          "properties": {
+            "label": {
+              "description": "This metro's own flag label, e.g. 'Inventory -24% YoY'",
+              "title": "Label",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "notable",
+                "major"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "slug": {
+              "title": "Slug",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The flagged value, as a ratio/diff",
+              "title": "Value"
+            }
+          },
+          "required": [
+            "slug",
+            "name",
+            "label",
+            "severity"
+          ],
+          "title": "AlertMetro",
+          "type": "object"
+        },
         "AlertOut": {
           "properties": {
             "flag": {
@@ -10,10 +58,19 @@
               "type": "string"
             },
             "label": {
+              "description": "The group's threshold, e.g. 'Inventory down \u226520% YoY'",
               "title": "Label",
               "type": "string"
             },
+            "metros": {
+              "items": {
+                "$ref": "#/$defs/AlertMetro"
+              },
+              "title": "Metros",
+              "type": "array"
+            },
             "severity": {
+              "description": "The highest severity in the group",
               "enum": [
                 "info",
                 "notable",
@@ -229,6 +286,67 @@
           "title": "ConstructionSeriesValue",
           "type": "object"
         },
+        "InvestigationSummary": {
+          "description": "\u00a76.3: one entry of the index-level `investigations` list.",
+          "properties": {
+            "cited_metrics": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Cited Metrics",
+              "type": "array"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "narrative_source": {
+              "enum": [
+                "llm",
+                "template"
+              ],
+              "title": "Narrative Source",
+              "type": "string"
+            },
+            "slug": {
+              "title": "Slug",
+              "type": "string"
+            },
+            "stop_reason": {
+              "title": "Stop Reason",
+              "type": "string"
+            },
+            "summary": {
+              "description": "The explanation's first sentence",
+              "title": "Summary",
+              "type": "string"
+            },
+            "trigger": {
+              "enum": [
+                "new_major_flag",
+                "top_mover"
+              ],
+              "title": "Trigger",
+              "type": "string"
+            },
+            "trigger_label": {
+              "title": "Trigger Label",
+              "type": "string"
+            }
+          },
+          "required": [
+            "slug",
+            "name",
+            "trigger",
+            "trigger_label",
+            "summary",
+            "cited_metrics",
+            "narrative_source",
+            "stop_reason"
+          ],
+          "title": "InvestigationSummary",
+          "type": "object"
+        },
         "KeyStat": {
           "additionalProperties": false,
           "properties": {
@@ -385,6 +503,19 @@
             "delta_format": {
               "anyOf": [
                 {
+                  "enum": [
+                    "currency_compact",
+                    "currency",
+                    "percent",
+                    "percent_signed",
+                    "pp_signed",
+                    "count",
+                    "count_signed",
+                    "count_signed_thousands",
+                    "decimal1",
+                    "days",
+                    "ratio"
+                  ],
                   "type": "string"
                 },
                 {
@@ -937,7 +1068,7 @@
         },
         "RunMeta": {
           "additionalProperties": false,
-          "description": "The `meta` block at the top of every agent's `latest.json`.",
+          "description": "The `meta` block at the top of every agent's `latest.json`.\n\nAgent-specific meta fields: subclass `RunMeta` (fields need defaults), declare\n`meta: MyMeta` on your `AgentOutput` subclass, and return the values in\n`AgentResult.meta_fields`. The runner merges them into `meta` before validating,\nso they're published in latest.json and appear in schema.json.",
           "properties": {
             "agent": {
               "title": "Agent",
@@ -955,6 +1086,12 @@
             "finished_at": {
               "format": "date-time",
               "title": "Finished At",
+              "type": "string"
+            },
+            "meta_schema_version": {
+              "default": "1.1.0",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$",
+              "title": "Meta Schema Version",
               "type": "string"
             },
             "model_usage": {
@@ -989,6 +1126,13 @@
               ],
               "title": "Status",
               "type": "string"
+            },
+            "warnings": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Warnings",
+              "type": "array"
             }
           },
           "required": [
@@ -1114,6 +1258,13 @@
         "headline": {
           "title": "Headline",
           "type": "string"
+        },
+        "investigations": {
+          "items": {
+            "$ref": "#/$defs/InvestigationSummary"
+          },
+          "title": "Investigations",
+          "type": "array"
         },
         "key_stats": {
           "items": {
@@ -1389,11 +1540,143 @@
           "title": "FlagOut",
           "type": "object"
         },
+        "Investigation": {
+          "description": "\u00a76.3: the metro investigator's \"why this is happening\" explanation\n(`metros/<slug>.json` \u2192 `investigation`). Additive: null for metros not\ninvestigated this run.",
+          "properties": {
+            "cited_metrics": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Cited Metrics",
+              "type": "array"
+            },
+            "cost_usd": {
+              "title": "Cost Usd",
+              "type": "number"
+            },
+            "explanation": {
+              "description": "4-6 sentences, numbers checked by the number guard",
+              "title": "Explanation",
+              "type": "string"
+            },
+            "generated_at": {
+              "format": "date-time",
+              "title": "Generated At",
+              "type": "string"
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Model"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "narrative_source": {
+              "enum": [
+                "llm",
+                "template"
+              ],
+              "title": "Narrative Source",
+              "type": "string"
+            },
+            "prompt_version": {
+              "title": "Prompt Version",
+              "type": "string"
+            },
+            "reused": {
+              "default": false,
+              "title": "Reused",
+              "type": "boolean"
+            },
+            "slug": {
+              "title": "Slug",
+              "type": "string"
+            },
+            "steps": {
+              "title": "Steps",
+              "type": "integer"
+            },
+            "stop_reason": {
+              "description": "The agent loop's stop reason, or 'not_run'",
+              "title": "Stop Reason",
+              "type": "string"
+            },
+            "tools_called": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Tools Called",
+              "type": "array"
+            },
+            "trigger": {
+              "enum": [
+                "new_major_flag",
+                "top_mover"
+              ],
+              "title": "Trigger",
+              "type": "string"
+            },
+            "trigger_flag": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Trigger Flag"
+            },
+            "trigger_label": {
+              "title": "Trigger Label",
+              "type": "string"
+            }
+          },
+          "required": [
+            "slug",
+            "name",
+            "trigger",
+            "trigger_label",
+            "explanation",
+            "cited_metrics",
+            "narrative_source",
+            "stop_reason",
+            "steps",
+            "cost_usd",
+            "prompt_version",
+            "generated_at"
+          ],
+          "title": "Investigation",
+          "type": "object"
+        },
         "MetricValue": {
           "properties": {
             "delta_format": {
               "anyOf": [
                 {
+                  "enum": [
+                    "currency_compact",
+                    "currency",
+                    "percent",
+                    "percent_signed",
+                    "pp_signed",
+                    "count",
+                    "count_signed",
+                    "count_signed_thousands",
+                    "decimal1",
+                    "days",
+                    "ratio"
+                  ],
                   "type": "string"
                 },
                 {
@@ -1622,6 +1905,17 @@
           },
           "title": "Flags",
           "type": "array"
+        },
+        "investigation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Investigation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "lat": {
           "anyOf": [

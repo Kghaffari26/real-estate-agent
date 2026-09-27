@@ -1,27 +1,34 @@
 name: real_estate agent
 
-# Weekly run (SPEC_REAL_ESTATE.md §9) through agents-core's reusable workflow:
-# it runs `agents-run real_estate`, commits data/ (cost log, guard failures,
-# data/real_estate/ state + brief cache) back to this branch, and force-pushes
-# public-data/ to this repo's `data` branch (the agents-core data-branch contract).
+# Weekly run (SPEC_REAL_ESTATE.md §9) through agents-core's reusable workflow. It
+# restores this repo's `data` branch into public-data/ (so briefs and investigations
+# are reused when their facts haven't changed), runs `agents-run real_estate`,
+# commits data/ (cost log, guard failures, data/real_estate/state.json) back to this
+# branch, and force-pushes public-data/ (latest.json, metros/, history/, trace.json,
+# ...) to the `data` branch.
 on:
   schedule:
     - cron: "0 15 * * 5" # Friday 08:00 PT, after Thursday's Freddie Mac rate release
   workflow_dispatch:
     inputs:
       force_briefs:
-        description: "Regenerate every brief regardless of cached facts hashes"
+        description: "Regenerate every brief and investigation regardless of cached facts hashes"
         required: false
         type: boolean
         default: false
 
 jobs:
   run:
-    uses: Kghaffari26/agents-core/.github/workflows/run-agent.yml@v0.1.0
+    # run-agent.yml declares no permissions since agents-core v0.2.0: it gets exactly
+    # this job's grant. contents: write pushes data/ and the data branch. No
+    # issues: write, because this agent opens no issues (it never calls ctx.alert).
+    permissions:
+      contents: write
+    uses: Kghaffari26/agents-core/.github/workflows/run-agent.yml@v0.3.0
     with:
       agent: real_estate
       extra_args: ${{ inputs.force_briefs && '--force-briefs' || '' }}
       max_run_usd: "0.50"
       site_repo: Kghaffari26/agents-hub
-      cache_path: data/cache/real_estate
+      cache_path: data/cache/real_estate # Redfin/Zillow downloads; public-data/ is restored from the data branch
     secrets: inherit

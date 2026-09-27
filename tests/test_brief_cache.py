@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from agents.real_estate.state import State, facts_changed, hash_facts
+import json
+
+from agents.real_estate.state import (
+    Previous,
+    State,
+    facts_changed,
+    hash_facts,
+    reusable,
+    state_path,
+)
 
 FACTS = {
     "median_sale_price": 412000,
@@ -105,3 +114,35 @@ def test_state_save_creates_parent_directories(tmp_path):
     path = tmp_path / "nested" / "dir" / "state.json"
     State().save(path)
     assert path.exists()
+
+
+def test_state_path_follows_the_configured_data_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTS_CORE_DATA_DIR", str(tmp_path / "elsewhere"))
+    assert state_path() == tmp_path / "elsewhere" / "real_estate" / "state.json"
+    State(brief_hashes={"x": "h"}).save()
+    assert (tmp_path / "elsewhere" / "real_estate" / "state.json").exists()
+    assert State.load().brief_hashes == {"x": "h"}
+
+
+def test_previous_reads_briefs_and_investigations_from_the_publish_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTS_CORE_PUBLISH_DIR", str(tmp_path / "pub"))
+    (tmp_path / "pub" / "metros").mkdir(parents=True)
+    (tmp_path / "pub" / "latest.json").write_text(json.dumps({"national": {"brief": {"text": "N"}}}))
+    (tmp_path / "pub" / "metros" / "a.json").write_text(
+        json.dumps({"brief": {"text": "A"}, "investigation": {"explanation": "why"}})
+    )
+    prev = Previous.load()
+    assert prev.brief("national") == {"text": "N"}
+    assert prev.brief("a") == {"text": "A"}
+    assert prev.investigation("a") == {"explanation": "why"}
+    assert prev.brief("missing") is None
+    # reuse needs both the matching hash and the previous output
+    assert reusable({"a": "h1"}, "a", "h1", prev.brief("a")) == {"text": "A"}
+    assert reusable({"a": "h1"}, "a", "h2", prev.brief("a")) is None
+    assert reusable({"a": "h1"}, "a", "h1", None) is None
+
+
+def test_previous_is_empty_without_a_publish_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTS_CORE_PUBLISH_DIR", str(tmp_path / "none"))
+    assert Previous.load().brief("national") is None
+    assert Previous.load().investigation("a") is None

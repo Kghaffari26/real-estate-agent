@@ -1,0 +1,32 @@
+name: Evals
+
+# The eval gate on pull requests (agents-core's run-evals.yml@v0.3.0): runs the
+# suites in evals/real_estate/suites.py, appends to evals/history.jsonl, compares
+# each suite with the committed baseline (the previous history line) and fails on a
+# score drop of more than regression_threshold. max_usd caps each suite's spend
+# (AGENTS_CORE_EVAL_MAX_USD); a full run costs about $0.15.
+on:
+  pull_request:
+    paths:
+      - "agents/**"
+      - "evals/**"
+      - "config/**"
+      - "pyproject.toml"
+      - "uv.lock"
+
+jobs:
+  evals:
+    # run-evals.yml declares no permissions of its own; it only needs to check out.
+    permissions:
+      contents: read
+    uses: Kghaffari26/agents-core/.github/workflows/run-evals.yml@v0.3.0
+    with:
+      eval_command: >-
+        uv run agents-evals run
+        evals.real_estate.suites:TEMPLATE_BRIEFS
+        evals.real_estate.suites:LLM_BRIEFS
+        evals.real_estate.suites:INVESTIGATOR
+      max_usd: "0.25"
+      regression_threshold: "0.10"
+      paths: "agents/* evals/* config/* pyproject.toml uv.lock"
+    secrets: inherit

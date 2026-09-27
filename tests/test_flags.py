@@ -282,3 +282,41 @@ def test_flag_facts_carry_the_triggering_value():
     flags = _flags(inventory_yoy=0.30)
     surge = next(f for f in flags if f.id == "inventory_surge")
     assert surge.facts == {"inventory_yoy": 0.30}
+
+
+def test_alert_groups_use_a_threshold_label_and_each_metros_own_figure():
+    from agents.real_estate.flags import Flag, build_alerts
+
+    thresholds = {"inventory_drop_yoy": -0.20, "inventory_surge_yoy": 0.25, "inventory_surge_major_yoy": 0.5}
+    flags = {
+        "a": [Flag("inventory_drop", "Inventory -24% YoY", "notable", {"inventory_yoy": -0.242})],
+        "b": [Flag("inventory_drop", "Inventory -31% YoY", "notable", {"inventory_yoy": -0.31})],
+        "c": [
+            Flag("inventory_surge", "Inventory +55% YoY", "major", {"inventory_yoy": 0.55}),
+            Flag("slowing", "Days on market +12 YoY", "info", {"median_dom_yoy_days": 12}),
+        ],
+        "d": [Flag("inventory_surge", "Inventory +30% YoY", "notable", {"inventory_yoy": 0.30})],
+    }
+    alerts = build_alerts(flags, {"a": "A", "b": "B", "c": "C", "d": "D"}, thresholds)
+    by_flag = {a["flag"]: a for a in alerts}
+    assert set(by_flag) == {"inventory_drop", "inventory_surge"}  # info flags aren't alerts
+
+    drop = by_flag["inventory_drop"]
+    assert drop["label"] == "Inventory down ≥20% YoY"  # not the first metro's "-24%"
+    assert drop["slugs"] == ["a", "b"]
+    assert [(m["slug"], m["label"], m["value"]) for m in drop["metros"]] == [
+        ("a", "Inventory -24% YoY", -0.242),
+        ("b", "Inventory -31% YoY", -0.31),
+    ]
+    surge = by_flag["inventory_surge"]
+    assert surge["label"] == "Inventory up ≥25% YoY"
+    assert surge["severity"] == "major"  # the highest in the group, whichever metro came first
+    assert [m["severity"] for m in surge["metros"]] == ["major", "notable"]
+
+
+def test_group_labels_follow_the_configured_thresholds():
+    from agents.real_estate.flags import group_label
+
+    assert group_label("price_decline", {"price_decline_yoy": -0.05}) == "Median price down ≥5% YoY"
+    assert group_label("payment_jump", {}) == "Monthly payment up ≥10% YoY"
+    assert group_label("buyers_market", {}) == "Crossed into a buyer's market"

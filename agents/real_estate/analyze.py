@@ -3,8 +3,8 @@ paths through `agents_core.llm`, and the deterministic template fallbacks.
 
 - Metro briefs: fast tier through the Batch API (`ctx.llm.batch` +
   `ctx.llm.guard_batch`), only for metros whose facts hash changed. If the batch
-  doesn't end within `batch_poll_timeout_min` it's cancelled and the same
-  requests run synchronously (§7.4 step 5).
+  doesn't end within `batch_poll_timeout_min`, agents-core cancels it and reruns
+  the requests synchronously, 5 at a time (`on_timeout="sync"`, §7.4 step 5).
 - National brief: smart tier, synchronous (`ctx.llm.structured`).
 
 Every LLM result goes through `fields_guard(facts, ["text", "key_points"])`: a
@@ -157,7 +157,15 @@ def build_national_input(
     return {
         **national_facts,
         "top_alerts": [
-            {"label": a["label"], "severity": a["severity"], "metros": len(a.get("slugs", []))}
+            {
+                "label": a["label"],
+                "severity": a["severity"],
+                "metros": len(a.get("slugs", [])),
+                # each metro's own figure (the group label is only the threshold)
+                "examples": [
+                    {"metro": m["name"], "label": m["label"]} for m in a.get("metros", [])[:3]
+                ],
+            }
             for a in alerts[:5]
         ],
         "movers": {
@@ -310,6 +318,9 @@ def _structured_or_template(
         return Guarded(fallback(), "template", attempts=1)
 
 
+SYNC_CONCURRENCY = 5  # §7.4: a timed-out batch reruns synchronously, 5 at a time
+
+
 def llm_metro_briefs(
     llm: LLM,
     facts_by_slug: dict[str, dict[str, Any]],
@@ -319,7 +330,8 @@ def llm_metro_briefs(
 ) -> tuple[dict[str, Brief], bool]:
     """Metro briefs for `facts_by_slug` via the Batch API (fast tier), guarded,
     with per-metro template fallback. Returns `(briefs, batch_fallback)`, where
-    `batch_fallback` is True if the batch timed out and requests ran synchronously.
+    `batch_fallback` is True if the batch timed out and agents-core reran the
+    requests synchronously (`on_timeout="sync"`, §7.4 step 5).
     """
     if not facts_by_slug:
         return {}, False
@@ -332,45 +344,29 @@ def llm_metro_briefs(
     def fallback(slug: str) -> BriefDraft:
         return template_metro_draft(facts_by_slug[slug])
 
-    def sync(item: BatchItem) -> Guarded[BriefDraft]:
-        return _structured_or_template(
-            llm,
-            "fast",
-            item.prompt,
-            system=METRO_SYSTEM,
-            max_tokens=METRO_MAX_TOKENS,
-            purpose=f"metro_brief:{item.custom_id}",
-            guard=guards[item.custom_id],
-            fallback=lambda: fallback(item.custom_id),
-        )
-
-    try:
-        results = llm.batch(
-            "fast",
-            items,
-            system=METRO_SYSTEM,
-            output_model=BriefDraft,
-            purpose="metro_brief",
-            poll_seconds=poll_seconds,
-            timeout_seconds=batch_timeout_seconds,
-        )
-    except LLMError as exc:  # the batch timed out and was cancelled (§7.4 step 5)
-        log.warning("metro brief batch failed (%s); running synchronously", exc)
-        batch_fallback = True
-        guarded = {item.custom_id: sync(item) for item in items}
-    else:
-        batch_fallback = False
-        guarded = llm.guard_batch(
-            "fast",
-            items,
-            results,
-            system=METRO_SYSTEM,
-            output_model=BriefDraft,
-            guard=lambda slug, value: guards[slug](value),
-            fallback=fallback,
-            purpose="metro_brief",
-        )
-
+    results = llm.batch(
+        "fast",
+        items,
+        system=METRO_SYSTEM,
+        output_model=BriefDraft,
+        purpose="metro_brief",
+        poll_seconds=poll_seconds,
+        timeout_seconds=batch_timeout_seconds,
+        on_timeout="sync",
+        max_concurrency=SYNC_CONCURRENCY,
+    )
+    batch_fallback = any(r.via == "sync" for r in results.values())
+    guarded = llm.guard_batch(
+        "fast",
+        items,
+        results,
+        system=METRO_SYSTEM,
+        output_model=BriefDraft,
+        guard=lambda slug, value: guards[slug](value),
+        fallback=fallback,
+        purpose="metro_brief",
+        max_concurrency=SYNC_CONCURRENCY,
+    )
     model = tier_config("fast").model
     briefs = {
         slug: _to_brief(guarded[slug], _metro_citations(facts), model)

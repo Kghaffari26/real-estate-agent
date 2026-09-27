@@ -15,7 +15,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Literal
 
-from agents_core.schema import AgentOutput, KeyStat, NarrativeSource
+from agents_core.schema import AgentOutput, KeyStat, NarrativeSource, StatFormat
 from pydantic import BaseModel, Field
 
 GoodDirection = Literal["up", "down", "neutral"]
@@ -27,7 +27,8 @@ class MetricValue(BaseModel):
     value: float | int | None
     yoy: float | None = None
     mom: float | None = None
-    delta_format: str | None = None
+    # One of agents-core's standard formats (never a local one like "days_signed").
+    delta_format: StatFormat | None = None
     trend_3m: Trend | None = None
     high_36m: bool | None = None
     low_36m: bool | None = None
@@ -85,11 +86,22 @@ class FlagOut(BaseModel):
     facts: dict[str, float] = Field(default_factory=dict)
 
 
+class AlertMetro(BaseModel):
+    """One metro in an alert group, with its own figure (the group label is a threshold)."""
+
+    slug: str
+    name: str
+    label: str = Field(description="This metro's own flag label, e.g. 'Inventory -24% YoY'")
+    value: float | None = Field(default=None, description="The flagged value, as a ratio/diff")
+    severity: Severity
+
+
 class AlertOut(BaseModel):
     flag: str
-    label: str
-    severity: Severity
+    label: str = Field(description="The group's threshold, e.g. 'Inventory down ≥20% YoY'")
+    severity: Severity = Field(description="The highest severity in the group")
     slugs: list[str]
+    metros: list[AlertMetro] = Field(default_factory=list)
 
 
 class MoverEntry(BaseModel):
@@ -185,6 +197,42 @@ class Movers(BaseModel):
     temperature_bottom: list[MoverEntry] = Field(default_factory=list)
 
 
+class Investigation(BaseModel):
+    """§6.3: the metro investigator's "why this is happening" explanation
+    (`metros/<slug>.json` → `investigation`). Additive: null for metros not
+    investigated this run."""
+
+    slug: str
+    name: str
+    trigger: Literal["new_major_flag", "top_mover"]
+    trigger_flag: str | None = None
+    trigger_label: str
+    explanation: str = Field(description="4-6 sentences, numbers checked by the number guard")
+    cited_metrics: list[str]
+    narrative_source: NarrativeSource
+    model: str | None = None
+    stop_reason: str = Field(description="The agent loop's stop reason, or 'not_run'")
+    steps: int
+    tools_called: list[str] = Field(default_factory=list)
+    cost_usd: float
+    prompt_version: str
+    generated_at: datetime
+    reused: bool = False
+
+
+class InvestigationSummary(BaseModel):
+    """§6.3: one entry of the index-level `investigations` list."""
+
+    slug: str
+    name: str
+    trigger: Literal["new_major_flag", "top_mover"]
+    trigger_label: str
+    summary: str = Field(description="The explanation's first sentence")
+    cited_metrics: list[str]
+    narrative_source: NarrativeSource
+    stop_reason: str
+
+
 class IndexOutput(AgentOutput):
     headline: str
     key_stats: list[KeyStat]
@@ -196,6 +244,7 @@ class IndexOutput(AgentOutput):
     movers: Movers
     alerts: list[AlertOut]
     sources: list[Citation]
+    investigations: list[InvestigationSummary] = Field(default_factory=list)  # §6.3, additive
 
 
 class MetroDetailOutput(BaseModel):
@@ -213,6 +262,7 @@ class MetroDetailOutput(BaseModel):
     series: dict[str, list[float | None] | list[str]]
     brief: Brief
     stale: bool = False
+    investigation: Investigation | None = None  # §6.3, additive
 
 
 def export_json_schema(path: Path | str = Path("schemas/real_estate.schema.json")) -> None:

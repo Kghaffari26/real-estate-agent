@@ -41,7 +41,7 @@ from agents.real_estate import compute
 from agents.real_estate import metrics as metric_registry
 from agents.real_estate.analyze import GUARD_ALLOW, guard_facts
 
-PROMPT_VERSION = "investigator-2026-09-27"
+PROMPT_VERSION = "investigator-2026-09-27.2"
 MAX_TARGETS = 3
 TIER = "fast"
 MAX_TOKENS = 1200
@@ -425,18 +425,26 @@ You investigate why one U.S. metro housing market is moving, for a public dashbo
 - Use only numbers the tools returned, written exactly as returned (you may round to fewer decimals). Never calculate new numbers: no differences, sums, ratios, averages or conversions.
 - Percent changes are "%", changes in shares (fields named yoy_pp) are "pp", day changes are "days".
 - Explain drivers the data supports (supply vs. demand, local vs. regional vs. national, rates). Say plainly when the data can't tell.
+- Call a level high, low or minimal only when a tool result gives the comparison (peers, the nation, the metro's own history).
 - No predictions, no advice, no hype words.
 - Finish with 4-6 sentences in `explanation` and the metric keys you relied on in `cited_metrics`."""
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"(])")
+# Abbreviations whose period doesn't end a sentence ("St. Louis", "Ft. Myers", "U.S.").
+_ABBREV = re.compile(r"\b(St|Ft|Mt|Jr|Sr|vs|U\.S)\.(?=\s)")
+
+
+def _sentences(text: str) -> list[str]:
+    protected = _ABBREV.sub(lambda m: m.group(1) + "\x00", text.strip())
+    return [s.replace("\x00", ".") for s in _SENTENCE_END.split(protected) if s.strip()]
 
 
 def first_sentence(text: str) -> str:
-    return _SENTENCE_END.split(text.strip(), maxsplit=1)[0]
+    return _sentences(text)[0] if text.strip() else ""
 
 
 def count_sentences(text: str) -> int:
-    return len([s for s in _SENTENCE_END.split(text.strip()) if s.strip()])
+    return len(_sentences(text))
 
 
 class InvestigationDraft(BaseModel):

@@ -138,6 +138,8 @@ def test_finish_requires_4_to_6_sentences_and_known_metric_keys():
         inv.InvestigationDraft(explanation=ok, cited_metrics=["mortgage_vibes"])
     # decimals and "U.S." don't end sentences
     assert inv.count_sentences("Prices fell 3.1% in the U.S. market. Inventory rose. A. B.") == 4
+    assert inv.count_sentences("St. Louis prices rose. Ft. Myers too. Supply fell. Sales held.") == 4
+    assert inv.first_sentence("St. Louis prices rose. Supply fell.") == "St. Louis prices rose."
 
 
 def test_template_is_4_to_6_sentences_and_passes_the_number_guard(world):

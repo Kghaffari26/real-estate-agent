@@ -305,7 +305,7 @@ def test_alert_groups_use_a_threshold_label_and_each_metros_own_figure():
     assert drop["label"] == "Inventory down ≥20% YoY"  # not the first metro's "-24%"
     assert drop["slugs"] == ["a", "b"]
     assert [(m["slug"], m["label"], m["value"]) for m in drop["metros"]] == [
-        ("a", "Inventory -24% YoY", -0.242),
+        ("a", "Inventory -24% YoY", -0.242),  # rounded to 4 places
         ("b", "Inventory -31% YoY", -0.31),
     ]
     surge = by_flag["inventory_surge"]

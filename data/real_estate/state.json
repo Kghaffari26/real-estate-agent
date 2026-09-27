@@ -28,7 +28,7 @@
     "myrtle-beach-sc": "ed1ea7482a430dd80f68197e3f5f1162b2a3aafcf1cf3774f28a6fdc2a72dde8",
     "nashville-tn": "1c62ef67d150586f46669639af7c3a0edce26dc826e8784214beaa69f51dc641",
     "nassau-county-ny": "9d689a3ca4701d54e99ff162eb086239dd393e02a2fe2486d67e1e65e7a16973",
-    "national": "f0d8ef6668259b65fd1cad82e7d43e610602d5600fe691780662539a53c139db",
+    "national": "9fce829890248ac7a40aee13ca47c5a6b946d6b3692da16d499fbefbe4b4a59f",
     "new-brunswick-nj": "9ac8d3ee9ac5963354b8fe01d87e793576b0dc64cf52425b2bec415b361577d6",
     "new-york-ny": "4a235376db6c0e2680369d71ec072e2483de6c8059a3d6a738d338db12236733",
     "north-port-fl": "29aa919d383d51e515bcab14923d30e7e4bc68448752168e7a0da0307f07a7dd",
@@ -52,13 +52,8 @@
     "washington-dc": "2fd6d12262affa0335e4ba8f9785615ee11fb463797ef97f7dc970863cf6e8bb",
     "west-palm-beach-fl": "c7f6291c53c328c4dcac644bdb92adb61391e572452541963630dd1a390f181c"
   },
-  "last_run": {
-    "batch_fallback": false,
-    "run_id": "2026-09-26T18-03-20Z-574325",
-    "warnings": [
-      "permits fetch skipped: the Census BPS monthly CBSA file URL/layout is unverified",
-      "ACS income unavailable; payment_to_income is null: ACS 2024: non-JSON response (the Census API now requires CENSUS_API_KEY)"
-    ]
+  "investigation_hashes": {
+    "pittsburgh-pa": "5399d1ba809f6f396a81c5b8be931aa54591e08e9f26d86a51329fd6c3b9a525"
   },
   "sources": {
     "fred": {

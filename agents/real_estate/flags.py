@@ -138,6 +138,10 @@ def evaluate_flags(
 SEVERITY_RANK = {"info": 0, "notable": 1, "major": 2}
 
 
+def _round(value: float | None) -> float | None:
+    return None if value is None else round(value, 4)
+
+
 def group_label(flag_id: str, thresholds: dict[str, float]) -> str:
     """The label for an alert *group* across metros: the flag's threshold (e.g.
     "Inventory down ≥20% YoY"), never one metro's figure. Each metro in the group
@@ -188,7 +192,7 @@ def build_alerts(
                         "slug": slug,
                         "name": names.get(slug, slug),
                         "label": f.label,
-                        "value": next(iter(f.facts.values()), None),
+                        "value": _round(next(iter(f.facts.values()), None)),
                         "severity": f.severity,
                     }
                     for slug, f in members

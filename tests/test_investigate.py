@@ -99,7 +99,8 @@ def test_peers_are_the_5_closest_by_homes_sold_in_the_same_region(world):
     assert "Seattle, WA" not in names  # West
     assert names[:3] == ["Nashville, TN", "Miami, FL", "San Antonio, TX"]  # |homes - 30000| ascending
     assert out["peer_median_yoy_pct"] is not None
-    assert out["rank_among_metro_and_peers"] == 1  # Austin's inventory grows fastest
+    assert out["rank_vs_peers"] == 1  # Austin's inventory grows fastest
+    assert "peers only" in out["rank_note"]
 
 
 def test_rates_and_episodes(world):

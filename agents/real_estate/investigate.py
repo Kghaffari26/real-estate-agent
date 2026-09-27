@@ -41,7 +41,7 @@ from agents.real_estate import compute
 from agents.real_estate import metrics as metric_registry
 from agents.real_estate.analyze import GUARD_ALLOW, guard_facts
 
-PROMPT_VERSION = "investigator-2026-09-27.2"
+PROMPT_VERSION = "investigator-2026-09-27.3"
 MAX_TARGETS = 3
 TIER = "fast"
 MAX_TOKENS = 1200
@@ -303,7 +303,11 @@ class Toolbox:
         }
         if this.get(change_key) is not None and changes:
             above = sum(1 for c in changes if c > this[change_key])
-            out["rank_among_metro_and_peers"] = above + 1  # 1 = highest change
+            out["rank_vs_peers"] = above + 1
+            out["rank_note"] = (
+                f"1 = the largest change among this metro and its {len(peer_rows)} peers only"
+                " (not the whole region)"
+            )
         return self._record(out)
 
     def national(self, q: NationalQuery) -> dict[str, Any]:
@@ -426,6 +430,8 @@ You investigate why one U.S. metro housing market is moving, for a public dashbo
 - Percent changes are "%", changes in shares (fields named yoy_pp) are "pp", day changes are "days".
 - Explain drivers the data supports (supply vs. demand, local vs. regional vs. national, rates). Say plainly when the data can't tell.
 - Call a level high, low or minimal only when a tool result gives the comparison (peers, the nation, the metro's own history).
+- Reason from the direction of each change: rising inventory, rising supply or falling sales loosen a market; falling inventory or rising sales tighten it.
+- A peer comparison covers only the metro and its closest peers, never the whole region or the country.
 - No predictions, no advice, no hype words.
 - Finish with 4-6 sentences in `explanation` and the metric keys you relied on in `cited_metrics`."""
 

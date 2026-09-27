@@ -262,3 +262,41 @@ def test_record_shape(world):
     rec = inv.investigation_record(target, None, draft, "template")
     assert rec["stop_reason"] == "not_run" and rec["model"] is None and rec["cost_usd"] == 0.0
     assert rec["prompt_version"] == inv.PROMPT_VERSION
+
+
+# ---- deterministic replay of trajectories recorded by the live eval run ------------------
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["price-gainer", "inventory-surge", "inventory-drop", "cold-market", "hot-market", "no-rate-data"],
+)
+def test_recorded_trajectories_replay_deterministically(case_id, tmp_path, monkeypatch):
+    """Each fixture metro's live trajectory (evals/real_estate/trajectories/, saved with
+    RE_SAVE_TRAJECTORIES) replays offline through the same loop: same tool calls, same
+    guarded result. `strict=True` fails if the loop diverges from the recording."""
+    from pathlib import Path
+
+    from agents_core.agent_loop import ReplayClient, Trajectory
+    from agents_core.evals import EvalCase
+
+    from evals.real_estate import suites
+
+    path = Path(__file__).parent.parent / "evals" / "real_estate" / "trajectories" / f"{case_id}.json"
+    case: EvalCase = next(c for c in suites.INVESTIGATOR.cases if c.id == case_id)
+    world, target = suites._target(case)
+    monkeypatch.setenv("AGENTS_CORE_DATA_DIR", str(tmp_path))
+    llm = LLM(CostTracker(agent="t", run_id="t", path=tmp_path / "c.jsonl"), client=ReplayClient(path, strict=True))
+    loop, box = inv.build_loop(llm, world, target)
+    result = loop.run(inv.task_prompt(target, world))
+
+    recorded = [
+        b["name"] for r in Trajectory.load(path).responses for b in r["content"] if b.get("type") == "tool_use"
+    ]
+    assert result.tools_called() == [t for t in recorded if t != "finish"]
+    assert result.ok and result.stop_reason == "finished" and result.narrative_source == "llm"
+    assert result.steps <= inv.BUDGET.max_steps
+    assert set(case.expected["required_tools"]) <= set(result.tools_called())
+    assert not set(case.expected["forbidden_tools"]) & set(result.tools_called())
+    assert 4 <= inv.count_sentences(result.result.explanation) <= 6
+    assert verify_numbers(result.result.explanation, guard_facts({"task": inv.task_facts(target, world), "seen": box.seen})).ok

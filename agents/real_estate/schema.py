@@ -36,6 +36,14 @@ class MetricValue(BaseModel):
     yoy_pct_rank: float | None = None
 
 
+class MetricSummaryValue(BaseModel):
+    """`metros[].latest.<metric>` in the index (§6.1): just `value` and `yoy`. The full
+    `MetricValue` (mom, delta_format, ranks, ...) is in `metros/<slug>.json`."""
+
+    value: float | int | None
+    yoy: float | None = None
+
+
 class PermitsValue(BaseModel):
     """Permits use a rolling-12-month YoY instead of yoy/mom/trend (§5.1)."""
 
@@ -139,7 +147,7 @@ class MetroSummary(BaseModel):
     lat: float | None
     lon: float | None
     homes_sold_12m: int | None = None
-    latest: dict[str, MetricValue | PermitsValue]
+    latest: dict[str, MetricSummaryValue | PermitsValue]
     temperature: TemperatureSummary
     market_type: str | None
     flags: list[str] = Field(default_factory=list)

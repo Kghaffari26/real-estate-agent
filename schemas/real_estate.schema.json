@@ -498,6 +498,42 @@
           "title": "MetricRegistryEntry",
           "type": "object"
         },
+        "MetricSummaryValue": {
+          "description": "`metros[].latest.<metric>` in the index (\u00a76.1): just `value` and `yoy`. The full\n`MetricValue` (mom, delta_format, ranks, ...) is in `metros/<slug>.json`.",
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Value"
+            },
+            "yoy": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Yoy"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "MetricSummaryValue",
+          "type": "object"
+        },
         "MetricValue": {
           "properties": {
             "delta_format": {
@@ -687,7 +723,7 @@
               "additionalProperties": {
                 "anyOf": [
                   {
-                    "$ref": "#/$defs/MetricValue"
+                    "$ref": "#/$defs/MetricSummaryValue"
                   },
                   {
                     "$ref": "#/$defs/PermitsValue"

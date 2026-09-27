@@ -63,6 +63,7 @@ from agents.real_estate.schema import (
     InvestigationSummary,
     KeyStat,
     MetricRegistryEntry,
+    MetricSummaryValue,
     MetricValue,
     MetroDetailOutput,
     MetroSummary,
@@ -159,8 +160,8 @@ def _series(df_rows: list[dict[str, Any]], key: str) -> list[tuple[date, float |
     return [(row["period_end"], row.get(key)) for row in df_rows]
 
 
-def _summary_metric(change: compute.MetricChange) -> MetricValue:
-    return MetricValue(value=change.value, yoy=change.yoy)
+def _summary_metric(change: compute.MetricChange) -> MetricSummaryValue:
+    return MetricSummaryValue(value=change.value, yoy=change.yoy)
 
 
 def _detail_metric(change: compute.MetricChange, delta_format: str) -> MetricValue:
@@ -980,7 +981,7 @@ class RealEstateAgent(Agent):
         self, mc: MetroComputed, brief: Brief, global_through: date | None
     ) -> tuple[MetroSummary, MetroDetailOutput]:
         m, c, p = mc.metro, mc.changes, mc.permits
-        summary_latest: dict[str, MetricValue | PermitsValue] = {
+        summary_latest: dict[str, MetricSummaryValue | PermitsValue] = {
             key: _summary_metric(c[key]) for key in STANDARD_METRO_KEYS
         }
         detail_latest: dict[str, MetricValue | PermitsValue] = {

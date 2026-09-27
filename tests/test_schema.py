@@ -20,6 +20,7 @@ from agents.real_estate.schema import (
     IndexOutput,
     KeyStat,
     MetricRegistryEntry,
+    MetricSummaryValue,
     MetricValue,
     MetroDetailOutput,
     MetroSummary,
@@ -93,7 +94,7 @@ def _metro_summary(slug: str = "houston-tx") -> MetroSummary:
         lon=-95.36,
         homes_sold_12m=42000,
         latest={
-            "median_sale_price": _metric_value(),
+            "median_sale_price": MetricSummaryValue(value=350000.0, yoy=0.03),
             "permits_total": PermitsValue(value=1200.0, yoy_12m=0.05),
         },
         temperature=TemperatureSummary(score=60, label="Warm"),
@@ -288,3 +289,10 @@ def test_committed_json_schema_is_current(tmp_path):
     export_json_schema(out)
     committed = Path(__file__).parent.parent / "schemas" / "real_estate.schema.json"
     assert out.read_text() == committed.read_text(), "run scripts/export_re_schema.py"
+
+
+def test_index_metro_summaries_carry_only_value_and_yoy():
+    """§6.1: `metros[].latest.<metric>` is `{value, yoy}`; the rest is in the metro file.
+    (Before, every summary also serialized 7 always-null fields: ~70KB of the index.)"""
+    dumped = _metro_summary().model_dump(mode="json")
+    assert dumped["latest"]["median_sale_price"] == {"value": 350000.0, "yoy": 0.03}

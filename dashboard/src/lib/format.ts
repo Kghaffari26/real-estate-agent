@@ -47,11 +47,16 @@ function withSign(text: string, value: number, signed: boolean): string {
   return text;
 }
 
+// Intl.NumberFormat construction is expensive; toLocaleString builds one per call.
+const formatters = new Map<number, Intl.NumberFormat>();
+
 function grouped(value: number, decimals = 0): string {
-  return value.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  let f = formatters.get(decimals);
+  if (!f) {
+    f = new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    formatters.set(decimals, f);
+  }
+  return f.format(value);
 }
 
 function compact(value: number): string {

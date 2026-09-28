@@ -26,6 +26,11 @@ export default tseslint.config(
     rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
+    // Context providers export their hook alongside the component (standard pattern).
+    files: ['src/hooks/**/*.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  {
     // Playwright fixtures call `use()`, which isn't React's hook.
     files: ['e2e/**'],
     languageOptions: { globals: globals.node },

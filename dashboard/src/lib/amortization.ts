@@ -42,3 +42,8 @@ export function calculate(inputs: CalculatorInputs): CalculatorResult {
 export function roundCents(value: number): number {
   return Math.round(value * 100) / 100;
 }
+
+/** Total interest paid over the full term at a fixed monthly payment. */
+export function totalInterest(loanAmount: number, monthlyPayment: number, termYears: number): number {
+  return Math.max(monthlyPayment * Math.round(termYears * 12) - loanAmount, 0);
+}

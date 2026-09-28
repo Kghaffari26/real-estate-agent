@@ -37,8 +37,12 @@ describe('pages', () => {
     renderAt('/');
     const index = JSON.parse(sample('latest.json'));
     expect(await screen.findByRole('heading', { name: index.headline })).toBeInTheDocument();
-    expect(screen.getByText('Sample data')).toBeInTheDocument();
+    // Freshness chip: "Redfin through <month>" with a Sample marker.
+    expect(await screen.findByText('Sample')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /through/ })).toHaveAttribute('href', '/about?section=run');
     expect(screen.getAllByText(/Data through/).length).toBeGreaterThan(0);
+    // The KPI row renders every national metric's final value for screen readers.
+    expect(screen.getByRole('region', { name: 'Key national metrics' })).toBeInTheDocument();
   });
 
   it('shows an error state with retry when latest.json is missing', async () => {
@@ -49,10 +53,10 @@ describe('pages', () => {
     expect(screen.getAllByRole('button', { name: 'Try again' }).length).toBeGreaterThan(0);
   });
 
-  it('shows a loading state first', () => {
+  it('shows a loading state first', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
     renderAt('/metros');
-    expect(screen.getByRole('status')).toHaveTextContent('Loading metros');
+    expect((await screen.findAllByRole('status')).some((el) => /Loading/.test(el.textContent ?? '') || /Loading/.test(el.getAttribute('aria-label') ?? ''))).toBe(true);
   });
 
   it('metro page: not found for unknown slugs', async () => {
@@ -64,7 +68,7 @@ describe('pages', () => {
   it('compare: empty state without metros', async () => {
     serve({ 'latest.json': sample('latest.json') });
     renderAt('/compare');
-    expect(await screen.findByText(/Pick at least one metro/)).toBeInTheDocument();
+    expect(await screen.findByText('Pick metros to compare')).toBeInTheDocument();
   });
 
   it('about: lists sources with attribution', async () => {
@@ -72,6 +76,8 @@ describe('pages', () => {
     renderAt('/about');
     expect(await screen.findByRole('heading', { name: 'Sources and attribution' })).toBeInTheDocument();
     expect(screen.getAllByText('Data: Redfin, a national real estate brokerage.').length).toBeGreaterThan(0);
-    expect(await screen.findByText('$0.0647')).toBeInTheDocument();
+    const manifest = JSON.parse(sample('manifest-entry.json'));
+    const cost = manifest.run_cost_usd < 1 ? manifest.run_cost_usd.toFixed(4) : manifest.run_cost_usd.toFixed(2);
+    expect(await screen.findByText(`$${cost}`)).toBeInTheDocument();
   });
 });

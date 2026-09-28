@@ -1,8 +1,8 @@
 /** View model for the Overview page (pure). */
 import type { IndexOutput, KeyStat } from '../data/schema.gen';
-import type { AlertView } from '../components/AlertsList';
-import type { InvestigationView } from '../components/InvestigationCard';
-import type { MoverRow } from '../components/MoversList';
+import type { AlertView } from '../components/data/AlertCards';
+import type { InvestigationView } from '../components/data/InvestigationCard';
+import type { RankedRow } from '../components/data/RankedBars';
 import { formatValue } from '../lib/format';
 import { metricLabel, type Registry } from '../lib/metrics';
 
@@ -38,8 +38,15 @@ export function keyStatScale(stat: KeyStatView): 'ratio' | 'points' {
   return stat.deltaFormat === 'pp_signed' ? 'points' : 'ratio';
 }
 
-export function moverRows(entries: IndexOutput['movers']['price_gains'], format: string, scale: 'ratio' | 'points' = 'ratio'): MoverRow[] {
-  return entries.map((e) => ({ slug: e.slug, name: e.name, value: formatValue(e.value, format, { scale }) }));
+export function moverRows(entries: IndexOutput['movers']['price_gains'], format: string, scale: 'ratio' | 'points' = 'ratio'): RankedRow[] {
+  return entries.map((e) => ({ slug: e.slug, name: e.name, value: e.value ?? null, text: formatValue(e.value, format, { scale }) }));
+}
+
+/** All metros for the heat grid, hottest first (ties by name). */
+export function heatCells(index: Pick<IndexOutput, 'metros'>) {
+  return [...index.metros]
+    .map((m) => ({ slug: m.slug, name: m.name, score: m.temperature.score, label: m.temperature.label }))
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.name.localeCompare(b.name));
 }
 
 export function alertViews(index: Pick<IndexOutput, 'alerts' | 'metros'>): AlertView[] {

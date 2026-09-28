@@ -10,10 +10,10 @@ interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
 }
 
-/** A labeled group of toggle buttons (aria-pressed), keyboard-accessible by default. */
+/** A labeled group of toggle buttons (aria-pressed). */
 export function SegmentedControl<T extends string>({ label, options, value, onChange }: SegmentedControlProps<T>) {
   return (
-    <div role="group" aria-label={label} className="inline-flex overflow-hidden rounded-md border border-border">
+    <div role="group" aria-label={label} className="inline-flex h-8 items-center rounded-md bg-surface-3 p-0.5">
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -22,7 +22,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
             type="button"
             aria-pressed={active}
             onClick={() => onChange(option.value)}
-            className={`px-3 py-1 text-sm ${active ? 'bg-accent text-accent-contrast' : 'bg-surface text-text hover:bg-surface-muted'}`}
+            className={`h-7 rounded-[5px] px-2.5 text-xs font-medium transition-colors duration-1 ${active ? 'bg-surface text-text shadow-1' : 'text-text-2 hover:text-text'}`}
           >
             {option.label}
           </button>

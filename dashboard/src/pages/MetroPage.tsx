@@ -1,33 +1,46 @@
-import { useMemo } from 'react';
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Building2, GitCompare, Printer } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AffordabilityCalculator } from '../components/AffordabilityCalculator';
-import { BriefCard } from '../components/BriefCard';
-import { TimeSeriesChart, type ChartSeries } from '../components/charts/TimeSeriesChart';
-import { InvestigationCard } from '../components/InvestigationCard';
-import { KpiTile } from '../components/KpiTile';
-import { PageHeader } from '../components/PageHeader';
-import { TemperatureBreakdown } from '../components/TemperatureBreakdown';
-import { TemperatureGauge } from '../components/TemperatureGauge';
+import { LogoMark } from '../components/brand/Logo';
+import { RateStrip, TimeSeriesChart, type ChartSeries } from '../components/charts';
+import { Sparkline } from '../components/charts/Sparkline';
+import { endLabelMargin } from '../components/charts/chartUtils';
+import { AffordabilityCalculator } from '../components/data/AffordabilityCalculator';
+import { AnalystNote, NarrativeBadge } from '../components/data/AnalystNote';
+import { FlagCards } from '../components/data/FlagCards';
+import { InvestigationBody } from '../components/data/InvestigationCard';
+import { KpiCard } from '../components/data/KpiCard';
+import { TemperatureComponents } from '../components/data/TemperatureComponents';
+import { TemperatureGauge } from '../components/data/TemperatureGauge';
 import { Badge } from '../components/ui/Badge';
-import { severityTone } from '../components/ui/tones';
 import { Card } from '../components/ui/Card';
 import { Checkbox } from '../components/ui/Checkbox';
+import { Collapsible } from '../components/ui/Collapsible';
+import { CopyLinkButton } from '../components/ui/CopyLinkButton';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { Select } from '../components/ui/Select';
-import { EmptyState, ErrorState, LoadingState } from '../components/ui/StateViews';
+import { PageSkeleton } from '../components/ui/Skeleton';
+import { EmptyState, ErrorState } from '../components/ui/StateViews';
+import { BRAND } from '../config/brand';
 import { isValidSlug } from '../data/api';
 import { useIndex, useMetro } from '../data/hooks';
 import type { IndexOutput, MetroDetailOutput } from '../data/schema.gen';
+import { useEntityColors } from '../hooks/EntityColors';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useQueryState } from '../hooks/useQueryState';
-import { formatMonth, formatValue } from '../lib/format';
-import { buildRegistry, metricLabel, valueScale, type Registry } from '../lib/metrics';
-import { alignToDates, hasData, numericSeries, rangeStart, RANGES, seriesDates, toRows, type Range } from '../lib/series';
-import { calculatorDefaults, flagFacts, investigationView, metricTiles, temperatureRows, type MetricTileView } from '../viewmodels/metro';
+import { withAttribution } from '../lib/attribution';
+import { formatDateTime, formatMonth, formatValue } from '../lib/format';
+import { buildRegistry, metricLabel, valueScale } from '../lib/metrics';
+import { alignToDates, hasData, indexTo100, numericSeries, rangeStart, RANGES, seriesDates, toRows, type Range } from '../lib/series';
+import { calculatorDefaults, flagViews, investigationView, metricTiles, temperatureBars, type MetricTileView } from '../viewmodels/metro';
 import { NotFoundPage } from './NotFoundPage';
 
 const RANGE_OPTIONS = RANGES.map((r) => ({ value: r, label: r }));
-const TREND_TEXT = { up: '▲ Rising (3 mo)', down: '▼ Falling (3 mo)', flat: '■ Flat (3 mo)' } as const;
+const TREND = {
+  up: { Icon: ArrowUpRight, text: 'Rising, 3 mo' },
+  down: { Icon: ArrowDownRight, text: 'Falling, 3 mo' },
+  flat: { Icon: ArrowRight, text: 'Flat, 3 mo' },
+} as const;
 
 export function MetroPage() {
   const { slug } = useParams();
@@ -37,7 +50,7 @@ export function MetroPage() {
   useDocumentTitle(metro.status === 'ready' ? metro.data.name : 'Metro');
 
   if (!valid) return <NotFoundPage what="metro" />;
-  if (metro.status === 'loading' || index.status === 'loading') return <LoadingState label="Loading metro…" />;
+  if (metro.status === 'loading' || index.status === 'loading') return <PageSkeleton label="Loading metro…" />;
   if (metro.status === 'error') {
     if ((metro.error as { kind?: string }).kind === 'not_found') return <NotFoundPage what="metro" />;
     return <ErrorState error={metro.error} onRetry={metro.retry} />;
@@ -46,12 +59,19 @@ export function MetroPage() {
   return <Metro metro={metro.data} index={index.data} />;
 }
 
-function tileBadges(tile: MetricTileView) {
+function TileBadges({ tile }: { tile: MetricTileView }) {
+  const trend = tile.trend ? TREND[tile.trend] : null;
   return (
     <>
-      {tile.trend && <Badge>{TREND_TEXT[tile.trend]}</Badge>}
-      {tile.high36 && <Badge tone="info">36-month high</Badge>}
-      {tile.low36 && <Badge tone="info">36-month low</Badge>}
+      {tile.high36 && <Badge tone="accent">36-mo high</Badge>}
+      {tile.low36 && <Badge tone="accent">36-mo low</Badge>}
+      {trend && (
+        <Badge title={trend.text}>
+          <trend.Icon aria-hidden="true" className="h-3 w-3" />
+          <span className="sr-only">{trend.text}</span>
+          <span aria-hidden="true">3 mo</span>
+        </Badge>
+      )}
     </>
   );
 }
@@ -59,209 +79,253 @@ function tileBadges(tile: MetricTileView) {
 function Metro({ metro, index }: { metro: MetroDetailOutput; index: IndexOutput }) {
   const registry = useMemo(() => buildRegistry(index.metric_registry), [index]);
   const tiles = useMemo(() => metricTiles(metro, registry), [metro, registry]);
+  const entityColors = useEntityColors();
+  const tone = entityColors.peek(metro.slug) ?? 'cat-1';
+  const [hovered, setHovered] = useState<string | null>(null);
   const dates = seriesDates(metro.series);
   const chartable = tiles.map((t) => t.key).filter((k) => hasData(numericSeries(metro.series, k)));
 
   const [metric, setMetric] = useQueryState('metric', chartable[0] ?? 'median_sale_price', chartable);
   const [range, setRange] = useQueryState<Range>('range', '3Y', RANGES);
-  const [overlay, setOverlay] = useQueryState<'0' | '1'>('rate', '0', ['0', '1']);
+  const [rates, setRates] = useQueryState<'1' | '0'>('rates', '1', ['1', '0']);
+  const [vsUs, setVsUs] = useQueryState<'0' | '1'>('vs', '0', ['0', '1']);
 
   const entry = registry.get(metric);
   const start = rangeStart(dates, range);
-  const values = numericSeries(metro.series, metric) ?? [];
-  const rates = alignToDates(dates, index.national.rates.dates, index.national.rates.mortgage30);
-  const rows = toRows(dates.slice(start), { [metric]: values.slice(start), mortgage30: rates.slice(start) });
-  const series: ChartSeries[] = [{ key: metric, label: metricLabel(registry, metric), color: 'chart-1' }];
-  if (overlay === '1') series.push({ key: 'mortgage30', label: metricLabel(registry, 'mortgage30'), color: 'chart-2', axis: 'right', dashed: true });
+  const values = (numericSeries(metro.series, metric) ?? []).slice(start);
+  const nationalValues = alignToDates(dates, seriesDates(index.national.series), numericSeries(index.national.series, metric) ?? [], 5).slice(start);
+  const canCompareUs = hasData(nationalValues);
+  const indexed = vsUs === '1' && canCompareUs;
+  const rateValues = alignToDates(dates, index.national.rates.dates, index.national.rates.mortgage30).slice(start);
+  const rows = toRows(dates.slice(start), {
+    [metric]: indexed ? indexTo100(values) : values,
+    us: indexed ? indexTo100(nationalValues) : nationalValues,
+    mortgage30: rateValues,
+  });
+  const cityName = metro.name.replace(/, [A-Z]{2}(-[A-Z]{2})*$/, '');
+  const series: ChartSeries[] = [{ key: metric, label: `${metricLabel(registry, metric)}, ${metro.name}`, shortLabel: cityName, color: tone }];
+  if (indexed) series.push({ key: 'us', label: `${metricLabel(registry, metric)}, U.S.`, shortLabel: 'U.S.', color: tone === 'cat-2' ? 'cat-1' : 'cat-2', dashed: true });
 
-  const coreTiles = tiles.filter((t) => !['zhvi', 'zori'].includes(t.key) && !t.permits);
-  const zillowTiles = tiles.filter((t) => ['zhvi', 'zori'].includes(t.key));
-  const permitTiles = tiles.filter((t) => t.permits);
+  const core = tiles.filter((t) => !['zhvi', 'zori'].includes(t.key) && !t.permits);
+  const zillow = tiles.filter((t) => ['zhvi', 'zori'].includes(t.key));
+  const permits = tiles.filter((t) => t.permits);
+  const heroKeys = ['median_sale_price', 'homes_sold', 'median_dom'];
+  const hero = heroKeys.map((k) => tiles.find((t) => t.key === k)).filter((t): t is MetricTileView => Boolean(t));
   const defaults = calculatorDefaults(metro);
   const investigation = investigationView(metro, registry);
+  const spark = (key: string) => (numericSeries(metro.series, key) ?? []).slice(-36);
 
-  const tile = (t: MetricTileView) => (
-    <KpiTile
+  // Keep a stale hover from lingering if the chips unmount.
+  useEffect(() => () => setHovered(null), []);
+
+  const kpi = (t: MetricTileView) => (
+    <KpiCard
       key={t.key}
+      metricKey={t.key}
       label={t.label}
-      value={t.value}
+      value={t.raw}
+      formatValue={(v) => formatValue(v, t.format, { scale: t.scale })}
       goodDirection={t.goodDirection}
       deltas={[
-        { value: t.yoy, format: t.deltaFormat, label: t.permits ? 'YoY (12-mo)' : 'YoY' },
+        { value: t.yoy, format: t.deltaFormat, label: t.permits ? 'YoY 12-mo' : 'YoY' },
         ...(t.permits ? [] : [{ value: t.mom, format: t.deltaFormat, label: 'MoM' }]),
       ]}
-      badges={tileBadges(t)}
+      badges={<TileBadges tile={t} />}
+      spark={spark(t.key)}
+      sparkTone={tone}
       note={t.note}
+      highlighted={hovered === t.key}
     />
   );
 
   return (
     <div className="space-y-6">
-      <nav aria-label="Breadcrumb" className="text-sm">
-        <Link to="/metros">Metros</Link> <span aria-hidden="true">/</span> <span aria-current="page">{metro.name}</span>
-      </nav>
-      <PageHeader
-        title={metro.name}
-        subtitle={
-          <>
-            Data through {formatMonth(metro.data_through, true)}
-            {metro.market_type && <> · {metro.market_type}</>}
-            {metro.stale && (
-              <>
-                {' '}
-                <Badge tone="warning">Stale data</Badge>
-              </>
-            )}
-          </>
-        }
-      >
-        <Link to={`/compare?m=${metro.slug}`} className="btn no-underline hover:no-underline">
-          Compare with…
-        </Link>
-      </PageHeader>
+      {/* Print-only report header */}
+      <div className="print-only mb-4 border-b border-border pb-3">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-2 text-md font-semibold">
+            <LogoMark className="h-6 w-6" />
+            {BRAND.name} · Metro report
+          </span>
+          <span className="text-xs">Data through {formatMonth(metro.data_through, true)}</span>
+        </div>
+      </div>
 
-      <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {coreTiles.map(tile)}
+      {/* Hero band */}
+      <section aria-labelledby="metro-title" className="card relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent/[0.05] via-transparent to-transparent" aria-hidden="true" />
+        <div className="relative grid gap-6 p-5 sm:p-6 lg:grid-cols-[1fr_auto]">
+          <div className="min-w-0 space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {metro.market_type && (
+                <Badge tone="accent">
+                  <Building2 aria-hidden="true" className="h-3 w-3" />
+                  {metro.market_type}
+                </Badge>
+              )}
+              {metro.stale && <Badge>Stale data</Badge>}
+              <span className="text-xs text-text-3">Data through {formatMonth(metro.data_through, true)}</span>
+            </div>
+            <h1 id="metro-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              {metro.name}
+            </h1>
+            <dl className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-3">
+              {hero.map((t) => (
+                <div key={t.key}>
+                  <dt className="text-xs text-text-3">{t.label}</dt>
+                  <dd className="num mt-0.5 text-lg font-semibold">{t.value}</dd>
+                  <dd className="num text-xs text-text-2">{formatValue(t.yoy, t.deltaFormat, { signed: true })} YoY</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="flex flex-wrap gap-2" data-no-print>
+              <Link to={`/compare?m=${metro.slug}`} className="btn">
+                <GitCompare aria-hidden="true" className="h-3.5 w-3.5" />
+                Compare
+              </Link>
+              <CopyLinkButton />
+              <button type="button" className="btn" onClick={() => window.print()}>
+                <Printer aria-hidden="true" className="h-3.5 w-3.5" />
+                Print report
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-col items-center justify-center">
+            <TemperatureGauge score={metro.temperature.score} label={metro.temperature.label} basis="vs the other 49 metros" />
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="Key metrics" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+        {core.map(kpi)}
       </section>
 
       <Card
-        id="metro-chart"
+        id="trend"
         title="Trend"
+        subtitle={indexed ? 'Indexed: first month in range = 100' : (entry?.note ?? undefined)}
+        copyLink
+        exportTitle={`${metricLabel(registry, metric)}, ${metro.name}`}
+        exportSubtitle={`Redfin, monthly, through ${formatMonth(metro.data_through, true)}`}
         actions={
           <>
             <Select label="Metric" hideLabel value={metric} onChange={setMetric} options={chartable.map((k) => ({ value: k, label: metricLabel(registry, k) }))} />
             <SegmentedControl label="Time range" options={RANGE_OPTIONS} value={range} onChange={setRange} />
-            <Checkbox label="30-yr mortgage rate" checked={overlay === '1'} onChange={(on) => setOverlay(on ? '1' : '0')} />
           </>
         }
-        footer={entry?.note ?? undefined}
       >
+        <div className="mb-3 flex flex-wrap gap-x-5" data-no-print>
+          {canCompareUs && <Checkbox label="Compare with U.S. (index to 100)" checked={indexed} onChange={(on) => setVsUs(on ? '1' : '0')} />}
+          <Checkbox label="30-yr mortgage rate strip" checked={rates === '1'} onChange={(on) => setRates(on ? '1' : '0')} />
+        </div>
         <TimeSeriesChart
           rows={rows}
           series={series}
-          left={{ format: entry?.format ?? 'count', scale: valueScale(entry) }}
-          right={overlay === '1' ? { format: 'percent', scale: 'points' } : undefined}
-          description={`${metricLabel(registry, metric)} in ${metro.name}, monthly${overlay === '1' ? ', with the 30-year mortgage rate on the right axis' : ''}`}
+          axis={indexed ? { format: 'index' } : { format: entry?.format ?? 'count', scale: valueScale(entry) }}
+          syncId="metro-trend"
+          area={!indexed}
+          annotate={!indexed}
+          extremeLabel={range === '1Y' ? { high: '1-yr high', low: '1-yr low' } : { high: '36-mo high', low: '36-mo low' }}
+          height={280}
+          description={`${metricLabel(registry, metric)} in ${metro.name}, monthly${indexed ? ', indexed to 100 with the U.S.' : ''}`}
         />
+        {rates === '1' && (
+          <div className="mt-2 border-t border-border pt-3">
+            <RateStrip rows={rows} dataKey="mortgage30" label="30-yr fixed mortgage rate (U.S.)" syncId="metro-trend" rightMargin={endLabelMargin(series)} />
+          </div>
+        )}
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card id="temperature" title="Market temperature" footer="Competitiveness relative to the other tracked metros. Each component is a z-score across the metros this month; the score is 100 × Φ(mean signed z).">
-          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-            <TemperatureGauge score={metro.temperature.score} label={metro.temperature.label} size="sm" />
-            <div className="w-full min-w-0">
-              <TemperatureBreakdown rows={temperatureRows(metro, registry)} />
-            </div>
-          </div>
-        </Card>
-        <Card id="flags" title="Flags">
-          {metro.flags.length === 0 ? (
-            <EmptyState>No flags this month.</EmptyState>
+      <Collapsible title="Temperature and flags" defaultOpen>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card id="temperature" title="What drives the temperature" subtitle="Each component vs the other tracked metros (z-score). Right of center pushes the score up." copyLink>
+            <TemperatureComponents bars={temperatureBars(metro, registry)} />
+          </Card>
+          <Card id="flags" title="Flags" subtitle="Deterministic rules on this month's numbers" copyLink>
+            <FlagCards flags={flagViews(metro, registry)} />
+          </Card>
+        </div>
+      </Collapsible>
+
+      <Collapsible title="Analysis" defaultOpen>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card id="brief" eyebrow="Analyst note" title="Market brief" actions={<NarrativeBadge source={metro.brief.narrative_source} reused={metro.brief.reused} />} copyLink>
+            <AnalystNote brief={metro.brief} compact />
+          </Card>
+          <Card id="investigation" eyebrow="Investigation" title="Why this is happening" copyLink>
+            {investigation ? (
+              <InvestigationBody view={investigation} onHoverMetric={setHovered} />
+            ) : (
+              <EmptyState title="Not investigated this run">The AI investigator looks into up to 3 metros per run: those with a new major flag, else the top mover.</EmptyState>
+            )}
+          </Card>
+        </div>
+      </Collapsible>
+
+      <Collapsible title="Home values, rents and permits">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card id="zillow" eyebrow="Zillow Research" title="Home values and rents" copyLink>
+            <MiniMetrics tiles={zillow} spark={spark} tone={tone} empty={<EmptyState compact title="Not published for this metro">Zillow reports this area only as part of its larger metro, so there's no separate index.</EmptyState>} />
+          </Card>
+          <Card id="permits" eyebrow="U.S. Census Bureau" title="Building permits" copyLink>
+            <MiniMetrics
+              tiles={permits}
+              spark={spark}
+              tone={tone}
+              empty={<EmptyState compact title="Permits coming soon">Metro-level permits will appear once the Census Bureau's monthly metro file is wired in. National starts and permits are on the Overview.</EmptyState>}
+            />
+          </Card>
+        </div>
+      </Collapsible>
+
+      <Collapsible title="Affordability">
+        <Card id="affordability" title="Affordability calculator" subtitle="Prefilled with this metro's median price and the latest 30-yr rate" copyLink>
+          {defaults ? (
+            <>
+              <AffordabilityCalculator key={metro.slug} defaults={defaults} />
+              {metro.affordability && (
+                <p className="num mt-4 border-t border-border pt-3 text-xs text-text-3">
+                  Published estimate: {formatValue(metro.affordability.payment_now, 'currency')}/mo now vs {formatValue(metro.affordability.payment_year_ago, 'currency')} a year ago ({formatValue(metro.affordability.payment_change_pct, 'percent_signed')}), with {formatValue(metro.affordability.assumptions.rate_year_ago, 'percent', { scale: 'points' })} rates and a {formatValue(metro.affordability.assumptions.price_year_ago, 'currency')} price a year ago.
+                </p>
+              )}
+            </>
           ) : (
-            <ul className="space-y-3">
-              {metro.flags.map((f) => (
-                <li key={f.id}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{f.label}</span>
-                    <Badge tone={severityTone(f.severity)}>{f.severity}</Badge>
-                  </div>
-                  {Object.keys(f.facts).length > 0 && (
-                    <dl className="mt-1 text-sm muted">
-                      {flagFacts(f, registry).map((fact) => (
-                        <div key={fact.label} className="flex gap-2">
-                          <dt>{fact.label}:</dt>
-                          <dd className="tabular-nums">{fact.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <EmptyState compact title="Not available">This metro has no price or rate to start from.</EmptyState>
           )}
         </Card>
-      </div>
+      </Collapsible>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <BriefCard id="metro-brief" title="Market brief" brief={metro.brief} />
-        {investigation ? (
-          <InvestigationCard id="investigation" view={investigation} />
-        ) : (
-          <Card id="investigation" title="Why this is happening">
-            <EmptyState>
-              The investigator looks into up to 3 metros per run (new major flags, else the top mover). {metro.name} wasn't one of them this run.
-            </EmptyState>
-          </Card>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card id="zillow" title="Home values and rents (Zillow)">
-          <SubTiles tiles={zillowTiles} registry={registry} metro={metro} empty="Zillow doesn't publish this metro separately." />
-        </Card>
-        <Card id="permits" title="Building permits (Census)">
-          <SubTiles tiles={permitTiles} registry={registry} metro={metro} empty="No permit data." />
-        </Card>
-      </div>
-
-      <Card id="affordability" title="Affordability calculator">
-        {defaults ? (
-          <>
-            <AffordabilityCalculator key={metro.slug} defaults={defaults} />
-            {metro.affordability && (
-              <p className="mt-3 text-sm muted">
-                Published estimate: {formatValue(metro.affordability.payment_now, 'currency')}/mo now vs{' '}
-                {formatValue(metro.affordability.payment_year_ago, 'currency')} a year ago (
-                {formatValue(metro.affordability.payment_change_pct, 'percent_signed')}), at{' '}
-                {formatValue(metro.affordability.assumptions.rate_year_ago, 'percent', { scale: 'points' })} and{' '}
-                {formatValue(metro.affordability.assumptions.price_year_ago, 'currency')} a year ago.
-              </p>
-            )}
-          </>
-        ) : (
-          <EmptyState>Affordability isn't available for this metro (no price or rate).</EmptyState>
-        )}
-      </Card>
+      <footer className="print-only mt-6 border-t border-border pt-2 text-2xs">
+        {withAttribution(index.sources)
+          .map((s) => s.attribution ?? s.name)
+          .join(' · ')}{' '}
+        · Generated {formatDateTime(index.meta.finished_at)} · {BRAND.siteUrl}
+      </footer>
     </div>
   );
 }
 
-/** ZHVI/ZORI and permits panels: a value per metric (dash when null) plus a small chart. */
-function SubTiles({ tiles, registry, metro, empty }: { tiles: readonly MetricTileView[]; registry: Registry; metro: MetroDetailOutput; empty: string }) {
-  if (tiles.length === 0) return <EmptyState>{empty}</EmptyState>;
-  const dates = seriesDates(metro.series);
-  const withData = tiles.filter((t) => hasData(numericSeries(metro.series, t.key)));
+/** Zillow/permit metrics: value + YoY + a sparkline each, or one friendly empty state when all are null. */
+function MiniMetrics({ tiles, spark, tone, empty }: { tiles: readonly MetricTileView[]; spark: (key: string) => (number | null)[]; tone: Parameters<typeof Sparkline>[0]['tone']; empty: React.ReactNode }) {
+  const present = tiles.filter((t) => t.raw !== null || hasData(spark(t.key)));
+  if (present.length === 0) return <>{empty}</>;
   return (
-    <div className="space-y-4">
-      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {tiles.map((t) => (
-          <div key={t.key}>
-            <dt className="text-sm muted">{t.label}</dt>
-            <dd className="text-lg font-semibold tabular-nums">{t.value}</dd>
-            <dd className="text-sm">
-              {t.permits ? 'YoY (12-mo) ' : 'YoY '}
-              {formatValue(t.yoy, t.deltaFormat, { signed: true })}
-            </dd>
+    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {present.map((t) => (
+        <li key={t.key} className="well p-3">
+          <p className="text-xs text-text-3">{t.label}</p>
+          <div className="mt-1 flex items-end justify-between gap-3">
+            <div>
+              <p className="num text-lg font-semibold">{t.value}</p>
+              <p className="num text-xs text-text-2">
+                {formatValue(t.yoy, t.deltaFormat, { signed: true })} {t.permits ? 'YoY (12-mo)' : 'YoY'}
+              </p>
+            </div>
+            <Sparkline values={spark(t.key)} tone={tone} className="h-10 w-28" />
           </div>
-        ))}
-      </dl>
-      {withData.length === 0 ? (
-        <EmptyState>{empty}</EmptyState>
-      ) : (
-        withData.map((t) => {
-          const entry = registry.get(t.key);
-          return (
-            <TimeSeriesChart
-              key={t.key}
-              height={180}
-              rows={toRows(dates, { [t.key]: numericSeries(metro.series, t.key) ?? [] })}
-              series={[{ key: t.key, label: t.label, color: 'chart-3' }]}
-              left={{ format: entry?.format ?? 'count', scale: valueScale(entry) }}
-              description={`${t.label} in ${metro.name}, monthly`}
-            />
-          );
-        })
-      )}
-    </div>
+          {t.note && <p className="mt-1 text-2xs text-text-3">{t.note}</p>}
+        </li>
+      ))}
+    </ul>
   );
 }

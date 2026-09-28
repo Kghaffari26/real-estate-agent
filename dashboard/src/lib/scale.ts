@@ -1,5 +1,5 @@
-/** A diverging, bucketed color scale for YoY values on the map and its legend. */
-import type { ColorToken } from './tokens';
+/** Bucketed color scales for YoY (diverging) and magnitude (sequential). Pure. */
+import { DIVERGING, SEQUENTIAL, type ColorToken } from './tokens';
 
 export interface ScaleBucket {
   token: ColorToken;
@@ -10,29 +10,35 @@ export interface ScaleBucket {
 }
 
 /**
- * Five buckets symmetric around zero, sized from the data: the "near zero" band is
- * ±20% of the largest absolute value, the strong bands start at ±60%.
+ * Seven buckets symmetric around zero: a gray "about flat" band of ±10% of the
+ * largest |value|, then light/mid/strong arms at 10–40%, 40–70% and ≥70%.
  */
 export function divergingBuckets(values: readonly (number | null | undefined)[]): ScaleBucket[] {
   const finite = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-  const maxAbs = finite.length ? Math.max(...finite.map(Math.abs)) : 0;
-  const t1 = maxAbs * 0.2;
-  const t2 = maxAbs * 0.6;
-  return [
-    { token: 'scale-neg-strong', min: -Infinity, max: -t2 },
-    { token: 'scale-neg', min: -t2, max: -t1 },
-    { token: 'scale-zero', min: -t1, max: t1 },
-    { token: 'scale-pos', min: t1, max: t2 },
-    { token: 'scale-pos-strong', min: t2, max: Infinity },
-  ];
+  const m = finite.length ? Math.max(...finite.map(Math.abs)) : 0;
+  const t = [0.1, 0.4, 0.7].map((f) => f * m);
+  const edges = [-Infinity, -t[2]!, -t[1]!, -t[0]!, t[0]!, t[1]!, t[2]!, Infinity];
+  return DIVERGING.map((token, i) => ({ token, min: edges[i]!, max: edges[i + 1]! }));
 }
 
 export function bucketFor(buckets: readonly ScaleBucket[], value: number | null | undefined): ColorToken {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 'scale-missing';
-  if (buckets.length === 0) return 'scale-missing';
-  // Zero range (every value identical): everything is "near zero".
-  const zero = buckets.find((b) => b.token === 'scale-zero');
-  if (zero && zero.min === 0 && zero.max === 0) return 'scale-zero';
-  const hit = buckets.find((b) => value >= b.min && value < b.max);
-  return hit?.token ?? buckets[buckets.length - 1]!.token;
+  if (typeof value !== 'number' || !Number.isFinite(value) || buckets.length === 0) return 'div-missing';
+  const mid = buckets[Math.floor(buckets.length / 2)]!;
+  if (mid.min === 0 && mid.max === 0) return mid.token; // every value identical
+  return (buckets.find((b) => value >= b.min && value < b.max) ?? buckets[buckets.length - 1]!).token;
+}
+
+/** A 0–100 score to a sequential step (e.g. temperature → heat). */
+export function sequentialToken(score: number | null | undefined): ColorToken | null {
+  if (typeof score !== 'number' || !Number.isFinite(score)) return null;
+  const i = Math.min(SEQUENTIAL.length - 1, Math.max(0, Math.floor((score / 100) * SEQUENTIAL.length)));
+  return SEQUENTIAL[i]!;
+}
+
+/** Whether text on a sequential step should be light (dark steps) — per theme. */
+export function inkOnSequential(token: ColorToken, dark: boolean): 'light' | 'dark' {
+  const i = SEQUENTIAL.indexOf(token);
+  // WCAG 4.5:1 either way: light theme steps 5–6 take light ink (step 4 #d16204 is
+  // only 3.9:1 with white); dark theme (flipped ramp) steps 1–3 take light ink.
+  return dark ? (i <= 2 ? 'light' : 'dark') : i >= 4 ? 'light' : 'dark';
 }

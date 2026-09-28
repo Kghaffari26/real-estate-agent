@@ -1,21 +1,39 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { BRAND } from './src/config/brand';
 
-// GitHub Pages serves the site at /real-estate-agent/; override with DASHBOARD_BASE
-// (e.g. "/" for a custom domain). Data files live in public/data and are fetched
-// relative to this base at runtime.
+/** Fills %BRAND_*% placeholders in index.html from the single brand config. */
+function brandHtml(): Plugin {
+  const values: Record<string, string> = {
+    BRAND_NAME: BRAND.name,
+    BRAND_TAGLINE: BRAND.tagline,
+    BRAND_DESCRIPTION: BRAND.description,
+    BRAND_URL: BRAND.siteUrl,
+    BRAND_THEME_LIGHT: BRAND.themeColor.light,
+    BRAND_THEME_DARK: BRAND.themeColor.dark,
+  };
+  const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return {
+    name: 'brand-html',
+    transformIndexHtml: (html) => html.replace(/%(BRAND_[A-Z_]+)%/g, (m, key: string) => (key in values ? escape(values[key]!) : m)),
+  };
+}
+
+// GitHub Pages serves the site at /real-estate-agent/; override with DASHBOARD_BASE.
 export default defineConfig({
   base: process.env.DASHBOARD_BASE ?? '/real-estate-agent/',
-  plugins: [react()],
+  plugins: [react(), brandHtml()],
+  worker: { format: 'es' },
   build: {
-    chunkSizeWarningLimit: 900,
+    chunkSizeWarningLimit: 1100,
     rollupOptions: {
       output: {
-        manualChunks: {
-          charts: ['recharts'],
-          map: ['leaflet', 'react-leaflet'],
-          vendor: ['react', 'react-dom', 'react-router-dom', 'zod'],
+        manualChunks(id) {
+          if (id.includes('node_modules/maplibre-gl')) return 'map';
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-') || id.includes('node_modules/victory-vendor')) return 'charts';
+          if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler|zod)\//.test(id)) return 'vendor';
+          return undefined;
         },
       },
     },

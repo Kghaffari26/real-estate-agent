@@ -1,7 +1,66 @@
 # Status
 
 Last updated 2026-09-28 by an unattended Claude Code session. Judgment calls
-are logged one per line in `DECISIONS.md` ("Session 4", "Session 6").
+are logged one per line in `DECISIONS.md` ("Session 4", "Session 6", "Session 7").
+
+## Session 7 (2026-09-28): Redfin Data Center + dashboard phase 2 (Metro Pulse)
+
+**Data freshness (fixed).**
+- **Symptom.** The published data ended at May 2026.
+- **Cause.** Redfin stopped updating the `redfin_market_tracker/` S3 exports on
+  2026-06-02, when it relaunched its Data Center. It wasn't our cache, filter or
+  file choice.
+- **Fix.** The fetcher now reads `redfin_data_center/housing_market/monthly/*.csv`
+  plus `price_drops/monthly/*.csv`, joined by name for all 50 metros; the legacy
+  export is kept only as a fallback (spec §3.1).
+- **Result.** Data runs through **August 2026**. Our YoY matches Redfin's within
+  rounding.
+- **New methodology.** The files define several metrics differently (e.g. the
+  national median is $399,900 vs $449,846 for May 2026). Series are never
+  spliced; see DECISIONS.
+- **Staleness warning.** Runs now warn in `meta.warnings` when Redfin's latest month
+  is older than 75 days.
+- **Snapshot and checks.** The sample snapshot was regenerated from a real run
+  ($0.0675). 241 Python tests; ruff clean.
+
+**Dashboard phase 2 (Metro Pulse).**
+- **Brand.** One brand config, logo and wordmark, favicon, OG image.
+- **Design.** Inter with tabular figures, and token-driven light and dark palettes
+  with validated chart colors.
+- **Maps and charts.**
+  - MapLibre + OpenFreeMap bubble map with hover cards and fly-to, overlapping
+    division metros spread out, and a list fallback.
+  - Charts have crosshair tooltips, end labels and high/low annotations; the metro
+    page gets a synced rate strip instead of a dual axis.
+  - Sparklines in KPI cards and table rows.
+- **Navigation.** ⌘K command palette, sidebar/bottom-nav shell, freshness chip,
+  breadcrumbs.
+- **Page features.**
+  - Heat grid, ranked movers, and alert cards.
+  - Diverging temperature components and severity cards.
+  - Slider calculator with a cost breakdown.
+  - Compare leaders.
+- **Sharing.** Copy link, Download PNG, Export CSV, and a print one-pager.
+- **States and motion.** Skeletons, illustrated empty/error states, and
+  reduced-motion-aware motion.
+- **Checks.** 106 unit tests, 35 Playwright smoke + axe checks (every route in
+  light and dark, desktop and 360 px), lint, typecheck, and a CI performance
+  budget.
+- **Performance.** Initial JS is 109 KB gzipped (budget 300 KB). Lighthouse on the
+  Overview: performance 96 mobile / 99 desktop, accessibility, best practices and
+  SEO 100.
+- **Screenshots.** `docs/screenshots/{overview,metros,metro-detail,compare,about}{,-dark,-mobile}.png`
+  (15 files).
+
+**Data-contract gaps still open** (the dashboard works around each):
+1. The index has no per-metro series, so table sparklines fetch each metro file.
+   A 12–24 point `metros[].spark` for one metric would add ~15 KB to the index and
+   save up to 50 requests.
+2. The `percent`/`pp_signed` unit ambiguity between metrics (ratios) and
+   `key_stats`/rates (percent) is unchanged from session 6.
+3. `flags[].facts` carry no formats, and index flags are ids only.
+4. National `temperature` has no components.
+5. `sources[].attribution` is null for FRED and Census.
 
 ## Dashboard, phase 1 (2026-09-28, session 6)
 

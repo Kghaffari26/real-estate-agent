@@ -1,21 +1,16 @@
 import type { ReactNode } from 'react';
-
-export function LoadingState({ label = 'Loading…' }: { label?: string }) {
-  return (
-    <div role="status" aria-live="polite" className="card flex items-center gap-2 muted">
-      <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-accent" aria-hidden="true" />
-      {label}
-    </div>
-  );
-}
+import { EmptyIllustration, ErrorIllustration } from './Illustrations';
 
 export function ErrorState({ title = "Couldn't load data", error, onRetry }: { title?: string; error?: Error; onRetry?: () => void }) {
   return (
-    <div role="alert" className="card border-negative/40">
-      <p className="font-semibold text-negative">{title}</p>
-      {error && <p className="mt-1 text-sm muted">{error.message}</p>}
+    <div role="alert" className="card card-pad flex flex-col items-center gap-3 py-10 text-center">
+      <ErrorIllustration />
+      <div>
+        <p className="text-md font-semibold">{title}</p>
+        {error && <p className="mt-1 max-w-md text-sm text-text-3">{error.message}</p>}
+      </div>
       {onRetry && (
-        <button type="button" className="btn mt-3" onClick={onRetry}>
+        <button type="button" className="btn" onClick={onRetry}>
           Try again
         </button>
       )}
@@ -23,6 +18,12 @@ export function ErrorState({ title = "Couldn't load data", error, onRetry }: { t
   );
 }
 
-export function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="rounded-md border border-dashed border-border p-4 text-sm muted">{children}</p>;
+export function EmptyState({ title, children, compact = false }: { title?: string; children?: ReactNode; compact?: boolean }) {
+  return (
+    <div className={`well flex flex-col items-center gap-2 text-center ${compact ? 'px-4 py-5' : 'px-6 py-8'}`}>
+      {!compact && <EmptyIllustration />}
+      {title && <p className="text-sm font-semibold text-text">{title}</p>}
+      {children && <div className="max-w-sm text-sm text-text-3">{children}</div>}
+    </div>
+  );
 }

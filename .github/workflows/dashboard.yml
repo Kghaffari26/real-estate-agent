@@ -55,6 +55,8 @@ jobs:
       - run: npm run build
         env:
           DASHBOARD_BASE: /real-estate-agent/
+      - name: Performance budget (initial JS <= 300 KB gzipped)
+        run: npm run check:bundle
       - name: Playwright smoke + axe
         run: |
           npx playwright install --with-deps chromium

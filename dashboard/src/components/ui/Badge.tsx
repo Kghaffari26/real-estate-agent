@@ -1,29 +1,16 @@
 import type { ReactNode } from 'react';
-import type { Tone } from './tones';
 
-export type { Tone };
+export type BadgeTone = 'neutral' | 'accent' | 'outline';
 
-// Full class strings (not interpolated) so Tailwind's content scan keeps them.
-const TONES: Record<Tone, string> = {
-  neutral: 'border-border text-text-muted',
-  accent: 'border-accent/40 text-accent',
-  positive: 'border-positive/40 text-positive',
-  negative: 'border-negative/40 text-negative',
-  warning: 'border-warning/40 text-warning',
-  info: 'border-info/40 text-info',
-  'severity-info': 'border-severity-info/40 text-severity-info',
-  'severity-notable': 'border-severity-notable/40 text-severity-notable',
-  'severity-major': 'border-severity-major/40 text-severity-major',
-  'temp-hot': 'border-temp-hot/40 text-temp-hot',
-  'temp-warm': 'border-temp-warm/40 text-temp-warm',
-  'temp-balanced': 'border-temp-balanced/40 text-temp-balanced',
-  'temp-cool': 'border-temp-cool/40 text-temp-cool',
-  'temp-cold': 'border-temp-cold/40 text-temp-cold',
+const TONES: Record<BadgeTone, string> = {
+  neutral: 'border-transparent bg-surface-3 text-text-2',
+  accent: 'border-transparent bg-accent-soft text-accent',
+  outline: 'border-border bg-surface text-text-2',
 };
 
-export function Badge({ tone = 'neutral', title, children }: { tone?: Tone; title?: string; children: ReactNode }) {
+export function Badge({ tone = 'neutral', title, children, className = '' }: { tone?: BadgeTone; title?: string; children: ReactNode; className?: string }) {
   return (
-    <span className={`chip ${TONES[tone]}`} title={title}>
+    <span className={`chip ${TONES[tone]} ${className}`} title={title}>
       {children}
     </span>
   );

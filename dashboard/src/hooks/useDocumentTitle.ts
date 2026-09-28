@@ -1,9 +1,8 @@
 import { useEffect } from 'react';
-
-const SITE = 'Housing Market Dashboard';
+import { BRAND } from '../config/brand';
 
 export function useDocumentTitle(title: string | null) {
   useEffect(() => {
-    document.title = title ? `${title} · ${SITE}` : SITE;
+    document.title = title ? `${title} · ${BRAND.name}` : BRAND.name;
   }, [title]);
 }

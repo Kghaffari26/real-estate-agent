@@ -2,10 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="U.S. housing market dashboard: 50 metros, national trends, mortgage rates." />
-    <title>Housing Market Dashboard</title>
+    <!-- %BRAND_*% placeholders are filled from src/config/brand.ts by vite.config.ts -->
+    <title>%BRAND_NAME% · %BRAND_TAGLINE%</title>
+    <meta name="description" content="%BRAND_DESCRIPTION%" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="%BRAND_THEME_LIGHT%" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="%BRAND_THEME_DARK%" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="%BRAND_NAME%" />
+    <meta property="og:title" content="%BRAND_NAME% · %BRAND_TAGLINE%" />
+    <meta property="og:description" content="%BRAND_DESCRIPTION%" />
+    <meta property="og:url" content="%BRAND_URL%" />
+    <meta property="og:image" content="%BRAND_URL%og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="%BRAND_URL%og.png" />
     <script>
       // Apply the saved theme before first paint (no flash). Mirrors src/lib/theme.ts.
       (function () {

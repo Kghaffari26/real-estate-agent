@@ -1,44 +1,56 @@
+import { Download, Map as MapIcon, Table2 } from 'lucide-react';
 import { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { MapLegend, MetroMap, type MapPoint } from '../components/MetroMap';
-import { SortableTable, type Column, type TableRow } from '../components/MetroTable';
-import { PageHeader } from '../components/PageHeader';
-import { TemperatureChip } from '../components/TemperatureChip';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ColumnPicker } from '../components/data/ColumnPicker';
+import { DataTable, type Column, type TableRow } from '../components/data/DataTable';
+import { SparkCell } from '../components/data/SparkCell';
+import { MetroMap } from '../components/map';
+import { MapLegend } from '../components/map/MapLegend';
 import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
+import { CopyLinkButton } from '../components/ui/CopyLinkButton';
 import { Delta } from '../components/ui/Delta';
+import { PageHeader } from '../components/ui/PageHeader';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { Select } from '../components/ui/Select';
-import { EmptyState, ErrorState, LoadingState } from '../components/ui/StateViews';
-import type { IndexOutput } from '../data/schema.gen';
+import { PageSkeleton } from '../components/ui/Skeleton';
+import { EmptyState, ErrorState } from '../components/ui/StateViews';
 import { useIndex } from '../data/hooks';
+import type { IndexOutput } from '../data/schema.gen';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useQueryState, useSetQuery } from '../hooks/useQueryState';
-import { formatValue } from '../lib/format';
+import { useToast } from '../hooks/Toast';
+import { downloadBlob, toCsv } from '../lib/csv';
+import { formatMonth, formatValue } from '../lib/format';
 import { buildRegistry, deltaFormat, flagName, metricLabel, valueScale } from '../lib/metrics';
-import { bucketFor, divergingBuckets } from '../lib/scale';
+import { sequentialToken } from '../lib/scale';
+import { color } from '../lib/tokens';
+import { availableColumns, csvTable, DEFAULT_COLUMNS, parseColumns } from '../viewmodels/columns';
+import { legendSteps, mapPoints, sizeLegend } from '../viewmodels/map';
 import { buildMetroRows, distinct, filterRows, metricColumns, metricsWithData, sortRows, type SortDir } from '../viewmodels/metros';
 
 const VIEWS = [
   { value: 'both', label: 'Map + table' },
-  { value: 'table', label: 'Table only' },
+  { value: 'table', label: 'Table' },
 ] as const;
 type View = (typeof VIEWS)[number]['value'];
 
 export function MetrosPage() {
   useDocumentTitle('Metros');
   const index = useIndex();
-  if (index.status === 'loading') return <LoadingState label="Loading metros…" />;
+  if (index.status === 'loading') return <PageSkeleton label="Loading metros…" />;
   if (index.status === 'error') return <ErrorState error={index.error} onRetry={index.retry} />;
   return <Metros index={index.data} />;
 }
 
 function Metros({ index }: { index: IndexOutput }) {
   const navigate = useNavigate();
+  const toast = useToast();
+  const [params] = useSearchParams();
   const registry = useMemo(() => buildRegistry(index.metric_registry), [index]);
   const allRows = useMemo(() => buildMetroRows(index), [index]);
-  const columns = useMemo(() => metricColumns(registry, allRows), [registry, allRows]);
-  const mappable = useMemo(() => metricsWithData(columns, allRows), [columns, allRows]);
+  const metrics = useMemo(() => metricColumns(registry, allRows), [registry, allRows]);
+  const withData = useMemo(() => metricsWithData(metrics, allRows), [metrics, allRows]);
 
   const [query, setSearch] = useQueryState('q', '');
   const [marketType, setMarketType] = useQueryState('type', '');
@@ -46,168 +58,187 @@ function Metros({ index }: { index: IndexOutput }) {
   const [temperature, setTemperature] = useQueryState('temp', '');
   const [sortKey] = useQueryState('sort', 'homes_sold_12m');
   const [sortDir] = useQueryState<SortDir>('dir', 'desc', ['asc', 'desc']);
-  const [mapMetric, setMapMetric] = useQueryState('metric', mappable[0] ?? 'median_sale_price', mappable);
+  const [metric, setMetric] = useQueryState('metric', withData[0] ?? 'median_sale_price', withData);
   const [view, setView] = useQueryState<View>('view', 'both', ['both', 'table']);
-
-  const filtered = useMemo(
-    () => sortRows(filterRows(allRows, { query, marketType, flag, temperature }), sortKey, sortDir),
-    [allRows, query, marketType, flag, temperature, sortKey, sortDir],
-  );
-
   const setQuery = useSetQuery();
+  const available = availableColumns(withData);
+  const columnsShown = parseColumns(params.get('cols'), available);
+
+  const filtered = useMemo(() => sortRows(filterRows(allRows, { query, marketType, flag, temperature }), sortKey, sortDir), [allRows, query, marketType, flag, temperature, sortKey, sortDir]);
+  const points = useMemo(() => mapPoints(filtered, registry, metric), [filtered, registry, metric]);
+
   const onSort = (key: string) => {
     const dir: SortDir = key === sortKey ? (sortDir === 'asc' ? 'desc' : 'asc') : key === 'name' || key === 'market_type' ? 'asc' : 'desc';
-    // Defaults (homes sold, descending) are dropped from the URL to keep it short.
     setQuery({ sort: key === 'homes_sold_12m' ? null : key, dir: dir === 'desc' ? null : dir });
   };
+  const setColumns = (ids: string[]) => {
+    const ordered = available.filter((c) => ids.includes(c));
+    const isDefault = ordered.length === DEFAULT_COLUMNS.length && DEFAULT_COLUMNS.every((c) => ordered.includes(c));
+    setQuery({ cols: isDefault ? null : ordered.join(',') });
+  };
+  const exportCsv = () => {
+    const { header, body } = csvTable(filtered, withData, registry);
+    downloadBlob(new Blob([toCsv(header, body)], { type: 'text/csv;charset=utf-8' }), `metro-pulse-metros-${index.data_through}.csv`);
+    toast(`Exported ${filtered.length} metros`);
+  };
 
-  const mapEntry = registry.get(mapMetric);
-  const mapDeltaFormat = deltaFormat(mapEntry);
-  const buckets = divergingBuckets(allRows.map((r) => r.metrics[mapMetric]?.yoy));
-  const points: MapPoint[] = filtered
-    .filter((r) => r.lat !== null && r.lon !== null)
-    .map((r) => ({
-      slug: r.slug,
-      name: r.name,
-      lat: r.lat!,
-      lon: r.lon!,
-      color: bucketFor(buckets, r.metrics[mapMetric]?.yoy),
-      valueText: `${metricLabel(registry, mapMetric)} YoY: ${formatValue(r.metrics[mapMetric]?.yoy, mapDeltaFormat, { signed: true })}`,
-    }));
-  const legend = [
-    ...buckets.map((b) => ({
-      color: b.token,
-      label:
-        b.min === -Infinity
-          ? `< ${formatValue(b.max, mapDeltaFormat, { signed: true })}`
-          : b.max === Infinity
-            ? `≥ ${formatValue(b.min, mapDeltaFormat, { signed: true })}`
-            : `${formatValue(b.min, mapDeltaFormat, { signed: true })} to ${formatValue(b.max, mapDeltaFormat, { signed: true })}`,
-    })),
-    { color: 'scale-missing' as const, label: 'No data' },
-  ];
-
-  const tableColumns: Column[] = [
+  const trendMetric = metric;
+  const columns: Column[] = [
     { id: 'name', header: 'Metro', sortable: true },
-    { id: 'temperature', header: 'Temperature', sortable: true },
-    { id: 'market_type', header: 'Market type', sortable: true },
+    { id: 'temperature', header: 'Temp.', sortable: true, align: 'right' },
+    { id: 'trend', header: 'Trend', sub: `${metricLabel(registry, trendMetric)}, 24 mo` },
+    ...columnsShown.map((id): Column => {
+      const [key, field] = id.split('.') as [string, string];
+      return { id, header: metricLabel(registry, key), sub: field === 'yoy' ? (key.startsWith('permits_') ? 'YoY (12-mo)' : 'YoY') : undefined, align: 'right', sortable: true };
+    }),
+    { id: 'market_type', header: 'Market', sortable: true },
     { id: 'flags', header: 'Flags' },
     { id: 'homes_sold_12m', header: 'Homes sold', sub: '12 months', align: 'right', sortable: true },
-    ...columns.flatMap((key): Column[] => [
-      { id: `${key}.value`, header: metricLabel(registry, key), align: 'right', sortable: true },
-      { id: `${key}.yoy`, header: metricLabel(registry, key), sub: key.startsWith('permits_') ? 'YoY (12-mo)' : 'YoY', align: 'right', sortable: true },
-    ]),
   ];
 
-  const tableRows: TableRow[] = filtered.map((r) => ({
-    key: r.slug,
-    cells: {
-      name: (
-        <>
-          <Link to={`/metro/${r.slug}`}>{r.name}</Link>
-          {r.stale && (
-            <>
-              {' '}
-              <Badge tone="warning">stale</Badge>
-            </>
-          )}
-        </>
-      ),
-      temperature: <TemperatureChip score={r.temperatureScore} label={r.temperatureLabel} />,
-      market_type: r.marketType ?? '—',
-      flags: r.flags.length ? (
-        <span className="flex flex-wrap gap-1">
-          {r.flags.map((f) => (
-            <Badge key={f}>{flagName(f)}</Badge>
-          ))}
-        </span>
-      ) : (
-        <span className="muted">—</span>
-      ),
-      homes_sold_12m: formatValue(r.homesSold12m, 'count'),
-      ...Object.fromEntries(
-        columns.flatMap((key) => {
-          const entry = registry.get(key);
-          const cell = r.metrics[key];
-          return [
-            [`${key}.value`, formatValue(cell?.value, entry?.format, { scale: valueScale(entry) })],
-            [`${key}.yoy`, <Delta key="d" value={cell?.yoy} format={deltaFormat(entry)} goodDirection={entry?.good_direction} />],
-          ];
-        }),
-      ),
-    },
-  }));
+  const tableRows: TableRow[] = filtered.map((r) => {
+    const heat = sequentialToken(r.temperatureScore);
+    return {
+      key: r.slug,
+      cells: {
+        name: (
+          <span className="flex items-center gap-2">
+            <Link to={`/metro/${r.slug}`} className="font-medium text-text no-underline hover:underline">
+              {r.name}
+            </Link>
+            {r.stale && <Badge>stale</Badge>}
+          </span>
+        ),
+        temperature: (
+          <span className="inline-flex items-center justify-end gap-1.5">
+            {heat && <span className="h-2 w-2 rounded-full" style={{ background: color(heat) }} aria-hidden="true" />}
+            <span className="num">{r.temperatureScore ?? '—'}</span>
+            <span className="sr-only">{r.temperatureLabel}</span>
+          </span>
+        ),
+        trend: <SparkCell slug={r.slug} metric={trendMetric} />,
+        market_type: <span className="text-text-2">{r.marketType ?? '—'}</span>,
+        flags: r.flags.length ? (
+          <span className="flex max-w-[280px] flex-wrap gap-1">
+            {r.flags.map((f) => (
+              <Badge key={f}>{flagName(f)}</Badge>
+            ))}
+          </span>
+        ) : (
+          <span className="text-text-3">—</span>
+        ),
+        homes_sold_12m: formatValue(r.homesSold12m, 'count'),
+        ...Object.fromEntries(
+          columnsShown.map((id) => {
+            const [key, field] = id.split('.') as [string, string];
+            const entry = registry.get(key);
+            const cell = r.metrics[key];
+            return [id, field === 'yoy' ? <Delta value={cell?.yoy} format={deltaFormat(entry)} goodDirection={entry?.good_direction} size="xs" /> : formatValue(cell?.value, entry?.format, { scale: valueScale(entry) })];
+          }),
+        ),
+      },
+    };
+  });
 
-  const flagOptions = distinct(allRows.flatMap((r) => r.flags));
   const typeOptions = distinct(allRows.map((r) => r.marketType));
   const tempOptions = distinct(allRows.map((r) => r.temperatureLabel));
+  const flagOptions = distinct(allRows.flatMap((r) => r.flags));
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Metros" subtitle={`The ${allRows.length} largest U.S. metros, latest month`}>
-        <SegmentedControl label="Layout" options={VIEWS} value={view} onChange={setView} />
-      </PageHeader>
+      <PageHeader
+        title="Metros"
+        subtitle={`The ${allRows.length} largest U.S. metros · data through ${formatMonth(index.data_through, true)}`}
+        actions={
+          <>
+            <SegmentedControl label="Layout" options={VIEWS} value={view} onChange={setView} />
+            <CopyLinkButton />
+          </>
+        }
+      />
 
-      <Card id="filters" title="Filter">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label htmlFor="metro-filter" className="label">
-              Search
-            </label>
-            <input id="metro-filter" type="search" className="input" placeholder="City or state" value={query} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <Select label="Market type" value={marketType} onChange={setMarketType} options={[{ value: '', label: 'All' }, ...typeOptions.map((t) => ({ value: t, label: t }))]} />
-          <Select label="Temperature" value={temperature} onChange={setTemperature} options={[{ value: '', label: 'All' }, ...tempOptions.map((t) => ({ value: t, label: t }))]} />
-          <Select label="Flag" value={flag} onChange={setFlag} options={[{ value: '', label: 'All' }, ...flagOptions.map((f) => ({ value: f, label: flagName(f) }))]} />
+      <section aria-label="Filters" className="card grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="lg:col-span-2">
+          <label htmlFor="metro-filter" className="label">
+            Search
+          </label>
+          <input id="metro-filter" type="search" className="input" placeholder="City or state" value={query} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <p className="mt-3 text-sm muted" role="status">
-          Showing {filtered.length} of {allRows.length} metros
+        <Select label="Market type" value={marketType} onChange={setMarketType} options={[{ value: '', label: 'All' }, ...typeOptions.map((t) => ({ value: t, label: t }))]} />
+        <Select label="Temperature" value={temperature} onChange={setTemperature} options={[{ value: '', label: 'All' }, ...tempOptions.map((t) => ({ value: t, label: t }))]} />
+        <Select label="Flag" value={flag} onChange={setFlag} options={[{ value: '', label: 'All' }, ...flagOptions.map((f) => ({ value: f, label: flagName(f) }))]} />
+        <p className="text-xs text-text-3 sm:col-span-2 lg:col-span-5" role="status">
+          Showing <span className="num font-medium text-text-2">{filtered.length}</span> of {allRows.length} metros
         </p>
-      </Card>
+      </section>
 
       {view === 'both' && (
         <Card
           id="map"
           title="Map"
+          subtitle="Bubble size: homes sold (12 mo). Color: year-over-year change. Click a metro to open it."
+          copyLink
           actions={
             <>
-              <Select
-                label="Color by YoY change in"
-                value={mapMetric}
-                onChange={setMapMetric}
-                options={mappable.map((k) => ({ value: k, label: metricLabel(registry, k) }))}
-              />
-              <button type="button" className="btn self-end" onClick={() => setView('table')}>
+              <Select label="Color by YoY change in" hideLabel value={metric} onChange={setMetric} options={withData.map((k) => ({ value: k, label: `${metricLabel(registry, k)} YoY` }))} />
+              <button type="button" className="btn" onClick={() => setView('table')}>
+                <Table2 aria-hidden="true" className="h-3.5 w-3.5" />
                 View as table
               </button>
             </>
           }
-          footer="Metros reported as divisions of a larger metro share its centroid, so some markers overlap. Map tiles © OpenStreetMap contributors."
+          footer="Metros Redfin reports as divisions of a larger metro (e.g. Dallas and Fort Worth) share a centroid; they're fanned out slightly so each is visible."
         >
           {points.length === 0 ? (
-            <EmptyState>No metros match these filters.</EmptyState>
+            <EmptyState title="No metros match these filters" />
           ) : (
-            <MetroMap points={points} onSelect={(slug) => navigate(`/metro/${slug}`)} label={`Map of metros colored by ${metricLabel(registry, mapMetric)} year-over-year change`} />
+            <MetroMap
+              points={points}
+              onSelect={(slug) => navigate(`/metro/${slug}`)}
+              label={`Map of ${points.length} metros colored by ${metricLabel(registry, metric)} year-over-year change`}
+              fallback={<p className="text-sm text-text-2">Every metro is in the table below.</p>}
+            />
           )}
-          <div className="mt-3">
-            <MapLegend title={`${metricLabel(registry, mapMetric)}, YoY`} items={legend} />
+          <div className="mt-4">
+            <MapLegend title={`${metricLabel(registry, metric)}, YoY`} steps={legendSteps(allRows, registry, metric)} sizes={sizeLegend(allRows)} />
           </div>
         </Card>
       )}
 
-      <Card id="table" title="All metros">
+      <Card
+        id="table"
+        title="All metros"
+        subtitle="Sort by any column; pick columns; export what's shown."
+        copyLink
+        bodyClassName="card-pad"
+        actions={
+          <>
+            {view === 'table' && (
+              <>
+                <Select label="Trend column metric" hideLabel value={metric} onChange={setMetric} options={withData.map((k) => ({ value: k, label: `Trend: ${metricLabel(registry, k)}` }))} />
+                <button type="button" className="btn" onClick={() => setView('both')}>
+                  <MapIcon aria-hidden="true" className="h-3.5 w-3.5" />
+                  Show map
+                </button>
+              </>
+            )}
+            <ColumnPicker
+              groups={withData.map((k) => ({ label: metricLabel(registry, k), options: [{ id: `${k}.value`, label: 'Value' }, { id: `${k}.yoy`, label: k.startsWith('permits_') ? 'YoY (12-mo)' : 'YoY' }] }))}
+              selected={columnsShown}
+              onChange={setColumns}
+              onReset={() => setQuery({ cols: null })}
+            />
+            <button type="button" className="btn" onClick={exportCsv}>
+              <Download aria-hidden="true" className="h-3.5 w-3.5" />
+              Export CSV
+            </button>
+          </>
+        }
+      >
         {tableRows.length === 0 ? (
-          <EmptyState>No metros match these filters.</EmptyState>
+          <EmptyState title="No metros match these filters">Try clearing the search or a filter.</EmptyState>
         ) : (
-          <SortableTable
-            caption="Metros with their latest value and year-over-year change for every metric"
-            columns={tableColumns}
-            rows={tableRows}
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={onSort}
-            rowHeader="name"
-          />
+          <DataTable caption="Metros with their latest values and year-over-year changes" columns={columns} rows={tableRows} sortKey={sortKey} sortDir={sortDir} onSort={onSort} rowHeader="name" />
         )}
       </Card>
     </div>

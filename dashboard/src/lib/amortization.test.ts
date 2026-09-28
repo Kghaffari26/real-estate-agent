@@ -39,3 +39,11 @@ describe('calculate', () => {
     expect(calculate({ price: 100, downPaymentPct: 150, ratePct: 5, termYears: 30 }).loanAmount).toBe(0);
   });
 });
+
+describe('totalInterest', () => {
+  it('is payments minus principal', async () => {
+    const { totalInterest } = await import('./amortization');
+    expect(roundCents(totalInterest(400000, 2528.27, 30))).toBe(510177.2);
+    expect(totalInterest(100, 1, 1)).toBe(0);
+  });
+});

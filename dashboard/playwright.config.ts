@@ -15,11 +15,15 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}/real-estate-agent/`,
     trace: 'retain-on-failure',
-    launchOptions: existsSync(localChromium) && !process.env.CI ? { executablePath: localChromium } : {},
+    // Software WebGL so MapLibre renders in headless runs.
+    launchOptions: {
+      args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+      ...(existsSync(localChromium) && !process.env.CI ? { executablePath: localChromium } : {}),
+    },
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-360', use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 780 } } },
+    { name: 'mobile-360', use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 780 }, isMobile: false } },
   ],
   webServer: {
     command: `npm run build && npx vite preview --port ${PORT} --strictPort`,

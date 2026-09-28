@@ -22,9 +22,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: s
   }
 
   render() {
-    if (this.state.error) {
-      return <ErrorState title="Something went wrong showing this view" error={this.state.error} onRetry={() => this.setState({ error: null })} />;
-    }
+    if (this.state.error) return <ErrorState title="Something went wrong showing this view" error={this.state.error} onRetry={() => this.setState({ error: null })} />;
     return this.props.children;
   }
 }

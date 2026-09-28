@@ -98,25 +98,42 @@ uv run pytest tests/test_investigate.py -k replay   # the 6 recorded trajectorie
 
 ## Dashboard
 
-`dashboard/` is a standalone web dashboard for this agent's output (Vite + React +
-TypeScript, Recharts, Leaflet), deployed to GitHub Pages at `/real-estate-agent/` by
-`.github/workflows/dashboard.yml` after every push to it and every successful agent run.
-Its types are generated from `schemas/real_estate.schema.json`, it parses tolerantly
-(older files and bad items never crash a view), and until the `data` branch exists it
-shows a committed snapshot of a real run with a **Sample data** badge. Details:
-[`dashboard/README.md`](dashboard/README.md).
+**Metro Pulse** (`dashboard/`) is the market-intelligence front end for this agent's
+output: a national overview, all 50 metros on a MapLibre map and in a sortable
+table, a page per metro, a comparison view and a methodology page. It's live at
+<https://kghaffari26.github.io/real-estate-agent/> and redeploys by
+`.github/workflows/dashboard.yml` after every push to it and after every
+successful agent run.
+
+- **Numbers from the agent.** Types are generated from
+  `schemas/real_estate.schema.json`, and parsing is tolerant: older files and bad
+  items never crash a view. The only client-side math is formatting,
+  indexed-to-100 comparisons and the mortgage calculator, which reproduces all 50
+  published payments.
+- **Design.** Inter with tabular figures, token-driven light and dark palettes, and
+  validated colorblind-safe chart colors. No dual axes. There's a ⌘K command
+  palette, deep links on everything, PNG and CSV export, and a print-ready metro
+  one-pager.
+- **Quality.** Axe-clean on every route in both themes; no horizontal scroll at
+  360 px; 109 KB of initial JS (budget 300 KB, checked in CI). Lighthouse on the
+  Overview: performance 96 mobile and 99 desktop, accessibility 100.
 
 ```bash
 cd dashboard && npm ci && npm run fetch-data && npm run dev
 ```
 
-| Overview | Metros (map + sortable table) |
-|---|---|
-| ![Overview](docs/screenshots/overview.png) | ![Metros](docs/screenshots/metros.png) |
-| **Metro detail** | **Compare** |
-| ![Metro detail](docs/screenshots/metro-detail.png) | ![Compare](docs/screenshots/compare.png) |
-| **About / methodology** | **Dark theme, and 360 px wide** |
-| ![About](docs/screenshots/about.png) | <img src="docs/screenshots/overview-dark.png" alt="Overview, dark theme" width="300"> <img src="docs/screenshots/metro-detail-mobile.png" alt="Metro detail at 360 px" width="90"> |
+Details, including how to restyle and rebrand: [`dashboard/README.md`](dashboard/README.md).
+
+| | Light | Dark | Mobile |
+|---|---|---|---|
+| **Overview** | <img src="docs/screenshots/overview.png" alt="Overview, light" width="260"> | <img src="docs/screenshots/overview-dark.png" alt="Overview, dark" width="260"> | <img src="docs/screenshots/overview-mobile.png" alt="Overview, mobile" width="90"> |
+| **Metros** | <img src="docs/screenshots/metros.png" alt="Metros, light" width="260"> | <img src="docs/screenshots/metros-dark.png" alt="Metros, dark" width="260"> | <img src="docs/screenshots/metros-mobile.png" alt="Metros, mobile" width="90"> |
+| **Metro** | <img src="docs/screenshots/metro-detail.png" alt="Metro detail, light" width="260"> | <img src="docs/screenshots/metro-detail-dark.png" alt="Metro detail, dark" width="260"> | <img src="docs/screenshots/metro-detail-mobile.png" alt="Metro detail, mobile" width="90"> |
+| **Compare** | <img src="docs/screenshots/compare.png" alt="Compare, light" width="260"> | <img src="docs/screenshots/compare-dark.png" alt="Compare, dark" width="260"> | <img src="docs/screenshots/compare-mobile.png" alt="Compare, mobile" width="90"> |
+| **Methodology** | <img src="docs/screenshots/about.png" alt="Methodology, light" width="260"> | <img src="docs/screenshots/about-dark.png" alt="Methodology, dark" width="260"> | <img src="docs/screenshots/about-mobile.png" alt="Methodology, mobile" width="90"> |
+
+The screenshots use an offline stand-in basemap (U.S. outline) because map tiles
+aren't reachable where they're taken; the live site uses OpenFreeMap.
 
 ## How it works
 

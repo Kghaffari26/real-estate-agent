@@ -30,8 +30,9 @@ real-estate-agent/
 ├── evals/                  # history.jsonl + results/ (agents_core.evals, committed);
 │                           # real_estate/: suites.py (3 suites), checks.py, fixtures.py,
 │                           # investigator_{world.json,cases.jsonl}, trajectories/ (recorded loops)
-├── dashboard/              # standalone web dashboard (Vite + React + TS), see dashboard/README.md;
-│                           # sample-data/ = a committed real run; types generated from schemas/
+├── dashboard/              # "Metro Pulse" web app (Vite + React + TS, Recharts, MapLibre), see
+│                           # dashboard/README.md; sample-data/ = a committed real run; types
+│                           # generated from schemas/; brand in src/config/brand.ts
 ├── docs/                   # specs/, case-studies.md, screenshots/ (dashboard, from Playwright)
 └── tests/                  # HTTP mocked (respx), fake or replayed Anthropic client, fixtures in tests/fixtures/
 ```
@@ -94,6 +95,10 @@ no permissions**; each calling job must grant exactly what it needs:
   - every new narrative is its template;
   - the run publishes `status: ok` with a warning;
   - the hashes aren't stored, so a later keyed run regenerates them.
+- **Redfin comes from the relaunched Data Center** (`redfin_data_center/…/monthly/*.csv`,
+  spec §3.1): percents → ratios, price drops joined by region name, legacy
+  `redfin_market_tracker/` only as an all-or-nothing fallback (never mix the two:
+  different methodology). `scripts/verify_re_sources.py --names` checks the name join live.
 - **All HTTP goes through `ctx.http` (`agents_core.http.Http`)**: retries,
   per-host rate limits, a 2xx-only TTL cache for small responses. Large files
   (Redfin, Zillow) use `ctx.http.download` (streaming conditional GET). Never
@@ -143,6 +148,10 @@ no permissions**; each calling job must grant exactly what it needs:
     values and runs the calculator (same formula, shared vectors).
   - Styling lives only in `dashboard/src/styles/tokens.css` + the Tailwind theme;
     data/logic in `data/`, `lib/`, `viewmodels/`; components are presentational.
+  - Chart colors have jobs (categorical/diverging/sequential/status); re-validate
+    with the dataviz palette validator if you change a step. No dual y-axes.
+  - Keep `npm run check:bundle` (initial JS ≤ 300 KB gz) and `npm run e2e` (axe in
+    both themes, 360 px) green; Recharts and MapLibre stay lazy.
   - `.github/workflows/dashboard.yml` grants only `contents: read`, `pages: write`,
     `id-token: write`.
 - **Keep published paths generic**: use `agents_core.settings.publish_dir()`
@@ -171,7 +180,7 @@ uv run python scripts/verify_re_sources.py     # which data-source URLs are reac
 uv run python scripts/build_metro_config.py    # regenerate config/metros.toml (Redfin + Zillow + Gazetteer)
 uv run python scripts/export_re_schema.py      # after any schema.py change
 cd dashboard && npm ci && npm run fetch-data && npm run dev   # dashboard (see dashboard/README.md)
-cd dashboard && npm run lint && npm run typecheck && npm test && npm run e2e
+cd dashboard && npm run lint && npm run typecheck && npm test && npm run build && npm run check:bundle && npm run e2e
 ```
 
 ## Before making a change

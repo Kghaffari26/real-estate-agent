@@ -1,5 +1,5 @@
+@import '@fontsource-variable/inter/index.css';
 @import './tokens.css';
-@import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
 @tailwind components;
@@ -7,57 +7,150 @@
 
 @layer base {
   html {
-    @apply bg-bg text-text font-sans antialiased;
+    @apply bg-bg text-base text-text antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings: var(--font-features);
+    text-rendering: optimizeLegibility;
   }
   body {
     @apply min-h-screen bg-bg;
   }
+  ::selection {
+    @apply bg-accent/20;
+  }
   :focus-visible {
-    @apply outline outline-2 outline-offset-2 outline-focus;
+    @apply rounded-sm outline outline-2 outline-offset-2 outline-focus;
   }
   a {
-    @apply text-accent underline underline-offset-2 hover:decoration-2;
+    @apply text-accent underline decoration-accent/40 underline-offset-2 transition-colors duration-1 hover:decoration-accent;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply text-text;
   }
 }
 
 @layer components {
-  /* Reusable primitives, all built from tokens. Phase 2 restyles these. */
+  /* Surfaces */
   .card {
-    @apply rounded-lg border border-border bg-surface p-4 shadow-card;
+    @apply min-w-0 rounded-lg border border-border bg-surface shadow-1;
   }
-  .card-title {
-    @apply text-base font-semibold text-text;
+  .card-pad {
+    @apply p-4 sm:p-5;
+  }
+  .well {
+    @apply rounded-md bg-surface-2 ring-1 ring-inset ring-border;
+  }
+
+  /* Type helpers */
+  .eyebrow {
+    @apply text-2xs font-semibold uppercase tracking-wider text-text-3;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: var(--font-features), 'tnum';
   }
   .muted {
-    @apply text-text-muted;
+    @apply text-text-3;
   }
+
+  /* Controls */
   .btn {
-    @apply inline-flex items-center justify-center gap-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text hover:bg-surface-muted disabled:opacity-50;
+    @apply inline-flex h-8 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-3 text-sm font-medium text-text no-underline shadow-1 transition-colors duration-1 hover:bg-surface-3 disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent shadow-none hover:bg-surface-3;
   }
   .btn-primary {
-    @apply border-accent bg-accent text-accent-contrast hover:bg-accent/90;
+    @apply border-accent bg-accent text-accent-contrast hover:border-accent-hover hover:bg-accent-hover;
+  }
+  .btn-icon {
+    @apply w-8 px-0;
   }
   .input {
-    @apply w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted;
+    @apply h-8 w-full rounded-md border border-border bg-surface px-2.5 text-sm text-text shadow-1 transition-colors duration-1 placeholder:text-text-3 hover:border-border-strong;
   }
   .label {
-    @apply mb-1 block text-sm font-medium text-text;
-  }
-  .table-base {
-    @apply w-full border-collapse text-sm;
-  }
-  .table-base th {
-    @apply border-b border-border px-2 py-2 text-left font-semibold text-text-muted;
-  }
-  .table-base td {
-    @apply border-b border-border px-2 py-2 align-top;
+    @apply mb-1.5 block text-xs font-medium text-text-2;
   }
   .chip {
-    @apply inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-xs font-medium;
+  }
+  .kbd {
+    @apply inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-surface-2 px-1 font-sans text-2xs font-medium text-text-3;
+  }
+
+  /* Tables */
+  .table-base {
+    @apply w-full border-separate border-spacing-0 text-sm;
+  }
+  .table-base th {
+    @apply border-b border-border bg-surface-2 px-3 py-2 text-left text-xs font-medium text-text-3;
+  }
+  .table-base td {
+    @apply border-b border-border px-3 py-2 align-middle;
+  }
+  .table-base tr:last-child td,
+  .table-base tr:last-child th[scope='row'] {
+    @apply border-b-0;
+  }
+
+  /* Loading */
+  .skeleton {
+    @apply rounded-md bg-surface-3;
+    background-image: linear-gradient(90deg, transparent 0, rgb(var(--color-surface) / 0.6) 50%, transparent 100%);
+    background-size: 400px 100%;
+    background-repeat: no-repeat;
+    animation: shimmer 1.4s linear infinite;
   }
 }
 
-/* Leaflet map tiles in dark mode: dim rather than restyle. */
-.dark .leaflet-tile-pane {
-  filter: brightness(0.7) contrast(1.1);
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Print: the metro page becomes a one-page report (the white-label seed). */
+.print-only {
+  display: none;
+}
+@media print {
+  @page {
+    size: letter;
+    margin: 12mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    font-size: 10pt;
+  }
+  .no-print,
+  [data-no-print] {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .card {
+    box-shadow: none !important;
+    break-inside: avoid;
+    border-color: #ddd !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
 }

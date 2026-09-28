@@ -1,7 +1,8 @@
 /** View model for the metro detail page (pure). */
 import type { FlagOut, MetroDetailOutput } from '../data/schema.gen';
-import type { InvestigationView } from '../components/InvestigationCard';
-import type { ComponentRow } from '../components/TemperatureBreakdown';
+import type { InvestigationView } from '../components/data/InvestigationCard';
+import type { ComponentBar } from '../components/data/TemperatureComponents';
+import type { FlagView } from '../components/data/FlagCards';
 import { formatValue } from '../lib/format';
 import { deltaFormat, isPermitMetric, metricLabel, TEMPERATURE_COMPONENTS, valueScale, type Registry } from '../lib/metrics';
 
@@ -9,6 +10,8 @@ export interface MetricTileView {
   key: string;
   label: string;
   value: string;
+  raw: number | null;
+  scale: 'ratio' | 'points';
   format: string;
   yoy: number | null;
   mom: number | null;
@@ -32,6 +35,8 @@ export function metricTiles(metro: Pick<MetroDetailOutput, 'latest'>, registry: 
       key,
       label: metricLabel(registry, key),
       value: formatValue(m.value, entry?.format, { scale: valueScale(entry) }),
+      raw: m.value ?? null,
+      scale: valueScale(entry),
       format: entry?.format ?? 'count',
       yoy: 'yoy_12m' in m ? m.yoy_12m : 'yoy' in m ? (m.yoy ?? null) : null,
       mom: full?.mom ?? null,
@@ -46,14 +51,34 @@ export function metricTiles(metro: Pick<MetroDetailOutput, 'latest'>, registry: 
   });
 }
 
-export function temperatureRows(metro: Pick<MetroDetailOutput, 'temperature'>, registry: Registry): ComponentRow[] {
+/** Plain-language readings of a component's z-score (higher / lower than the other metros). */
+const READINGS: Record<string, { high: string; low: string }> = {
+  avg_sale_to_list: { high: 'Homes sell closer to asking than in most metros', low: 'Homes sell further below asking than in most metros' },
+  sold_above_list: { high: 'More homes sell above the original list price', low: 'Fewer homes sell above the original list price' },
+  off_market_in_two_weeks: { high: 'More listings go under contract within two weeks', low: 'Fewer listings go under contract within two weeks' },
+  median_dom: { high: 'Homes take longer to sell than in most metros', low: 'Homes sell faster than in most metros' },
+  price_drops: { high: 'More listings have price cuts than in most metros', low: 'Fewer listings have price cuts than in most metros' },
+  months_of_supply: { high: 'More supply relative to sales than most metros', low: 'Tighter supply than most metros' },
+};
+
+export function componentReading(key: string, z: number | null): string {
+  if (z === null) return 'Not available this month';
+  if (Math.abs(z) < 0.25) return 'About typical for the tracked metros';
+  const r = READINGS[key];
+  return r ? (z > 0 ? r.high : r.low) : z > 0 ? 'Higher than most metros' : 'Lower than most metros';
+}
+
+/** Temperature components as signed contributions (z × sign): positive = hotter (SPEC §5.3). */
+export function temperatureBars(metro: Pick<MetroDetailOutput, 'temperature'>, registry: Registry): ComponentBar[] {
   const components: Record<string, number | null> = metro.temperature.components ?? {};
-  return TEMPERATURE_COMPONENTS.map(({ key, sign }) => ({
-    key,
-    label: metricLabel(registry, key),
-    z: typeof components[key] === 'number' ? components[key]! : null,
-    sign,
-  }));
+  return TEMPERATURE_COMPONENTS.map(({ key, sign }) => {
+    const z = typeof components[key] === 'number' ? components[key]! : null;
+    return { key, label: metricLabel(registry, key), z, contribution: z === null ? null : z * sign, reading: componentReading(key, z) };
+  });
+}
+
+export function flagViews(metro: Pick<MetroDetailOutput, 'flags'>, registry: Registry): FlagView[] {
+  return metro.flags.map((f) => ({ id: f.id, label: f.label, severity: f.severity, facts: flagFacts(f, registry) }));
 }
 
 /**

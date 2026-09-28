@@ -1,80 +1,101 @@
-import { useEffect, useMemo } from 'react';
-import { Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useMemo } from 'react';
+import { Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Footer } from './components/layout/Footer';
-import { Header } from './components/layout/Header';
+import { AppShell } from './components/shell/AppShell';
+import type { Crumb } from './components/shell/Breadcrumbs';
+import { PageSkeleton } from './components/ui/Skeleton';
 import { useDataSource, useIndex, useManifest } from './data/hooks';
+import { EntityColorsProvider } from './hooks/EntityColors';
+import { ToastProvider } from './hooks/Toast';
+import { useScrollToSection } from './hooks/useSectionLink';
 import { useTheme } from './hooks/useTheme';
 import { withAttribution } from './lib/attribution';
+import { isStale } from './lib/labels';
 import { formatDateTime, formatMonth, MISSING } from './lib/format';
-import { AboutPage } from './pages/AboutPage';
-import { ComparePage } from './pages/ComparePage';
-import { MetroPage } from './pages/MetroPage';
-import { MetrosPage } from './pages/MetrosPage';
-import { NotFoundPage } from './pages/NotFoundPage';
 import { OverviewPage } from './pages/OverviewPage';
 
+// The Overview is the landing view and stays in the main bundle; the rest load on demand.
+const MetrosPage = lazy(() => import('./pages/MetrosPage').then((m) => ({ default: m.MetrosPage })));
+const MetroPage = lazy(() => import('./pages/MetroPage').then((m) => ({ default: m.MetroPage })));
+const ComparePage = lazy(() => import('./pages/ComparePage').then((m) => ({ default: m.ComparePage })));
+const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
+
+function useCrumbs(names: ReadonlyMap<string, string>): Crumb[] {
+  const { pathname } = useLocation();
+  const root: Crumb = { label: 'Overview', to: '/' };
+  if (pathname === '/') return [{ label: 'Overview' }];
+  if (pathname.startsWith('/metros')) return [root, { label: 'Metros' }];
+  if (pathname.startsWith('/metro/')) {
+    const slug = pathname.split('/')[2] ?? '';
+    return [root, { label: 'Metros', to: '/metros' }, { label: names.get(slug) ?? 'Metro' }];
+  }
+  if (pathname.startsWith('/compare')) return [root, { label: 'Compare' }];
+  if (pathname.startsWith('/about')) return [root, { label: 'Methodology' }];
+  return [root, { label: 'Not found' }];
+}
+
 function Shell() {
-  const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
   const index = useIndex();
   const manifest = useManifest();
   const source = useDataSource();
+  useScrollToSection();
 
-  const searchItems = useMemo(
-    () => (index.status === 'ready' ? index.data.metros.map((m) => ({ slug: m.slug, name: m.name })) : []),
-    [index],
-  );
-
-  // Move focus to the main landmark on navigation so screen readers announce the new view.
-  useEffect(() => {
-    document.getElementById('main')?.focus({ preventScroll: true });
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
-
+  const metros = useMemo(() => (index.status === 'ready' ? index.data.metros.map((m) => ({ slug: m.slug, name: m.name })) : []), [index]);
+  const names = useMemo(() => new Map(metros.map((m) => [m.slug, m.name])), [metros]);
+  const crumbs = useCrumbs(names);
   const lastRun = manifest.status === 'ready' ? manifest.data.last_run_at : index.status === 'ready' ? index.data.meta.finished_at : null;
+  const sample = source.status === 'ready' && source.data?.source === 'sample';
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[2000] btn" onClick={(e) => {
-        e.preventDefault();
-        document.getElementById('main')?.focus();
-      }}>
-        Skip to content
-      </a>
-      <Header
-        searchItems={searchItems}
-        onSelectMetro={(slug) => navigate(`/metro/${slug}`)}
-        theme={theme.preference}
-        onThemeChange={theme.setPreference}
-        sampleData={source.status === 'ready' && source.data?.source === 'sample'}
-      />
-      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 outline-none">
-        <ErrorBoundary resetKey={location.pathname}>
+    <AppShell
+      crumbs={crumbs}
+      metros={metros}
+      theme={theme.preference}
+      onThemeChange={theme.setPreference}
+      freshness={
+        index.status === 'ready'
+          ? { dataThrough: index.data.data_through, ratesAsOf: index.data.rates_as_of, stale: isStale(index.data.meta.warnings), sample }
+          : null
+      }
+      footer={{
+        sources: index.status === 'ready' ? withAttribution(index.data.sources) : [],
+        dataThrough: index.status === 'ready' ? formatMonth(index.data.data_through, true) : MISSING,
+        lastUpdated: lastRun ? formatDateTime(lastRun) : MISSING,
+      }}
+    >
+      <ErrorBoundary resetKey={location.pathname}>
+        <Suspense fallback={<PageSkeleton label="Loading view…" />}>
           <Outlet />
-        </ErrorBoundary>
-      </main>
-      <Footer
-        sources={index.status === 'ready' ? withAttribution(index.data.sources) : []}
-        dataThrough={index.status === 'ready' ? formatMonth(index.data.data_through, true) : MISSING}
-        lastUpdated={lastRun ? formatDateTime(lastRun) : MISSING}
-      />
-    </div>
+        </Suspense>
+      </ErrorBoundary>
+    </AppShell>
   );
+}
+
+function MetroRoute() {
+  const { slug } = useParams();
+  // Keyed so switching metros resets page state (calculator inputs, hovers).
+  return <MetroPage key={slug} />;
 }
 
 export function App() {
   return (
-    <Routes>
-      <Route element={<Shell />}>
-        <Route index element={<OverviewPage />} />
-        <Route path="metros" element={<MetrosPage />} />
-        <Route path="metro/:slug" element={<MetroPage />} />
-        <Route path="compare" element={<ComparePage />} />
-        <Route path="about" element={<AboutPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
+    <ToastProvider>
+      <EntityColorsProvider>
+        <Routes>
+          <Route element={<Shell />}>
+            <Route index element={<OverviewPage />} />
+            <Route path="metros" element={<MetrosPage />} />
+            <Route path="metro/:slug" element={<MetroRoute />} />
+            <Route path="compare" element={<ComparePage />} />
+            <Route path="about" element={<AboutPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+      </EntityColorsProvider>
+    </ToastProvider>
   );
 }

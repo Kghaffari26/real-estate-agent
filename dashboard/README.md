@@ -1,113 +1,197 @@
-# Housing Market Dashboard
+# Metro Pulse — the dashboard
 
-A standalone web dashboard for the `real_estate` agent's published data: a national
-overview, all 50 metros (table + map), a page per metro, a comparison view and a
-methodology page. Vite + React 18 + TypeScript (strict) + Tailwind + React Router
-(hash router) + Recharts + react-leaflet (OSM tiles). Deployed to GitHub Pages at
-`/real-estate-agent/` by `.github/workflows/dashboard.yml`.
+A market-intelligence web app for the `real_estate` agent's published data: a
+national overview, all 50 metros on a map and in a sortable table, a page per
+metro, a comparison view and a methodology page. Every view and setting is
+deep-linkable.
 
-**Phase 1 of 2** (structure, data plumbing, every view and interaction, plain styling).
-Phase 2 restyles it; see [How to restyle](#how-to-restyle).
+**Stack:** Vite, React 18, TypeScript (strict), Tailwind (token-driven), React
+Router (hash router), Recharts (lazy), MapLibre GL with OpenFreeMap tiles (lazy),
+framer-motion (async features), and self-hosted Inter Variable (`@fontsource`).
+Tests use Vitest with Testing Library, plus Playwright with axe. It's deployed to
+GitHub Pages at `/real-estate-agent/` by `.github/workflows/dashboard.yml`.
 
 ## Run locally
 
 ```bash
 cd dashboard
 npm ci
-npm run fetch-data      # data branch → else the committed sample snapshot
+npm run fetch-data      # the data branch, else the committed sample snapshot
 npm run dev             # http://localhost:5173/real-estate-agent/
 ```
 
 | Command | What it does |
 |---|---|
-| `npm run fetch-data` | Fill `public/data/` (see below). `RE_DATA_DIR=../public-data npm run fetch-data` uses a local agent run instead. |
+| `npm run fetch-data` | Fill `public/data/` (see "Data flow"). `RE_DATA_DIR=../public-data npm run fetch-data` uses a local agent run instead. |
 | `npm run gen:schema` | Regenerate `src/data/schema.gen.ts` from `../schemas/real_estate.schema.json`. `check:schema` fails if it's stale. |
-| `npm run lint` / `typecheck` / `test` | ESLint, `tsc -b`, Vitest + Testing Library (85 tests). |
-| `npm run build` / `preview` | Production build into `dist/` (`DASHBOARD_BASE` overrides the `/real-estate-agent/` base path). |
-| `npm run e2e` | Playwright smoke + axe on every route, desktop and 360 px wide (28 checks). |
-| `npm run screenshots` | Rewrite `../docs/screenshots/*.png`. |
+| `npm run lint` / `typecheck` / `test` | ESLint (0 warnings), `tsc -b`, Vitest + Testing Library (106 tests). |
+| `npm run build` / `preview` | Production build into `dist/`. `DASHBOARD_BASE` overrides the base path. |
+| `npm run check:bundle` | Performance budget: initial JS ≤ 300 KB gzipped (CI enforces it). |
+| `npm run e2e` | Playwright smoke + axe: every route in light and dark, desktop and 360 px, plus the interactions (35 checks). |
+| `npm run screenshots` | Rewrite `../docs/screenshots/*.png`: every view in light, dark and mobile. |
+| `npm run brand-assets` | Re-render `public/og.png` and `public/apple-touch-icon.png` from the brand config. |
 
-`predev`/`prebuild` run `fetch-data --if-missing`, so a fresh checkout just works.
+`predev` and `prebuild` run `fetch-data --if-missing`, so a fresh checkout just works.
 
 ## Data flow
 
 ```
 agent run ──► data branch (latest.json, metros/*.json, manifest-entry.json, history/)
-                     │  npm run fetch-data (git fetch origin data → FETCH_HEAD, no branch changes)
+                     │  npm run fetch-data (git fetch origin data → FETCH_HEAD; no branch changes)
                      ▼
 sample-data/ ──► public/data/  +  source.json {source: data-branch | sample | local}
  (fallback)          │  fetched at runtime from <base>/data/
                      ▼
-         src/data/api.ts ── zod (schema.gen.ts, tolerant) ──► hooks ──► view models ──► components
+    src/data/api.ts ── zod (schema.gen.ts, tolerant) ──► hooks ──► view models ──► components
 ```
 
-- **Contract.** `schemas/real_estate.schema.json` (SPEC §6.1–6.3) is compiled into zod
-  schemas and TS types by `scripts/gen-schema-lib.mjs`. A unit test and CI's
-  `check:schema` fail when the generated file is stale, so types can't drift.
-- **Tolerant parsing** (`src/data/tolerant.ts`): fields that aren't required fall back to
-  their JSON Schema default when missing (1.0.0 data has no `investigations`,
-  `alerts[].metros`, `meta.warnings`); a malformed array item or map entry is dropped
-  with a `console.warn`; a malformed optional field is replaced by its default with a
-  warning; numeric series coerce bad values to `null`. Only a missing required
-  top-level block (e.g. `national`) fails a view, which then shows its error state with a retry.
-- **Sample data.** `sample-data/` is a real run of the agent on 2026-09-28 (Redfin data
-  through May 2026, rates as of 2026-09-24, $0.065 of Claude spend): the full index,
-  all 50 metro files, the manifest entry and one history file. Nothing is hand-edited.
-  When it's in use the header shows a **Sample data** badge.
-- **Units.** Metric values and changes are ratios (0.968 → 96.8%, 0.009 → +0.9 pp);
-  mortgage rates and `key_stats` are already in percent (7.03 → 7.03%). `lib/metrics.ts`
-  (`valueScale`) and `lib/format.ts` (`scale: 'ratio' | 'points'`) encode this.
+- **Contract.** The zod schemas and TS types are generated from the agent's JSON
+  Schema (`scripts/gen-schema-lib.mjs`). A unit test and CI fail when they're stale.
+- **Tolerant parsing** (`src/data/tolerant.ts`):
+  - A missing optional field gets its default.
+  - A malformed array item or map entry is dropped with a `console.warn`.
+  - Numeric series coerce bad values to `null`.
+  - Only a missing required top-level block fails a view, which then shows an
+    illustrated error state with a retry.
+- **Sample data.** `sample-data/` comes from a real agent run on 2026-09-28: Redfin
+  Data Center through **August 2026**, rates as of 2026-09-24, $0.0675 of Claude
+  spend. It holds the full index, all 50 metro files, the manifest entry and one
+  history file, with nothing hand-edited. While it's in use, the freshness chip
+  shows **Sample**.
+- **Units.** Metric values and changes are ratios (0.968 → 96.8%, 0.009 → +0.9 pp).
+  Mortgage rates and `key_stats` are already in percent (7.03 → 7.03%). See
+  `lib/metrics.ts` (`valueScale`) and `lib/format.ts` (`scale`).
 
 ## Architecture
 
 ```
 src/
-├── data/          schema.gen.ts (generated), tolerant.ts, manifest.ts, api.ts (fetch+parse+cache),
-│                  useResource.ts + hooks.ts (loading/error/ready + retry)
-├── lib/           pure logic, unit-tested: format.ts (every StatFormat + registry format),
-│                  amortization.ts (SPEC §5.2), series.ts (ranges, index-to-100, weekly→monthly
-│                  alignment), metrics.ts (registry helpers), scale.ts (map colors), tokens.ts,
-│                  theme.ts, search.ts, attribution.ts, labels.ts
-├── viewmodels/    pure data → display models per page (overview, metros, metro, compare)
-├── components/    presentational only (props in, JSX out): ui/ primitives, charts/, layout/,
-│                  KpiTile, TemperatureGauge, BriefCard, InvestigationCard, MetroMap, …
-├── pages/         containers: read URL state + data hooks, call view models, render components
-├── content/       methodology copy (from the spec)
-├── hooks/         useQueryState (every view setting lives in the URL), useTheme, useDocumentTitle
-└── styles/        tokens.css (the design tokens) + index.css (Tailwind layers)
+├── config/brand.ts   the product name, tagline, URL and theme colors (one place)
+├── data/             schema.gen.ts (generated), tolerant.ts, manifest.ts, api.ts, hooks
+├── lib/              pure, unit-tested logic: format (every StatFormat), amortization,
+│                     series (ranges, index-to-100, weekly→monthly), metrics, scale
+│                     (diverging/sequential buckets), geo (de-overlap, bubble size),
+│                     tokens (CSS-variable colors for JS), csv, exportPng, palette, labels…
+├── viewmodels/       pure data → display models: overview, metros, metro, compare, map, columns
+├── components/
+│   ├── shell/        AppShell (sidebar, top bar, bottom nav, footer), CommandPalette, FreshnessChip
+│   ├── ui/           Card (copy link + PNG export), Badge, Status, Delta, SegmentedControl,
+│   │                 Select, Checkbox, Skeleton, StateViews + illustrations, Collapsible…
+│   ├── charts/       TimeSeriesChart + RateStrip (Recharts, lazy), Sparkline, AnimatedNumber
+│   ├── map/          MetroMap (MapLibre, lazy), MapLegend
+│   └── data/         KpiCard, TemperatureGauge, TemperatureComponents, HeatGrid, RankedBars,
+│                     AlertCards, AnalystNote, InvestigationCard, FlagCards, DataTable,
+│                     ColumnPicker, SparkCell, AffordabilityCalculator
+├── pages/            containers: URL state + data hooks → view models → components
+├── hooks/            useQueryState (URL = state), useTheme, EntityColors, Toast, useInView…
+└── styles/           tokens.css (the design tokens) + index.css (Tailwind layers, print CSS)
 ```
 
-Routes (hash router, all deep-linkable): `#/` (`?metric=&range=&rates=`),
-`#/metros` (`?q=&type=&temp=&flag=&sort=&dir=&metric=&view=`),
-`#/metro/:slug` (`?metric=&range=&rate=1`), `#/compare?m=a,b,c` (`&metrics=&range=&indexed=1`),
-`#/about`.
+Every route is deep-linkable:
 
-Numbers are never computed from narrative: everything shown is either a published
-value or deterministic client code (formatting, the calculator, indexing to 100). The
-calculator reproduces every metro's published `payment_now` (tested across all 50).
+| Route | Query parameters |
+|---|---|
+| `#/` | `?metric=&range=&rates=&map=` |
+| `#/metros` | `?q=&type=&temp=&flag=&sort=&dir=&metric=&view=&cols=` |
+| `#/metro/:slug` | `?metric=&range=&rates=0&vs=1` |
+| `#/compare` | `?m=a,b,c&metrics=&range=&indexed=1` |
+| `#/about` | none |
+
+Any view also takes `?section=<id>` to scroll to a section. "Copy link" buttons
+produce these URLs.
+
+## Design system
+
+- **Type.** Inter Variable, self-hosted, with the `cv11` and `ss01` features.
+  Figures use tabular numerals (`.num`). The scale is 11/12/13/14/16/20/24/32/40 on
+  a 4/8 px spacing grid.
+- **Surfaces.** A calm warm-gray neutral ramp with hairline borders and three
+  elevation levels.
+- **One accent.** Indigo.
+- **Dark mode** is its own palette, not an inversion. Surfaces step up in lightness
+  with elevation, and chart and scale steps are re-chosen for the dark surface.
+- **Color jobs** follow the dataviz method. Each role is validated with the palette
+  validator against this app's surfaces (`#ffffff` light, `#17181b` dark):
+
+  | Job | Tokens | Rule |
+  |---|---|---|
+  | Categorical (identity) | `cat-1…4` (blue, orange, aqua, yellow) | Fixed order. Adjacent pairs pass in both modes: worst CVD ΔE 9.1 light / 8.4 dark, normal-vision ≥ 19. Slots 1–3 pass *all-pairs* (ΔE 9.2 / 9.4), so Compare caps at 3 metros. A metro keeps its slot for the session (`hooks/EntityColors.tsx`). Aqua is under 3:1 on white, so lines carry direct labels and a table. |
+  | Diverging (YoY) | `div-neg-3…div-pos-3` | Blue ↔ red with a gray midpoint, 7 steps. Dark mode flips the arms so near-zero recedes into the surface. |
+  | Sequential (magnitude) | `seq-1…6` | One hue (orange "heat"), low → high, used for temperature. Ink on each step is chosen for ≥ 4.5:1 (`inkOnSequential`). |
+  | Status | `good`, `warning`, `bad` | Reserved for state, always with an icon and a label (`ui/Status.tsx`). |
+
+- **Charts.**
+  - One y-axis only. A second measure gets a synced strip (the metro page's
+    mortgage-rate strip shares the x-axis and crosshair) or an indexed-to-100
+    comparison.
+  - 2 px lines, soft area gradients, and hairline solid grids.
+  - A custom crosshair tooltip, direct end labels (collision-resolved) for up to
+    4 series, and high/low/latest annotations.
+  - Transitions on range changes.
+- **Motion.** Subtle: a page fade, gauge arcs drawing in, and KPI count-ups. All of
+  it respects `prefers-reduced-motion` (framer-motion's `MotionConfig
+  reducedMotion="user"`, CSS duration tokens that drop to 0, and the count-up is
+  skipped).
 
 ## How to restyle
 
-1. **Tokens first.** `src/styles/tokens.css` defines every color (light + `.dark`),
-   font, radius and shadow as CSS variables. `tailwind.config.js` maps them to Tailwind
-   names (`bg-surface`, `text-text-muted`, `border-border`, `text-temp-hot`, …), and
-   `src/lib/tokens.ts` hands them to Recharts/Leaflet as `rgb(var(--color-…))`. Changing a
-   token restyles components, charts and map markers together, in both themes.
-2. **Primitives.** `src/styles/index.css` `@layer components` holds `.card`, `.btn`,
-   `.input`, `.chip`, `.table-base`…; `components/ui/` holds Card, Badge (tones),
-   SegmentedControl, Select, Delta, StateViews. Restyle these before touching views.
-3. **Views.** Components only take preformatted props; pages and view models own the
-   data. A restyle should never need to edit `lib/`, `data/` or `viewmodels/`.
-4. The only inline styles are data-driven geometry (chart height, the temperature bar
-   width) and Recharts' tooltip/legend style objects, which read tokens.
-5. Keep `npm run e2e` green: it runs axe (WCAG 2.1 AA) on every route in both themes
-   and checks there's no horizontal scroll at 360 px.
+1. **Tokens first.** `src/styles/tokens.css` defines every color (light and
+   `.dark`), font, radius, shadow and motion duration. `tailwind.config.js` maps
+   them to utilities (`bg-surface`, `text-text-3`, `border-border`, `bg-seq-4`…).
+   `src/lib/tokens.ts` hands them to Recharts as CSS expressions, and to MapLibre
+   and the PNG export as resolved values. Change a token, and components, charts,
+   the map and exports all follow in both themes.
+2. **Primitives.** `@layer components` in `src/styles/index.css` (`.card`, `.btn`,
+   `.input`, `.chip`, `.table-base`, `.skeleton`, `.eyebrow`, `.num`) and
+   `components/ui/`.
+3. **Views.** Components take preformatted props. Pages and view models own the
+   data, so a restyle never touches `lib/`, `data/` or `viewmodels/`.
+4. **Inline styles** are only data-driven geometry: bar widths, chart heights, a
+   color picked by value, and the hover-card position.
+5. If you change a categorical, diverging or sequential step, re-run the palette
+   validator in both modes. Keep `npm run e2e` green: axe runs on every route in
+   both themes, at 360 px too.
 
-## Known limitations (phase 1)
+## How to rebrand
 
-- OSM map tiles load from `tile.openstreetmap.org`; they're stubbed in tests and
-  screenshots, so the screenshots show markers on a blank map.
-- 20 metros that Redfin reports as divisions share their parent metro's centroid, so
-  some markers overlap (see `STATUS.md`).
-- Permits and ACS income are null in current data (sources disabled/unkeyed), so those
-  panels show dashes and payment-to-income is unavailable.
+1. `src/config/brand.ts`: name, tagline, description, site URL, theme colors.
+   `vite.config.ts` injects these into `index.html` (title, description, Open
+   Graph/Twitter tags, theme-color). The UI reads them from the same object.
+2. The logo: `components/brand/Logo.tsx`, `public/favicon.svg`, and the `MARK`
+   geometry in `scripts/make-brand-assets.mjs` (the same path in all three).
+3. The accent: `--color-accent*` in `src/styles/tokens.css`, for both themes.
+4. `npm run brand-assets` re-renders `public/og.png` (1200×630) and
+   `public/apple-touch-icon.png`.
+5. `npm run screenshots`, then check the README.
+
+The print one-pager (Print report on a metro page) uses the brand name in its
+header and footer, so it's the starting point for a white-label PDF report.
+
+## Performance
+
+- **Initial JS: 109 KB gzipped**: 44 KB app + 65 KB React/Router/zod. The budget is
+  300 KB, checked in CI by `npm run check:bundle`.
+- **Lazy chunks:**
+  - Recharts: ~110 KB, loaded when a chart nears the viewport.
+  - MapLibre: ~280 KB, plus its worker, loaded when the map nears the viewport.
+  - framer-motion's animation features: 15 KB, loaded asynchronously.
+  - Every page except the Overview.
+- **Lighthouse on the Overview** (2026-09-28, local `vite preview`, Lighthouse 12):
+
+  | | Performance | Accessibility | Best practices | SEO |
+  |---|---|---|---|---|
+  | Mobile (simulated Moto G, 4× CPU) | 96 | 100 | 100 | 100 |
+  | Desktop | 99 | 100 | 100 | 100 |
+
+## Known limitations
+
+- **Basemap in tests.** OpenFreeMap tiles are unreachable from CI and the build
+  sandbox, so the e2e tests and screenshots use an offline stand-in style (U.S.
+  land and state lines from `us-atlas`). The live site uses OpenFreeMap's
+  `positron` and `dark` styles. If WebGL or the basemap fails, the map is replaced
+  by a list, and the full table is always on the Metros page.
+- **Table sparklines load per row.** The index has no per-metro series, so each
+  visible row loads its metro file. A `metros[].spark` array in the index would
+  avoid that (see STATUS.md).
+- **Missing sources.** Permits and ACS income are null in the current data, so those
+  panels show friendly empty states and payment-to-income is unavailable.

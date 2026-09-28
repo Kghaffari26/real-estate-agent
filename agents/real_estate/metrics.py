@@ -90,14 +90,14 @@ METRICS: tuple[Metric, ...] = (
     ),
     Metric("median_dom", "Median days on market", "redfin", "days", "diff", unit="days"),
     Metric("avg_sale_to_list", "Sale-to-list ratio", "redfin", "percent", "pp"),
-    Metric("sold_above_list", "Sold above list", "redfin", "percent", "pp", note="Share of sales"),
+    Metric("sold_above_list", "Sold above list", "redfin", "percent", "pp", note="Share of sales above the original list price"),
     Metric(
         "price_drops",
         "Listings with price drops",
         "redfin",
         "percent",
         "pp",
-        note="Share of active listings",
+        note="Share of active listings with a price drop",
     ),
     Metric(
         "off_market_in_two_weeks",

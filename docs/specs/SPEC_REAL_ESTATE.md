@@ -80,6 +80,53 @@ A single **metric registry** (`agents/real_estate/metrics.py`) defines every met
 
 ### 3.1 Redfin Data Center (primary, market metrics)
 
+**Updated 2026-09-28.** Redfin relaunched its Data Center and stopped updating the
+`redfin_market_tracker/` exports on 2026-06-02 (last month: May 2026). The current
+files are CSVs in the same public bucket under `redfin_data_center/` (manifest:
+`redfin_data_center/index.json`), refreshed around the 3rd week of each month:
+
+| Use | Path under `https://redfin-public-data.s3.us-west-2.amazonaws.com/redfin_data_center/` |
+|---|---|
+| Metro metrics | `housing_market/monthly/all_metros.csv` (~44MB; one row per metro and month, back to 2012) |
+| National metrics | `housing_market/monthly/country.csv` |
+| Metro price-drop share | `price_drops/monthly/all_metros.csv` (~20MB) |
+| National price-drop share | `price_drops/monthly/country.csv` |
+
+- **Why `all_metros` and not `top_50_metros`:** Redfin's top 50 omits 5 tracked metros
+  (North Port, Raleigh, Oklahoma City, Cape Coral, Myrtle Beach).
+- **Format:** CSV with a quoted header, `NA` for missing values. Keys: `LAST UPDATED,
+  FREQUENCY` (`Monthly`), `PERIOD BEGIN, PERIOD END, REGION ID` (housing files only;
+  same codes as the legacy `PARENT_METRO_REGION_METRO_CODE`), `REGION TYPE` (`Metro` /
+  `Country`), `REGION NAME` (`"Houston, TX metro area"`, matching `redfin_region` in
+  `config/metros.toml`). Then value / `MOM` / `YOY` triplets per metric.
+- **Columns used → published metric:** `MEDIAN SALE PRICE NSA ($)` → `median_sale_price`,
+  `HOMES SOLD`, `NEW LISTINGS`, `INVENTORY`, `MONTHS OF SUPPLY`, `MEDIAN DAYS ON MARKET
+  (DAYS)` → `median_dom`, `AVERAGE SALE TO LIST RATIO (%)` → `avg_sale_to_list`, `SHARE
+  SOLD ABOVE ORIGINAL LIST (%)` → `sold_above_list`, `PERCENT OFF MARKET IN TWO WEEKS
+  (%)` → `off_market_in_two_weeks`, and from the price-drops file `PERCENT ACTIVE WITH
+  PRICE DROPS (%)` → `price_drops`. **Percent columns are percents (97.09); divide by
+  100** so the published contract keeps ratios (§6 rules). Assert the columns exist and
+  fail loudly with a list of missing ones.
+- **The price-drops files have no `REGION ID`**, so they're joined on (`REGION NAME`,
+  `PERIOD END`). All 50 tracked names match exactly (a test checks a snapshot of the
+  live names; `scripts/verify_re_sources.py --names` checks the live files). A metro
+  without a price-drop row gets `price_drops: null`; if the price-drops file itself is
+  unavailable, the run warns and publishes `price_drops: null`.
+- **Ignore Redfin's `MOM`/`YOY` columns** and compute changes ourselves (§5). Checked on
+  the 2026-09 file: our YoY matches theirs within rounding for all 50 metros.
+- **New methodology, not a continuation.** Several definitions and the national coverage
+  changed (e.g. May 2026 national median sale price $399,900 vs $449,846 in the old
+  export; "sold above list" is now above the *original* list price; the price-drop share
+  is of active listings). Every series therefore comes from one source; old and new rows
+  are never spliced.
+- **Fallback:** if any Data Center file above fails to download or parse, both metro and
+  national data come from the legacy exports below (never a mix), with a
+  `meta.warnings` line. If those fail too, the run fails.
+- **Staleness:** when the latest month is older than `redfin_stale_after_days` (75,
+  `config/real_estate.toml`), the run still publishes and adds a `meta.warnings` line.
+
+**Legacy exports (fallback only; frozen since 2026-06-02):**
+
 - Metro: `https://redfin-public-data.s3.us-west-2.amazonaws.com/redfin_market_tracker/redfin_metro_market_tracker.tsv000.gz`
 - National: `https://redfin-public-data.s3.us-west-2.amazonaws.com/redfin_market_tracker/us_national_market_tracker.tsv000.gz`
 - The format is gzipped TSV. **The metro file is large** (hundreds of MB uncompressed), so:
@@ -92,9 +139,10 @@ A single **metric registry** (`agents/real_estate/metrics.py`) defines every met
      - `REGION` in the tracked set
      - `PERIOD_END >= today − 40 months`
   3. Write the filtered result to `data/cache/real_estate/redfin_metro.parquet` (small), and use that for everything else.
-- Columns used (uppercase at the time of writing; normalize to lowercase on read): `PERIOD_BEGIN, PERIOD_END, REGION, STATE_CODE, TABLE_ID, MEDIAN_SALE_PRICE, HOMES_SOLD, NEW_LISTINGS, INVENTORY, MONTHS_OF_SUPPLY, MEDIAN_DOM, AVG_SALE_TO_LIST, SOLD_ABOVE_LIST, PRICE_DROPS, OFF_MARKET_IN_TWO_WEEKS, LAST_UPDATED`. **Assert the expected columns exist** and fail loudly with a list of any missing ones.
-- Redfin also publishes precomputed `_MOM` and `_YOY` columns. **Ignore them** and compute changes yourself (§5), so every number comes from one consistent method.
-- **Attribution required:** "Data: Redfin, a national real estate brokerage." Link to `https://www.redfin.com/news/data-center/`.
+- Columns used (uppercase at the time of writing; normalize to lowercase on read): `PERIOD_BEGIN, PERIOD_END, REGION, STATE_CODE, TABLE_ID, MEDIAN_SALE_PRICE, HOMES_SOLD, NEW_LISTINGS, INVENTORY, MONTHS_OF_SUPPLY, MEDIAN_DOM, AVG_SALE_TO_LIST, SOLD_ABOVE_LIST, PRICE_DROPS, OFF_MARKET_IN_TWO_WEEKS, LAST_UPDATED`. Ratios are already ratios in this format.
+- `scripts/build_metro_config.py` still ranks metros from the legacy file (a one-time setup step).
+
+**Attribution required:** "Data: Redfin, a national real estate brokerage." Link to `https://www.redfin.com/news/data-center/`.
 
 ### 3.2 Zillow Research (home values and rents)
 

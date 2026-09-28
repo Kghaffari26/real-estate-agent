@@ -23,6 +23,7 @@ from agents_core.http import Http
 from agents.real_estate import fetch_redfin
 from agents.real_estate.agent import AGENT
 from agents.real_estate.schema import IndexOutput, MetroDetailOutput
+from tests import redfin_dc_fixtures as dc
 
 COLUMNS = [
     "PERIOD_BEGIN", "PERIOD_END", "REGION_TYPE", "REGION", "STATE_CODE", "PROPERTY_TYPE", "TABLE_ID",
@@ -164,11 +165,31 @@ def workdir(tmp_path, monkeypatch):
     return tmp_path
 
 
-def _mock_redfin() -> None:
-    files = {
-        fetch_redfin.METRO_URL: _tsv_gz("metro", [("Alpha, TX metro area", 400000), ("Beta, TX metro area", 300000)]),
-        fetch_redfin.NATIONAL_URL: _tsv_gz("national", [("National", 420000)]),
+def _dc_files() -> dict[str, bytes]:
+    months = _month_ends(26)
+    metros = [("Alpha, TX metro area", "10001", "Metro", 400000), ("Beta, TX metro area", "10002", "Metro", 300000)]
+    return {
+        fetch_redfin.METRO_URL: dc.housing_csv([(n, rid, t, dc.default_values(p)) for n, rid, t, p in metros], months),
+        fetch_redfin.PRICE_DROPS_METRO_URL: dc.price_drops_csv(
+            [(n, t, lambda i: 8.0 + 0.2 * i) for n, _, t, _ in metros], months
+        ),
+        fetch_redfin.NATIONAL_URL: dc.housing_csv([("National", None, "Country", dc.default_values(420000))], months),
+        fetch_redfin.PRICE_DROPS_NATIONAL_URL: dc.price_drops_csv([("National", "Country", 9.0)], months),
     }
+
+
+def _mock_redfin(legacy: bool = False) -> None:
+    """The Data Center CSVs (default), or, with legacy=True, only the frozen legacy TSVs
+    while the Data Center files 404 (the fallback path)."""
+    if legacy:
+        for url in (fetch_redfin.METRO_URL, fetch_redfin.PRICE_DROPS_METRO_URL, fetch_redfin.NATIONAL_URL, fetch_redfin.PRICE_DROPS_NATIONAL_URL):
+            respx.get(url).mock(return_value=httpx.Response(404))
+        files = {
+            fetch_redfin.LEGACY_METRO_URL: _tsv_gz("metro", [("Alpha, TX metro area", 400000), ("Beta, TX metro area", 300000)]),
+            fetch_redfin.LEGACY_NATIONAL_URL: _tsv_gz("national", [("National", 420000)]),
+        }
+    else:
+        files = _dc_files()
     for url, body in files.items():
 
         def respond(request, body=body):
@@ -317,8 +338,11 @@ def test_dry_run_makes_no_llm_calls_and_publishes_nothing(workdir, capsys):
 
 @respx.mock
 def test_redfin_failure_fails_the_run_and_keeps_previous_latest(workdir):
-    respx.get(fetch_redfin.METRO_URL).mock(return_value=httpx.Response(404))
-    respx.get(fetch_redfin.NATIONAL_URL).mock(return_value=httpx.Response(404))
+    for url in (
+        fetch_redfin.METRO_URL, fetch_redfin.PRICE_DROPS_METRO_URL, fetch_redfin.NATIONAL_URL,
+        fetch_redfin.PRICE_DROPS_NATIONAL_URL, fetch_redfin.LEGACY_METRO_URL, fetch_redfin.LEGACY_NATIONAL_URL,
+    ):  # fmt: skip
+        respx.get(url).mock(return_value=httpx.Response(404))
     assert _run(workdir, FakeClient()) == 1
     manifest = json.loads((workdir / "public-data" / "manifest-entry.json").read_text())
     assert manifest["status"] == "failed"
@@ -336,3 +360,28 @@ def test_stale_redfin_data_is_published_with_a_warning(workdir):
     index = IndexOutput.model_validate(json.loads((workdir / "public-data" / "latest.json").read_text()))
     assert index.meta.status == "ok"
     assert any(w.startswith("Redfin data runs through ") and "days old" in w for w in index.meta.warnings)
+
+
+@respx.mock
+def test_data_center_outage_falls_back_to_the_legacy_export_with_a_warning(workdir):
+    _mock_redfin(legacy=True)
+    assert _run(workdir, FakeClient()) == 0
+    index = IndexOutput.model_validate(json.loads((workdir / "public-data" / "latest.json").read_text()))
+    assert any("used the legacy market-tracker export" in w for w in index.meta.warnings)
+    assert [s.name for s in index.meta.sources][:2] == ["Redfin metro market tracker (legacy)", "Redfin national market tracker (legacy)"]
+    assert [m.slug for m in index.metros] == ["alpha-tx", "beta-tx"]
+
+
+@respx.mock
+def test_data_center_run_converts_percents_to_ratios(workdir):
+    _mock_redfin()
+    assert _run(workdir, FakeClient()) == 0
+    index = IndexOutput.model_validate(json.loads((workdir / "public-data" / "latest.json").read_text()))
+    alpha = next(m for m in index.metros if m.slug == "alpha-tx")
+    assert alpha.latest["avg_sale_to_list"].value == pytest.approx(0.98)
+    assert alpha.latest["sold_above_list"].value == pytest.approx(0.30)
+    assert alpha.latest["off_market_in_two_weeks"].value == pytest.approx(0.20)
+    # Price drops joined by name: 8.0% + 0.2 per month → ratio; YoY computed by us in pp.
+    assert alpha.latest["price_drops"].value == pytest.approx((8.0 + 0.2 * 25) / 100)
+    assert alpha.latest["price_drops"].yoy == pytest.approx(0.024)
+    assert index.meta.sources[0].name == "Redfin Data Center: housing market, metros"

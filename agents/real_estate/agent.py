@@ -302,15 +302,17 @@ class RealEstateAgent(Agent):
         http = ctx.http
 
         with tracing.span("custom", "fetch:redfin") as sp:
-            metro_fetch = fetch_redfin.fetch_metro(
+            metro_fetch, national_fetch = fetch_redfin.fetch_all(
                 http, tracked_regions={m.redfin_region for m in metros}, history_months=HISTORY_MONTHS
             )
-            national_fetch = fetch_redfin.fetch_national(http, history_months=HISTORY_MONTHS)
             sp.set(
+                source=metro_fetch.source,
                 metro_modified=metro_fetch.modified,
                 national_modified=national_fetch.modified,
                 data_through=metro_fetch.data_through,
             )
+        for warning in (*metro_fetch.warnings, *national_fetch.warnings):
+            ctx.warn(warning)
         out = Fetched(
             metros=metros,
             settings=settings,
@@ -319,9 +321,17 @@ class RealEstateAgent(Agent):
             any_source_changed=metro_fetch.modified or national_fetch.modified,
             warnings=ctx.warnings,  # published as meta.warnings; also printed by --dry-run
         )
+        labels = {
+            fetch_redfin.METRO_URL: "Redfin Data Center: housing market, metros",
+            fetch_redfin.PRICE_DROPS_METRO_URL: "Redfin Data Center: price drops, metros",
+            fetch_redfin.NATIONAL_URL: "Redfin Data Center: housing market, national",
+            fetch_redfin.PRICE_DROPS_NATIONAL_URL: "Redfin Data Center: price drops, national",
+            fetch_redfin.LEGACY_METRO_URL: "Redfin metro market tracker (legacy)",
+            fetch_redfin.LEGACY_NATIONAL_URL: "Redfin national market tracker (legacy)",
+        }
         out.sources += [
-            Source(name="Redfin metro market tracker", url=fetch_redfin.METRO_URL, retrieved_at=now),
-            Source(name="Redfin national market tracker", url=fetch_redfin.NATIONAL_URL, retrieved_at=now),
+            Source(name=labels.get(url, url), url=url, retrieved_at=now)
+            for url in (*metro_fetch.urls, *national_fetch.urls)
         ]
 
         region_ids = {m.zillow_region_id for m in metros if m.zillow_region_id is not None}

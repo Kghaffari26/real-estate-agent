@@ -3,7 +3,8 @@
 Does a HEAD request against each and prints status, size, and
 Last-Modified, per §3's "Verify each URL during setup" instruction. Run
 this before trusting any hardcoded URL in the fetchers — public dataset
-URLs change occasionally.
+URLs change occasionally (Redfin moved everything in 2026-09). `--names` also
+checks every tracked metro's name against the live Redfin Data Center files.
 """
 
 from __future__ import annotations
@@ -20,7 +21,10 @@ from agents.real_estate import fetch_redfin, fetch_zillow  # noqa: E402
 
 URLS: dict[str, str] = {
     "redfin_metro": fetch_redfin.METRO_URL,
+    "redfin_price_drops_metro": fetch_redfin.PRICE_DROPS_METRO_URL,
     "redfin_national": fetch_redfin.NATIONAL_URL,
+    "redfin_price_drops_national": fetch_redfin.PRICE_DROPS_NATIONAL_URL,
+    "redfin_legacy_metro (fallback, frozen 2026-06-02)": fetch_redfin.LEGACY_METRO_URL,
     "zillow_zhvi": fetch_zillow.ZHVI_URL,
     "zillow_zori": fetch_zillow.ZORI_URL,
     "census_bps_index": "https://www2.census.gov/econ/bps/",
@@ -67,7 +71,32 @@ def main() -> int:
         print("\nSome sources are unreachable — this may be code, or it may be network policy", file=sys.stderr)
         print("in this environment; a fetcher's optional sources (Zillow, permits, ACS) should", file=sys.stderr)
         print("degrade to null per SPEC_REAL_ESTATE.md §10 rather than fail the whole run.", file=sys.stderr)
+    if "--names" in sys.argv:
+        ok = check_redfin_names() and ok
     return 0 if ok else 1
+
+
+def check_redfin_names() -> bool:
+    """--names: download both Data Center metro files (~65MB) and confirm every
+    tracked metro's `redfin_region` is present in each. The price-drops file has no
+    REGION ID, so the fetcher joins it by name."""
+    import tempfile
+
+    import polars as pl
+
+    from agents.real_estate.config import load_metros
+
+    wanted = {m.redfin_region for m in load_metros()}
+    ok = True
+    with tempfile.TemporaryDirectory() as tmp, Http(max_attempts=2) as http:
+        for label, url in (("housing", fetch_redfin.METRO_URL), ("price drops", fetch_redfin.PRICE_DROPS_METRO_URL)):
+            path = Path(tmp) / "f.csv"
+            http.download(url, path, force=True)
+            names = set(pl.scan_csv(path, infer_schema_length=0).select("REGION NAME").unique().collect()["REGION NAME"])
+            missing = sorted(wanted - names)
+            ok = ok and not missing
+            print(f"[{'OK' if not missing else 'FAIL'}] {label}: {len(wanted) - len(missing)}/{len(wanted)} tracked metros matched by name {missing or ''}")
+    return ok
 
 
 if __name__ == "__main__":

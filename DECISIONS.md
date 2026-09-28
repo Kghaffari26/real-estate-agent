@@ -88,3 +88,9 @@ One line per consequential judgment call made while working unattended.
 - OSM tile URL is `tile.openstreetmap.org` (no a/b/c subdomains, per OSM's current guidance).
 - Pushed to `main` as asked, and to the session branch `claude/great-bohr-u6up6d`.
 
+
+## Session 7 (2026-09-28): data freshness + dashboard phase 2
+
+- Redfin freshness: the snapshot ends May 2026 because Redfin's public S3 exports stopped updating. Every `redfin_market_tracker/*.tsv000.gz` (national, metro, state, county, city, zip) has Last-Modified 2026-06-02, the metro file's `LAST_UPDATED` column is 2026-06-02 and its latest `PERIOD_END` is 2026-05-31 for every duration/property type/SA combination. A forced conditional GET returned the same ETag, so it isn't our cache, filter or file choice. Search results say Redfin's own site already shows August 2026 (its "new Data Center" launch); the new download hub is on redfin.com, which this sandbox can't reach, and guessed S3 keys all 403. Not a bug here, so no fetcher change.
+- What was missing was detection: the agent published 4-month-old data silently. Added `compute.source_lag_warning()` + `redfin_stale_after_days = 75` (config): when Redfin's latest month is older than that, the run still publishes (the data is valid) and adds a plain-language `meta.warnings` line. 75 days = Redfin's normal ~55-day lag plus slack. Tested in `test_compute.py` and end-to-end in `test_agent_run.py`.
+- Sample snapshot regenerated from a fresh real run (same scratch state, so every brief and the investigation were reused: $0.00). Its data is unchanged except `meta` (new run id, the staleness warning).

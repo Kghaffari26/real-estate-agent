@@ -407,6 +407,11 @@ class RealEstateAgent(Agent):
             pl.scan_parquet(raw.national_fetch.parquet_path).sort("period_end").collect().to_dicts()
         )
         global_data_through = national_rows[-1]["period_end"] if national_rows else None
+        lag = compute.source_lag_warning(
+            "Redfin", global_data_through, date.today(), settings.redfin_stale_after_days
+        )
+        if lag:
+            ctx.warn(lag)
 
         rows_by_slug: dict[str, list[dict[str, Any]]] = {}
         changes_by_slug: dict[str, dict[str, compute.MetricChange]] = {}

@@ -351,3 +351,19 @@ def test_compute_affordability_respects_custom_down_payment_and_term():
     assert result.payment_now == expected
     assert result.assumptions["term_years"] == 15
     assert result.assumptions["down_payment_pct"] == 0.10
+
+
+def test_source_lag_warning_only_when_older_than_the_usual_lag():
+    from datetime import date
+
+    from agents.real_estate.compute import source_lag_warning
+
+    today = date(2026, 9, 28)
+    # Normal lag: August data in late September is fine, and so is July.
+    assert source_lag_warning("Redfin", date(2026, 8, 31), today, 75) is None
+    assert source_lag_warning("Redfin", date(2026, 7, 31), today, 75) is None
+    # The 2026-09 incident: the public S3 export still ended at May 2026.
+    msg = source_lag_warning("Redfin", date(2026, 5, 31), today, 75)
+    assert msg is not None
+    assert msg.startswith("Redfin data runs through May 2026 (120 days old")
+    assert source_lag_warning("Redfin", None, today, 75) is None

@@ -323,3 +323,16 @@ def test_redfin_failure_fails_the_run_and_keeps_previous_latest(workdir):
     manifest = json.loads((workdir / "public-data" / "manifest-entry.json").read_text())
     assert manifest["status"] == "failed"
     assert not (workdir / "public-data" / "latest.json").exists()
+
+
+@respx.mock
+def test_stale_redfin_data_is_published_with_a_warning(workdir):
+    """2026-09: Redfin's public S3 export stopped at May 2026. The run still publishes
+    (the data is valid), but meta.warnings says the latest month is older than usual."""
+    settings = workdir / "config" / "real_estate.toml"
+    settings.write_text(settings.read_text().replace("[settings]", "[settings]\nredfin_stale_after_days = 0", 1))
+    _mock_redfin()
+    assert _run(workdir, FakeClient()) == 0
+    index = IndexOutput.model_validate(json.loads((workdir / "public-data" / "latest.json").read_text()))
+    assert index.meta.status == "ok"
+    assert any(w.startswith("Redfin data runs through ") and "days old" in w for w in index.meta.warnings)

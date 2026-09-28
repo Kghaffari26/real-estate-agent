@@ -5,6 +5,8 @@ use_acs_income = true
 batch_poll_timeout_min = 40
 max_index_kb = 150
 max_metro_kb = 40
+# meta.warnings when Redfin's latest month is older than this many days (normal lag ~55)
+redfin_stale_after_days = 75
 
 [flags]
 inventory_surge_yoy = 0.25

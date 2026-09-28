@@ -29,6 +29,9 @@ class Settings:
     batch_poll_timeout_min: int = 40
     max_index_kb: float = 150
     max_metro_kb: float = 40
+    # Warn (meta.warnings) when Redfin's latest month is older than this. Redfin
+    # normally publishes month M in the 3rd-4th week of M+1, so ~55 days is normal.
+    redfin_stale_after_days: int = 75
     flags: dict[str, float] = field(default_factory=dict)
     temperature_min_components: int = 4
     temperature_bands: tuple[int, int, int, int] = (80, 60, 40, 20)
@@ -65,6 +68,7 @@ def load_settings(path: Path | str = DEFAULT_SETTINGS_PATH) -> Settings:
         batch_poll_timeout_min=settings.get("batch_poll_timeout_min", 40),
         max_index_kb=settings.get("max_index_kb", 150),
         max_metro_kb=settings.get("max_metro_kb", 40),
+        redfin_stale_after_days=settings.get("redfin_stale_after_days", 75),
         flags=dict(flags),
         temperature_min_components=temperature.get("min_components", 4),
         temperature_bands=tuple(bands),

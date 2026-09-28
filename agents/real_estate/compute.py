@@ -252,3 +252,17 @@ def compute_affordability(
             "price_year_ago": price_year_ago,
         },
     )
+
+
+def source_lag_warning(source: str, data_through: date | None, today: date, max_age_days: int) -> str | None:
+    """A plain-language `meta.warnings` line when a source's latest period is older
+    than `max_age_days`, else None. Deterministic: `today` is passed in."""
+    if data_through is None:
+        return None
+    age = (today - data_through).days
+    if age <= max_age_days:
+        return None
+    return (
+        f"{source} data runs through {data_through:%B %Y} ({age} days old, more than the usual "
+        f"~{max_age_days}-day publishing lag): the upstream file hasn't been updated with newer months"
+    )

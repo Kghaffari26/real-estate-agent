@@ -1,0 +1,30 @@
+import { existsSync } from 'node:fs';
+import { defineConfig, devices } from '@playwright/test';
+
+const PORT = 4173;
+// Cloud dev containers ship Chromium at a fixed path; CI uses `npx playwright install`.
+const localChromium = '/opt/pw-browsers/chromium';
+
+export default defineConfig({
+  testDir: './e2e',
+  timeout: 30_000,
+  fullyParallel: true,
+  forbidOnly: Boolean(process.env.CI),
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [['github'], ['list']] : 'list',
+  use: {
+    baseURL: `http://localhost:${PORT}/real-estate-agent/`,
+    trace: 'retain-on-failure',
+    launchOptions: existsSync(localChromium) && !process.env.CI ? { executablePath: localChromium } : {},
+  },
+  projects: [
+    { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
+    { name: 'mobile-360', use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 780 } } },
+  ],
+  webServer: {
+    command: `npm run build && npx vite preview --port ${PORT} --strictPort`,
+    url: `http://localhost:${PORT}/real-estate-agent/`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
+});

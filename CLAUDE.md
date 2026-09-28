@@ -30,7 +30,9 @@ real-estate-agent/
 ├── evals/                  # history.jsonl + results/ (agents_core.evals, committed);
 │                           # real_estate/: suites.py (3 suites), checks.py, fixtures.py,
 │                           # investigator_{world.json,cases.jsonl}, trajectories/ (recorded loops)
-├── docs/                   # specs/, case-studies.md
+├── dashboard/              # standalone web dashboard (Vite + React + TS), see dashboard/README.md;
+│                           # sample-data/ = a committed real run; types generated from schemas/
+├── docs/                   # specs/, case-studies.md, screenshots/ (dashboard, from Playwright)
 └── tests/                  # HTTP mocked (respx), fake or replayed Anthropic client, fixtures in tests/fixtures/
 ```
 
@@ -134,6 +136,15 @@ no permissions**; each calling job must grant exactly what it needs:
   - Re-record the investigator trajectories
     (`RE_SAVE_TRAJECTORIES=evals/real_estate/trajectories`) so the replay tests
     match.
+- **The dashboard follows the contract, never the other way round.**
+  - After any `schema.py` change: `scripts/export_re_schema.py`, then
+    `cd dashboard && npm run gen:schema` (a dashboard test and CI fail if stale).
+  - `dashboard/` never computes a number the agent should own; it formats published
+    values and runs the calculator (same formula, shared vectors).
+  - Styling lives only in `dashboard/src/styles/tokens.css` + the Tailwind theme;
+    data/logic in `data/`, `lib/`, `viewmodels/`; components are presentational.
+  - `.github/workflows/dashboard.yml` grants only `contents: read`, `pages: write`,
+    `id-token: write`.
 - **Keep published paths generic**: use `agents_core.settings.publish_dir()`
   / `data_dir()` (env-overridable), never a site path.
 - Secrets come from environment variables only (`ANTHROPIC_API_KEY` /
@@ -159,6 +170,8 @@ uv run python scripts/build_investigator_fixtures.py  # re-snapshot the investig
 uv run python scripts/verify_re_sources.py     # which data-source URLs are reachable
 uv run python scripts/build_metro_config.py    # regenerate config/metros.toml (Redfin + Zillow + Gazetteer)
 uv run python scripts/export_re_schema.py      # after any schema.py change
+cd dashboard && npm ci && npm run fetch-data && npm run dev   # dashboard (see dashboard/README.md)
+cd dashboard && npm run lint && npm run typecheck && npm test && npm run e2e
 ```
 
 ## Before making a change

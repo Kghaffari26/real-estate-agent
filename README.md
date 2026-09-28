@@ -96,6 +96,28 @@ jq '.spans[] | select(.kind=="agent_loop" or .kind=="tool_call") | {kind,name,du
 uv run pytest tests/test_investigate.py -k replay   # the 6 recorded trajectories, offline
 ```
 
+## Dashboard
+
+`dashboard/` is a standalone web dashboard for this agent's output (Vite + React +
+TypeScript, Recharts, Leaflet), deployed to GitHub Pages at `/real-estate-agent/` by
+`.github/workflows/dashboard.yml` after every push to it and every successful agent run.
+Its types are generated from `schemas/real_estate.schema.json`, it parses tolerantly
+(older files and bad items never crash a view), and until the `data` branch exists it
+shows a committed snapshot of a real run with a **Sample data** badge. Details:
+[`dashboard/README.md`](dashboard/README.md).
+
+```bash
+cd dashboard && npm ci && npm run fetch-data && npm run dev
+```
+
+| Overview | Metros (map + sortable table) |
+|---|---|
+| ![Overview](docs/screenshots/overview.png) | ![Metros](docs/screenshots/metros.png) |
+| **Metro detail** | **Compare** |
+| ![Metro detail](docs/screenshots/metro-detail.png) | ![Compare](docs/screenshots/compare.png) |
+| **About / methodology** | **Dark theme, and 360 px wide** |
+| ![About](docs/screenshots/about.png) | <img src="docs/screenshots/overview-dark.png" alt="Overview, dark theme" width="300"> <img src="docs/screenshots/metro-detail-mobile.png" alt="Metro detail at 360 px" width="90"> |
+
 ## How it works
 
 ```

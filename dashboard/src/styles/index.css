@@ -1,0 +1,63 @@
+@import './tokens.css';
+@import 'leaflet/dist/leaflet.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-bg text-text font-sans antialiased;
+  }
+  body {
+    @apply min-h-screen bg-bg;
+  }
+  :focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-focus;
+  }
+  a {
+    @apply text-accent underline underline-offset-2 hover:decoration-2;
+  }
+}
+
+@layer components {
+  /* Reusable primitives, all built from tokens. Phase 2 restyles these. */
+  .card {
+    @apply rounded-lg border border-border bg-surface p-4 shadow-card;
+  }
+  .card-title {
+    @apply text-base font-semibold text-text;
+  }
+  .muted {
+    @apply text-text-muted;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text hover:bg-surface-muted disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-accent bg-accent text-accent-contrast hover:bg-accent/90;
+  }
+  .input {
+    @apply w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-text;
+  }
+  .table-base {
+    @apply w-full border-collapse text-sm;
+  }
+  .table-base th {
+    @apply border-b border-border px-2 py-2 text-left font-semibold text-text-muted;
+  }
+  .table-base td {
+    @apply border-b border-border px-2 py-2 align-top;
+  }
+  .chip {
+    @apply inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium;
+  }
+}
+
+/* Leaflet map tiles in dark mode: dim rather than restyle. */
+.dark .leaflet-tile-pane {
+  filter: brightness(0.7) contrast(1.1);
+}

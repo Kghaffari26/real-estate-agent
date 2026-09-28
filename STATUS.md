@@ -1,7 +1,41 @@
 # Status
 
-Last updated 2026-09-27 by an unattended Claude Code session. Judgment calls
-are logged one per line in `DECISIONS.md` ("Session 4").
+Last updated 2026-09-28 by an unattended Claude Code session. Judgment calls
+are logged one per line in `DECISIONS.md` ("Session 4", "Session 6").
+
+## Dashboard, phase 1 (2026-09-28, session 6)
+
+`dashboard/` (Vite + React 18 + TS strict + Tailwind + Recharts + react-leaflet),
+deployed by `.github/workflows/dashboard.yml`. The Python agent is unchanged.
+
+- **Done:** all five views (Overview, Metros table + map, Metro detail, Compare,
+  About), each deep-linkable; header quick-search combobox; light/dark/system theme;
+  loading/empty/error states; zod schemas + types generated from
+  `schemas/real_estate.schema.json` with a staleness check; tolerant parsing;
+  `npm run fetch-data` (data branch → sample fallback + badge); client calculator
+  that reproduces all 50 published `payment_now` values (§13's "site calculator"
+  criterion, now ✅ against the sample).
+- **Checks:** 85 Vitest tests, ESLint, `tsc -b`, 28 Playwright smoke + axe checks
+  (every route, desktop and 360 px, light and dark), all passing; 232 Python tests
+  and ruff still pass.
+- **Sample data:** `dashboard/sample-data/` is a live run into a scratch publish dir
+  on 2026-09-28: status ok, **$0.0647** Claude spend (50 metro briefs, national brief,
+  1 investigation: Pittsburgh), index 86.8 KB. Committed state (`data/`) untouched.
+- **Screenshots:** `docs/screenshots/{overview,metros,metro-detail,compare,about,overview-dark,metro-detail-mobile}.png`.
+- **By hand:** Settings → Pages → Source: **GitHub Actions** (the workflow can't turn
+  Pages on). The `github-pages` environment must allow deploys from `main`.
+- **Not verifiable here:** OSM tiles are blocked by this sandbox's egress policy, so
+  tiles are stubbed in tests/screenshots; the workflow itself hasn't run yet.
+- **Data-contract gaps** (dashboard works around each; see DECISIONS "Session 6"):
+  1. `percent`/`pp_signed` mean different units in different places: metric values
+     are ratios (0.968), but `key_stats` and the rate series are in percent (7.03,
+     +0.08 pp), and the registry lists `mortgage30` as `format: "percent"`.
+  2. Index `metros[].flags` are ids only, with no labels for `info` flags.
+  3. `flags[].facts` carry no formats; units are inferred from key suffixes.
+  4. `sources[].attribution` is null for FRED and Census.
+  5. Unrounded ratios in `latest`/`series` (known item 3 below).
+  6. National `temperature` has no components, so only metros show a breakdown.
+  7. Metro series start with nulls in the first months while `dates` is shared.
 
 ## agents-core v0.3.1 (2026-09-27, session 5)
 
@@ -219,7 +253,7 @@ fallback. One observation for upstream:
 | Real run publishes index ≤150KB + 50 metro files ≤40KB, all validated | ✅ 87 KB / 8.7–11.9 KB. |
 | Immediate second run makes zero LLM calls | ✅ Live: 0 calls, $0 (briefs *and* investigations reused). |
 | Mortgage-rate change regenerates only the national brief | ✅ for briefs, by construction. Investigations also rerun on a rate change, by design (DECISIONS). |
-| Affordability numbers match the site calculator | N/A (no site yet). The shared vector passes. |
+| Affordability numbers match the site calculator | ✅ `dashboard/` reproduces all 50 published `payment_now` values with default inputs (`viewmodels.test.ts`), plus the shared vectors. |
 | Tests pass, evals meet §11 thresholds | ✅ 232 tests, ruff clean, all three suites at pass rate 1.000. |
 | `/real-estate` page renders | N/A (site out of scope). |
 

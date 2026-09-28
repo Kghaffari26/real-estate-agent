@@ -1,0 +1,75 @@
+name: dashboard
+
+# Builds dashboard/ (Vite + React) and deploys it to GitHub Pages at
+# https://<owner>.github.io/real-estate-agent/. Runs when the dashboard changes,
+# after every successful agent run (so new data on the `data` branch redeploys
+# automatically), and on demand. `npm run fetch-data` reads the `data` branch and
+# falls back to the committed sample snapshot while that branch doesn't exist.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dashboard/**"
+      - "schemas/real_estate.schema.json"
+      - ".github/workflows/dashboard.yml"
+  workflow_run:
+    workflows: ["real_estate agent"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # workflow_run fires on every completion; deploy only after a successful agent run.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # After an agent run, build the commit that run left on main.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - name: Schema types are current
+        run: npm run check:schema
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Fetch data (data branch, else the sample snapshot)
+        run: npm run fetch-data
+      - run: npm run build
+        env:
+          DASHBOARD_BASE: /real-estate-agent/
+      - name: Playwright smoke + axe
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

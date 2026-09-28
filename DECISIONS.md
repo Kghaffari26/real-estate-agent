@@ -62,3 +62,29 @@ One line per consequential judgment call made while working unattended.
 - No spend-splitting wrapper existed to replace; added `total_max_usd: "0.40"` to `evals.yml` anyway (per-suite $0.25 stays) because it bounds the gate at $0.40 instead of 3 × $0.25, with headroom over a ~$0.16 full run.
 - Didn't append an eval history line: nothing in the prompts, tools or guards changed, and the replay tests confirm the recorded trajectories still pass on v0.3.1.
 - Pushed to `main` as asked, fast-forwarding from the session branch `claude/kind-brown-pj1pdt`, which was pushed as well.
+
+## Session 6 (2026-09-28): dashboard phase 1
+
+- Dashboard lives in `dashboard/` with its own `package.json`; the Python agent, its tests and committed run state are untouched.
+- Types: a small in-repo generator (`scripts/gen-schema-lib.mjs`) emits zod schemas + inferred types from `schemas/real_estate.schema.json` instead of `json-schema-to-zod`, so tolerance rules (defaults, drop-with-warning, series coercion) are built into the generated code.
+- Tolerance: non-required fields fall back to their JSON Schema default (arrays to `[]`, maps to `{}`); malformed array items/map entries are dropped with a console warning; only missing required top-level blocks fail a view.
+- `anyOf` of object shapes uses a best-key-match union, because zod's first-match union parsed `{value, yoy_12m}` as a MetricValue and stripped `yoy_12m`.
+- Validation-only keywords (pattern, minimum, maxLength, formats) aren't enforced client-side: they'd only turn harmless drift into dropped data.
+- Units: metric values/changes are treated as ratios; mortgage rates and `key_stats` as percent points. The registry marks rate metrics as `format: percent` + `change_kind: diff`, which `valueScale()` uses. Logged as a contract gap rather than changing the agent.
+- Key stat delta labels: the price delta is YoY and the rate delta is 1 week (§5.6); inferred from `delta_format` since KeyStat has no period field.
+- Flag names for index ids and flag-fact labels/units are small static maps in the dashboard (index ships ids only; facts have no formats). Agent-provided labels always win.
+- Attribution text for FRED/Census (null in `sources`) comes from `lib/attribution.ts`, including Freddie Mac PMMS and S&P CoreLogic Case-Shiller for the FRED series.
+- Methodology copy (temperature steps, flag rules) is transcribed from SPEC §5.3/§5.4 into `src/content/methodology.ts`.
+- Sample snapshot: a real `agents-run real_estate` with `AGENTS_CORE_DATA_DIR`/`AGENTS_CORE_PUBLISH_DIR` in a scratch dir and `AGENTS_CORE_MAX_RUN_USD=0.25`; it cost $0.0647. All 50 metro files kept (604 KB), no trimming needed; trace.json/schema.json/costs-summary.json not copied (the dashboard doesn't read them).
+- `fetch-data` uses `git fetch origin data` into FETCH_HEAD + `git archive`, so it never creates or moves local branches; `RE_DATA_DIR` supports a local publish dir; `predev`/`prebuild` run it with `--if-missing`.
+- Metros page shows the map and table together by default (`view=table` hides the map); the map is mouse-only, so the table is always available and linked from a "View as table" button.
+- Map colors use a diverging orange/blue scale (not red/green), since most metrics have `good_direction: neutral`; buckets are ±20%/±60% of the largest |YoY|. `Delta` only colors good/bad for metrics with a good direction.
+- Compare supports several metrics via `?metrics=a,b` (one chart each) and indexes each metro to 100 at its first non-null month in the range.
+- Mortgage-rate overlay aligns weekly rates to month-ends (last weekly value on or before the month end, within 31 days).
+- Links are underlined everywhere: axe's `link-in-text-block` flagged accent-only links in dark mode.
+- Found and fixed a URL-state bug: two `useSearchParams` setters in one handler clobber each other; `useSetQuery()` batches them.
+- Playwright pinned to 1.56.1 (matches the sandbox's Chromium 1194) with `playwright-core` pinned too so `@axe-core/playwright` shares its types; CI installs its own Chromium. OSM tiles are stubbed in tests (blocked here, and keeps CI offline-safe).
+- CI runs the Playwright smoke + axe suite before deploying; the sample-badge test reads `public/data/source.json` so it stays green once the data branch exists.
+- OSM tile URL is `tile.openstreetmap.org` (no a/b/c subdomains, per OSM's current guidance).
+- Pushed to `main` as asked, and to the session branch `claude/great-bohr-u6up6d`.
+

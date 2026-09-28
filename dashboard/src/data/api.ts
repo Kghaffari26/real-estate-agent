@@ -1,0 +1,102 @@
+/**
+ * Loading and parsing published JSON. Files are served from `<base>/data/`, which
+ * `npm run fetch-data` fills from the data branch (or the committed sample snapshot).
+ * Every file goes through its zod schema; results are cached per path for the session.
+ */
+import type { z } from 'zod';
+import { DataSourceSchema, ManifestEntrySchema, type DataSource, type ManifestEntry } from './manifest';
+import { IndexOutputSchema, MetroDetailOutputSchema, type IndexOutput, type MetroDetailOutput } from './schema.gen';
+
+export class DataError extends Error {
+  constructor(
+    message: string,
+    readonly kind: 'not_found' | 'network' | 'invalid',
+  ) {
+    super(message);
+    this.name = 'DataError';
+  }
+}
+
+export function dataUrl(path: string): string {
+  const base = import.meta.env.BASE_URL ?? '/';
+  return `${base.endsWith('/') ? base : `${base}/`}data/${path}`;
+}
+
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function isValidSlug(slug: string | undefined): slug is string {
+  return typeof slug === 'string' && SLUG.test(slug);
+}
+
+async function fetchJson(path: string, fetcher: typeof fetch): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetcher(dataUrl(path), { headers: { Accept: 'application/json' } });
+  } catch (error) {
+    throw new DataError(`Couldn't reach ${path}: ${(error as Error).message}`, 'network');
+  }
+  if (response.status === 404) throw new DataError(`${path} was not found`, 'not_found');
+  if (!response.ok) throw new DataError(`${path} returned HTTP ${response.status}`, 'network');
+  try {
+    return await response.json();
+  } catch {
+    // Static hosts often answer a missing file with an HTML page.
+    throw new DataError(`${path} is not valid JSON`, 'invalid');
+  }
+}
+
+export function parseWith<S extends z.ZodTypeAny>(schema: S, raw: unknown, what: string): z.output<S> {
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .slice(0, 3)
+      .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('; ');
+    throw new DataError(`${what} doesn't match the data contract (${issues})`, 'invalid');
+  }
+  return parsed.data;
+}
+
+const cache = new Map<string, Promise<unknown>>();
+
+function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+  let hit = cache.get(key) as Promise<T> | undefined;
+  if (!hit) {
+    hit = load();
+    cache.set(key, hit);
+    // Don't cache failures: a retry should refetch.
+    hit.catch(() => cache.delete(key));
+  }
+  return hit;
+}
+
+export function clearCache(): void {
+  cache.clear();
+}
+
+export function loadIndex(fetcher: typeof fetch = fetch): Promise<IndexOutput> {
+  return cached('latest.json', async () => parseWith(IndexOutputSchema, await fetchJson('latest.json', fetcher), 'latest.json'));
+}
+
+export function loadMetro(slug: string, fetcher: typeof fetch = fetch): Promise<MetroDetailOutput> {
+  if (!isValidSlug(slug)) return Promise.reject(new DataError(`"${slug}" is not a metro`, 'not_found'));
+  const path = `metros/${slug}.json`;
+  return cached(path, async () => parseWith(MetroDetailOutputSchema, await fetchJson(path, fetcher), path));
+}
+
+export function loadManifest(fetcher: typeof fetch = fetch): Promise<ManifestEntry> {
+  return cached('manifest-entry.json', async () =>
+    parseWith(ManifestEntrySchema, await fetchJson('manifest-entry.json', fetcher), 'manifest-entry.json'),
+  );
+}
+
+/** Where the data came from; unknown (null) when source.json is missing. */
+export function loadDataSource(fetcher: typeof fetch = fetch): Promise<DataSource | null> {
+  return cached('source.json', async () => {
+    try {
+      return parseWith(DataSourceSchema, await fetchJson('source.json', fetcher), 'source.json');
+    } catch {
+      return null;
+    }
+  });
+}

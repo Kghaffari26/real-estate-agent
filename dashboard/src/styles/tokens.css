@@ -1,0 +1,115 @@
+/*
+ * Design tokens: the ONLY place colors, type, radii and shadows are defined.
+ * Components use Tailwind classes that resolve to these variables (tailwind.config.js),
+ * and charts/maps read them through src/lib/tokens.ts. Restyling = editing this file
+ * (and optionally the Tailwind theme mapping); no component or logic changes needed.
+ *
+ * Colors are space-separated RGB channels so Tailwind's opacity modifiers work
+ * (e.g. bg-accent/10).
+ */
+:root {
+  color-scheme: light;
+
+  /* Surfaces and text */
+  --color-bg: 248 249 251;
+  --color-surface: 255 255 255;
+  --color-surface-muted: 241 243 246;
+  --color-border: 214 218 225;
+  --color-text: 20 24 31;
+  --color-text-muted: 84 92 105;
+  --color-accent: 29 78 216;
+  --color-accent-contrast: 255 255 255;
+  --color-focus: 29 78 216;
+
+  /* Semantic */
+  --color-positive: 21 128 61;
+  --color-negative: 185 28 28;
+  --color-neutral: 84 92 105;
+  --color-warning: 161 98 7;
+  --color-info: 3 105 161;
+
+  /* Severity (flags / alerts) */
+  --color-severity-info: 3 105 161;
+  --color-severity-notable: 161 98 7;
+  --color-severity-major: 185 28 28;
+
+  /* Temperature bands (§5.3): Cold → Hot */
+  --color-temp-cold: 29 78 216;
+  --color-temp-cool: 14 116 144;
+  --color-temp-balanced: 100 116 139;
+  --color-temp-warm: 194 65 12;
+  --color-temp-hot: 185 28 28;
+
+  /* Chart series (categorical) + axes */
+  --color-chart-1: 29 78 216;
+  --color-chart-2: 194 65 12;
+  --color-chart-3: 21 128 61;
+  --color-chart-4: 126 34 206;
+  --color-chart-grid: 226 229 234;
+  --color-chart-axis: 84 92 105;
+
+  /* Diverging map scale for YoY (negative → zero → positive); colorblind-safe
+     orange/blue, deliberately not red/green since most metrics are "neutral". */
+  --color-scale-neg-strong: 180 83 9;
+  --color-scale-neg: 251 146 60;
+  --color-scale-zero: 148 163 184;
+  --color-scale-pos: 96 165 250;
+  --color-scale-pos-strong: 29 78 216;
+  --color-scale-missing: 226 232 240;
+
+  /* Typography */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-bg: 15 18 24;
+  --color-surface: 24 28 36;
+  --color-surface-muted: 33 38 48;
+  --color-border: 55 62 75;
+  --color-text: 236 239 244;
+  --color-text-muted: 168 176 189;
+  --color-accent: 129 161 247;
+  --color-accent-contrast: 15 18 24;
+  --color-focus: 147 180 255;
+
+  --color-positive: 74 222 128;
+  --color-negative: 252 129 129;
+  --color-neutral: 168 176 189;
+  --color-warning: 250 204 21;
+  --color-info: 125 211 252;
+
+  --color-severity-info: 125 211 252;
+  --color-severity-notable: 250 204 21;
+  --color-severity-major: 252 129 129;
+
+  --color-temp-cold: 129 161 247;
+  --color-temp-cool: 103 232 249;
+  --color-temp-balanced: 168 176 189;
+  --color-temp-warm: 253 186 116;
+  --color-temp-hot: 252 129 129;
+
+  --color-chart-1: 129 161 247;
+  --color-chart-2: 253 186 116;
+  --color-chart-3: 74 222 128;
+  --color-chart-4: 216 180 254;
+  --color-chart-grid: 45 51 63;
+  --color-chart-axis: 168 176 189;
+
+  --color-scale-neg-strong: 253 186 116;
+  --color-scale-neg: 194 110 50;
+  --color-scale-zero: 110 120 135;
+  --color-scale-pos: 70 120 200;
+  --color-scale-pos-strong: 147 180 255;
+  --color-scale-missing: 70 78 92;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+}

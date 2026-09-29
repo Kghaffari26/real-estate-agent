@@ -182,6 +182,8 @@ uv run python scripts/verify_re_sources.py     # which data-source URLs are reac
 uv run python scripts/build_metro_config.py    # regenerate config/metros.toml (Redfin + Zillow + Gazetteer)
 uv run python scripts/export_re_schema.py      # after any schema.py change
 uv run python scripts/build_county_centroids.py  # regenerate config/county_centroids.csv (§6.7) after metros.toml changes
+uv run python scripts/fix_division_coords.py     # place metro divisions at their own counties (after build_metro_config.py)
+uv run python scripts/build_region_geometry.py   # regenerate config/regions/*.geo.json (§6.8) after regions.toml changes
 cd dashboard && npm ci && npm run fetch-data && npm run dev   # dashboard (see dashboard/README.md)
 cd dashboard && npm run lint && npm run typecheck && npm test && npm run build && npm run check:bundle && npm run e2e
 ```

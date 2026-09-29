@@ -685,6 +685,36 @@ Redfin's ZIP file is 364 MB, too large for a weekly run.
 **Index:** `events` and `pulse` are `{path, count, through}` or null; `areas` is
 `[{slug, path, count}]`, listing exactly the files this run published.
 
+### 6.8 Additive (schema 1.5.0): `regions/<slug>.json`, `regions/<slug>.geo.json`
+
+Added 2026-09-29 for the Regional Desk (`SPEC_REGIONAL_DESK.md` §4.2). Additive with a
+default (`regions: []`); the site works without them. Regions are configured in
+`config/regions.toml` (Orange County = the `anaheim-ca` metro's ZIPs).
+
+- **Source:** Redfin's `housing_market/monthly/zips_in_top_50_metros.csv` (~360 MB,
+  streamed and filtered lazily to the region's metros and the last ~50 months). Each
+  value is a **rolling 3-month window** ending that month (`window: "rolling_3_months"`).
+- **`regions/<slug>.json`** (`RegionOutput`, ≤ `max_region_kb` = 250 KB; Orange County
+  ~159 KB): `zips[]` (every ZIP reporting in the latest month), `cities[]` and a region
+  `summary`, each a `RegionArea` `{id, name, kind, city, zips, lat, lon, latest:
+  {metric: {value, yoy}}, series: {metric: [36 values]}, ranks}` with `dates` shared.
+  Metrics: median sale price, homes sold, new listings, inventory, days on market,
+  sale-to-list, sold above list, off market in two weeks, months of supply (percents as
+  ratios). **YoY** uses §5.1's rule per the registry's `change_kind` (ratio for levels,
+  pp for shares, a difference for days and months). **Cities and the summary** are
+  built per month from their ZIPs: sums for homes sold, new listings and inventory;
+  **homes-sold-weighted means** of the ZIP values for the rest (labelled as weighted on
+  the site), then changed with the same rule. **Ranks** (1 = highest price, fastest price
+  growth, fewest days on market) are within the region.
+- **`regions/<slug>.geo.json`** (`RegionGeometry`, ≤ `max_region_geo_kb` = 450 KB;
+  Orange County ~219 KB): GeoJSON features `{kind: "zip", id, city, city_id, lat, lon}`
+  (2020 ZCTAs) and `{kind: "city", id (place GEOID), name, lat, lon}`. Built once by
+  `scripts/build_region_geometry.py` from Census TIGERweb (server-generalized, ~40 m) and
+  the ZCTA-place relationship file (a ZIP's city is the incorporated place with the most
+  land overlap, or the census-designated place when incorporated places cover under a
+  quarter of it), committed under `config/regions/`, and copied by each run.
+- **Index:** `regions: [{slug, name, path, geometry, zips, cities, through}]`.
+
 ---
 
 ## 7. LLM usage

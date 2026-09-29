@@ -81,7 +81,7 @@ def main() -> int:
             print(f"  {m.slug}: no county data; left at {m.lat}, {m.lon}")
             continue
         block = re.compile(rf'(slug = "{re.escape(m.slug)}"\n(?:[^\[]*?\n)?)lat = [-\d.]+\nlon = [-\d.]+')
-        text, n = block.subn(lambda mt: f"{mt.group(1)}lat = {new[0]}\nlon = {new[1]}", text, count=1)
+        text, n = block.subn(lambda mt, new=new: f"{mt.group(1)}lat = {new[0]}\nlon = {new[1]}", text, count=1)
         if n != 1:
             print(f"  {m.slug}: couldn't find its lat/lon lines")
             return 1

@@ -135,3 +135,23 @@ def county_csv(counties: list[tuple[str, str, dict[str, object]]], month_ends: l
                 row.append(v(i) if callable(v) else v)
             rows.append(row)
     return _csv(header, rows)
+
+
+ZIP_COLUMNS = [
+    "HOMES SOLD", "MEDIAN SALE PRICE NSA ($)", "NEW LISTINGS", "INVENTORY", "MEDIAN DAYS ON MARKET (DAYS)",
+    "AVERAGE SALE TO LIST RATIO (%)", "SHARE SOLD ABOVE ORIGINAL LIST (%)", "PERCENT OFF MARKET IN TWO WEEKS (%)", "MONTHS OF SUPPLY",
+]  # fmt: skip
+
+
+def zip_csv(zips: list[tuple[str, str, dict[str, object]]], month_ends: list) -> bytes:
+    """Redfin's ZIP file (rolling 3 months): `zips` are (ZIP, parent METRO, values)."""
+    header = [*KEY, "REGION ID", "REGION TYPE", "REGION NAME", "METRO", *ZIP_COLUMNS]
+    rows = []
+    for z, metro, values in zips:
+        for i, end in enumerate(month_ends):
+            row: list[object] = ["2026-09-03", "Rolling 3 Months", end.replace(day=1).isoformat(), end.isoformat(), 9, "Zip", z, metro]
+            for col in ZIP_COLUMNS:
+                v = values.get(col)
+                row.append(v(i) if callable(v) else v)
+            rows.append(row)
+    return _csv(header, rows)

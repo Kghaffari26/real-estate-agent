@@ -30,7 +30,7 @@ const repoRoot = resolve(dashboard, '..');
 const out = resolve(dashboard, 'public/data');
 const sampleDir = resolve(dashboard, 'sample-data');
 const FILES = ['latest.json', 'manifest-entry.json', 'events.json', 'pulse.json'];
-const DIRS = ['metros', 'history', 'timeline', 'areas'];
+const DIRS = ['metros', 'history', 'timeline', 'areas', 'regions'];
 
 function log(message) {
   console.log(`[fetch-data] ${message}`);

@@ -13,6 +13,7 @@ data/cache/real_estate/*
 
 # agents_core.http's on-disk TTL cache (FRED/ACS responses); local only.
 .cache/
+data/cache/http/
 
 # Published output (agents_core.settings.publish_dir(), default "public-data/")
 # is regenerated on every run; agents-core's run-agent.yml force-pushes it to

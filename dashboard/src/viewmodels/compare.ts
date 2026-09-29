@@ -1,5 +1,7 @@
 /** View model for Compare: overlay rows and the side-by-side table (pure). */
-import type { MetroDetailOutput } from '../data/schema.gen';
+import type { MetricRegistryEntry, MetroDetailOutput } from '../data/schema.gen';
+import type { Timeline } from '../lib/timeline';
+import { dossierChart, type ChartRange } from './dossier';
 import { formatValue } from '../lib/format';
 import { deltaFormat, metricLabel, valueScale, type Registry } from '../lib/metrics';
 import { indexTo100, mergeOnDates, numericSeries, rangeStart, seriesDates, type Range, type Row } from '../lib/series';
@@ -87,4 +89,28 @@ export function compareTable(metros: readonly MetroDetailOutput[], registry: Reg
     });
   }
   return rows;
+}
+
+// ---------- v2 arena ----------
+
+export interface ArenaSeries {
+  dates: string[];
+  lines: Array<{ slug: string; values: Array<number | null> }>;
+  span: 'timeline' | 'metro-file';
+}
+
+/**
+ * One metric for every compared metro on one date axis: the metro files' months, or
+ * the §6.4 timeline for "All" when it's loaded. Indexed rebases each line to 100 at
+ * its first value in the range (same rule as v1's compare and the dossier).
+ */
+export function arenaSeries(metros: readonly MetroDetailOutput[], metric: MetricRegistryEntry, range: ChartRange, indexed: boolean, timeline: Timeline | null): ArenaSeries {
+  const charts = metros.map((m) => ({ slug: m.slug, c: dossierChart({ detail: m, metric, range, mode: 'level', indexed: false, national: null, timeline }) }));
+  const longest = charts.reduce<string[]>((a, x) => (x.c.dates.length > a.length ? x.c.dates : a), []);
+  const lines = charts.map(({ slug, c }) => {
+    const byDate = new Map(c.dates.map((d, i) => [d, c.metro[i] ?? null]));
+    const values = longest.map((d) => byDate.get(d) ?? null);
+    return { slug, values: indexed ? indexTo100(values) : values };
+  });
+  return { dates: longest, lines, span: charts.every((x) => x.c.span === 'timeline') && charts.length > 0 ? 'timeline' : 'metro-file' };
 }

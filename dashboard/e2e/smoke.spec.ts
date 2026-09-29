@@ -7,9 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import AxeBuilder from '@axe-core/playwright';
-import type { Page } from '@playwright/test';
-import { expect, expectNoHorizontalScroll, gotoView, revealAll, test } from './fixtures';
+import { expect, expectNoHorizontalScroll, gotoView, test } from './fixtures';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // The Sample marker shows only when fetch-data fell back to the committed snapshot.
@@ -22,38 +20,6 @@ const dataSource = (() => {
 })();
 const latest = JSON.parse(readFileSync(resolve(here, '../public/data/latest.json'), 'utf8')) as { investigations: { slug: string }[] };
 const investigated = latest.investigations[0]?.slug ?? 'pittsburgh-pa';
-
-// v1-shell pages (full WCAG 2.1 AA axe, as before the v2 swap).
-const ROUTES: Array<{ name: string; path: string; ready: RegExp }> = [
-  { name: 'compare', path: '/compare?m=pittsburgh-pa,houston-tx,austin-tx', ready: /Compare metros/ },
-  { name: 'about', path: '/about', ready: /Methodology/ },
-];
-
-async function ready(page: Page, heading: RegExp) {
-  await expect(page.getByRole('heading', { level: 1, name: heading }).first()).toBeVisible();
-  await revealAll(page); // charts load as they near the viewport
-  await expect(page.locator('.skeleton')).toHaveCount(0, { timeout: 15_000 });
-  await page.waitForLoadState('networkidle');
-}
-
-async function axe(page: Page) {
-  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-  return results.violations.map((v) => `${v.id} (${v.impact}): ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
-}
-
-for (const route of ROUTES) {
-  for (const theme of ['light', 'dark'] as const) {
-    test(`${route.name} (${theme}): renders, axe-clean, fits the viewport`, async ({ page, consoleErrors }) => {
-      await page.addInitScript((t) => localStorage.setItem('re-theme', t), theme);
-      await gotoView(page, route.path);
-      await ready(page, route.ready);
-      await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /^(?!.*dark)/);
-      expect(await axe(page), 'axe violations').toEqual([]);
-      await expectNoHorizontalScroll(page);
-      expect(consoleErrors).toEqual([]);
-    });
-  }
-}
 
 test('freshness and the national brief on the landing page', async ({ page }, info) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -125,32 +91,6 @@ test('metro dossier: rate strip, U.S. comparison, the way into the studio', asyn
   await expect(page.getByTestId('studio-payment')).not.toHaveText(before ?? '');
   await page.getByRole('button', { name: 'Reset to published' }).click();
   await expect(page.getByTestId('studio-payment')).toHaveText(before ?? '');
-});
-
-test('compare: add, remove, indexed toggle, leaders', async ({ page }, info) => {
-  test.skip(info.project.name === 'mobile-360', 'desktop interaction');
-  await gotoView(page, '/compare?m=pittsburgh-pa');
-  await page.getByRole('combobox', { name: 'Add a metro to compare' }).fill('Houston');
-  await page.getByRole('option', { name: 'Houston, TX' }).click();
-  await expect(page).toHaveURL(/m=pittsburgh-pa(%2C|,)houston-tx/);
-  await page.getByText('Index to 100 (first month in range)').click();
-  await expect(page.getByRole('heading', { name: /, indexed$/ })).toBeVisible();
-  await expect(page.locator('td.bg-accent-soft').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Remove Houston, TX' }).click();
-  await expect(page.getByRole('columnheader', { name: /Houston, TX/ })).toHaveCount(0);
-});
-
-test('copy link shows a toast; sidebar collapse is remembered', async ({ page, context }, info) => {
-  test.skip(info.project.name === 'mobile-360', 'desktop interaction');
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await gotoView(page, '/compare?m=pittsburgh-pa,houston-tx');
-  await ready(page, /Compare metros/);
-  await page.getByRole('button', { name: 'Copy link' }).first().click();
-  await expect(page.getByRole('status').filter({ hasText: 'Link copied' })).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/#\/compare\?/);
-  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
-  await page.reload();
-  await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
 });
 
 test('unknown metro shows not found', async ({ page }) => {

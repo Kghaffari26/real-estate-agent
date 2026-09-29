@@ -14,8 +14,8 @@ const VIEWS: Array<{ name: string; path: string; heading: RegExp }> = [
   { name: 'overview', path: '/', heading: /Metro Pulse/ },
   { name: 'metros', path: '/explore', heading: /^Atlas/ },
   { name: 'metro-detail', path: '/metro/west-palm-beach-fl', heading: /West Palm Beach/ },
-  { name: 'compare', path: '/compare?m=pittsburgh-pa,houston-tx,boston-ma&metrics=median_sale_price,inventory&indexed=1', heading: /Compare metros/ },
-  { name: 'about', path: '/about', heading: /Methodology/ },
+  { name: 'compare', path: '/compare?m=pittsburgh-pa,houston-tx,boston-ma&metrics=median_sale_price,inventory&indexed=1', heading: /Pittsburgh/ },
+  { name: 'about', path: '/methodology', heading: /Numbers come from code/ },
 ];
 
 const MODES = [

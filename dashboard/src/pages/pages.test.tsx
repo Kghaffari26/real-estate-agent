@@ -32,7 +32,7 @@ const renderAt = (path: string) =>
 // which under a busy parallel run can outlast findBy's timeout. Load them up front so
 // every timed wait only covers rendering, never compilation.
 beforeAll(async () => {
-  await Promise.all([import('./ArrivalPage'), import('./ExplorePage'), import('./DossierPage'), import('./ComparePage'), import('./AboutPage'), import('./NotFoundPage')]);
+  await Promise.all([import('./ArrivalPage'), import('./ExplorePage'), import('./DossierPage'), import('./CompareArenaPage'), import('./MethodologyPage'), import('./NotFoundPage')]);
 }, 60_000);
 
 beforeEach(() => {
@@ -92,13 +92,24 @@ describe('pages', () => {
     serve({ 'latest.json': sample('latest.json') });
     renderAt('/compare');
     expect(await screen.findByText('Pick metros to compare')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Add from map' })).toHaveAttribute('href', '/explore');
   });
 
-  it('about: lists sources with attribution', async () => {
+  it('unknown routes get the v2 not-found page', async () => {
+    serve({ 'latest.json': sample('latest.json') });
+    renderAt('/nope');
+    expect(await screen.findByText('There’s nothing at this address.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Browse the atlas' })).toHaveAttribute('href', '/explore');
+  });
+
+  it('methodology (and the old /about link): lists sources with attribution and credits', async () => {
     serve({ 'latest.json': sample('latest.json'), 'manifest-entry.json': sample('manifest-entry.json') });
     renderAt('/about');
     expect(await screen.findByRole('heading', { name: 'Sources and attribution' })).toBeInTheDocument();
-    expect(screen.getAllByText('Data: Redfin, a national real estate brokerage.').length).toBeGreaterThan(0);
+    expect(await screen.findByText('Data: Redfin, a national real estate brokerage.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Numbers come from code. The AI only narrates.');
+    expect(screen.getByText(/there is no generated media/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Mapzen Terrain Tiles' })).toBeInTheDocument();
     const manifest = JSON.parse(sample('manifest-entry.json'));
     const cost = manifest.run_cost_usd < 1 ? manifest.run_cost_usd.toFixed(4) : manifest.run_cost_usd.toFixed(2);
     expect(await screen.findByText(`$${cost}`)).toBeInTheDocument();

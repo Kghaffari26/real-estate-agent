@@ -1,11 +1,12 @@
-/** Command palette results (pure): metros first, then pages. */
+/** Command palette results (pure): regions, then metros, then pages. */
 import { NAV_ITEMS } from '../components/shell/nav';
+import { matchRegions } from './regions';
 import { matchMetros, type SearchItem } from './search';
 
 export interface PaletteItem {
   id: string;
   label: string;
-  group: 'Go to' | 'Metros';
+  group: 'Go to' | 'Regions' | 'Metros';
   hint?: string;
   to: string;
 }
@@ -29,5 +30,6 @@ export function paletteResults(query: string, metros: readonly SearchItem[]): Pa
     const first = metroItems[0]!;
     metroItems.push({ id: `compare:${first.to}`, label: `Compare ${first.label}…`, group: 'Metros', to: `/compare?m=${first.to.split('/').pop()}` });
   }
-  return [...metroItems, ...pages];
+  const regions: PaletteItem[] = matchRegions(q).map((r) => ({ id: `region:${r.slug}`, label: r.name, group: 'Regions', hint: 'Open on the atlas', to: `/explore?region=${r.slug}` }));
+  return [...regions, ...metroItems, ...pages];
 }

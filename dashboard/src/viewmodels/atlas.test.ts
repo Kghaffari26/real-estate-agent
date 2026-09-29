@@ -18,8 +18,9 @@ describe('atlas view model', () => {
     expect(new Set(metros.map((m) => `${m.lat.toFixed(4)},${m.lon.toFixed(4)}`)).size).toBe(50);
     const phl = metros.find((m) => m.slug === 'philadelphia-pa')!;
     const mont = metros.find((m) => m.slug === 'montgomery-county-pa')!;
-    expect([phl.trueLat, phl.trueLon]).toEqual([mont.trueLat, mont.trueLon]); // same CBSA centroid…
-    expect([phl.lat, phl.lon]).not.toEqual([mont.lat, mont.lon]); // …fanned out for display
+    // Redfin divisions sit on their own counties (scripts/fix_division_coords.py), not the parent CBSA's centroid.
+    expect([phl.trueLat, phl.trueLon]).not.toEqual([mont.trueLat, mont.trueLon]);
+    expect([phl.lat, phl.lon]).not.toEqual([mont.lat, mont.lon]);
   });
 
   it('offers only metrics most metros report', () => {
@@ -68,8 +69,9 @@ describe('atlas view model', () => {
 
   it('feeds area search the latest published values at true centroids', () => {
     const r = areaSearch({ lat: 39.9526, lon: -75.1652 }, 100, areaMetros(metros));
-    expect(r.metros.map((m) => m.slug).sort()).toEqual(['baltimore-md', 'montgomery-county-pa', 'nassau-county-ny', 'new-brunswick-nj', 'new-york-ny', 'philadelphia-pa']);
-    // Independently: Σ(price × homes sold) / Σ(homes sold) over the six index entries.
+    // Nassau County (Long Island) is ~110 mi out now that divisions sit on their own counties.
+    expect(r.metros.map((m) => m.slug).sort()).toEqual(['baltimore-md', 'montgomery-county-pa', 'new-brunswick-nj', 'new-york-ny', 'philadelphia-pa']);
+    // Independently: Σ(price × homes sold) / Σ(homes sold) over the five index entries.
     const six = index.metros.filter((m) => r.metros.some((x) => x.slug === m.slug));
     const w = six.reduce((s, m) => s + m.homes_sold_12m!, 0);
     expect(r.price).toBeCloseTo(six.reduce((s, m) => s + m.latest.median_sale_price!.value! * m.homes_sold_12m!, 0) / w, 6);

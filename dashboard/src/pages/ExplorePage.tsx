@@ -23,6 +23,7 @@ import { areaSearch, countySearch, formatPin, metrosNearRing, milesBetween, pars
 import { copyText } from '../lib/clipboard';
 import { parseChannels, type DivergingStops, type RGB } from '../lib/columns';
 import { railMoments } from '../lib/moments';
+import { regionBySlug } from '../lib/regions';
 import { formatMonth, formatValue } from '../lib/format';
 import { monthEnds, monthIndex, YOY_LEAD } from '../lib/timeline';
 import { TICK_MS, timeStore, useTime } from '../state/timeStore';
@@ -127,7 +128,7 @@ function Explore({ index }: { index: IndexOutput }) {
   const dates = useMemo(() => (ref ? monthEnds(ref.start, ref.months).slice(YOY_LEAD) : nationalDates), [ref, nationalDates]);
 
   const [initialCamera] = useState<Camera>(() => {
-    const saved = parseCamera(params.get('cam'));
+    const saved = parseCamera(params.get('cam')) ?? regionBySlug(params.get('region'))?.camera ?? null;
     if (saved) return saved;
     if (mobile) return MOBILE_CAMERA;
     const free = Math.max(480, window.innerWidth - 290 - 380);
@@ -225,6 +226,20 @@ function Explore({ index }: { index: IndexOutput }) {
   const [mapReady, setMapReady] = useState(false);
   const pinKey = pin ? formatPin(pin) : '';
   const hadCamera = useRef(Boolean(params.get('cam')));
+  // `?region=` (from ⌘K or a link) frames the region, also when chosen on this page.
+  const regionSlug = params.get('region');
+  const firstRegion = useRef(regionSlug);
+  useEffect(() => {
+    const r = regionBySlug(regionSlug);
+    if (!mapReady || !r) return;
+    if (firstRegion.current === regionSlug && params.get('cam')) {
+      firstRegion.current = null; // the initial camera already frames it
+      return;
+    }
+    firstRegion.current = null;
+    mapRef.current?.reset(r.camera);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, regionSlug]);
   useEffect(() => {
     if (!mapReady || !pin) return;
     if (hadCamera.current) {

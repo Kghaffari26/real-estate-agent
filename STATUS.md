@@ -24,7 +24,8 @@ Spec: `docs/specs/SPEC_DASHBOARD_V2.md`. v1 pages still serve `/`, `/metros`, `/
 - **Phase 8 (E2-E4, schema 1.4.0):** `events.json` (the national event rail, detected in Python; the dashboard's own detector is gone), `pulse.json` (12 weekly windows for all 50 metros, with agent-computed YoY) and `areas/<slug>.json` (330 counties with Gazetteer centroids; ZIPs skipped, 364 MB). Wired into the time machine's rail, an Arrival ticker, the dossier and county-level area search. Each file is optional and size-capped; the site renders without them. On `dashboard-v2`; not yet on `main`.
 - **Phase 8 merged to `main`.**
 - **Phase 9 (polish, performance, accessibility, trailer):** quality tiers (high/medium/low, `?tier=`), a pre-JS globe poster (applied-throttling mobile LCP 2.2 s), Lighthouse in CI (accessibility 100 on Arrival and Explore, enforced; performance reported: software WebGL in CI dominates it), an FPS smoke (60 fps on an integrated GPU), local visual regression (42 views), v1 pruned (38 modules, recharts), CSV export on the atlas table, a ~45 s trailer and a README hero GIF, and rewritten READMEs. On `dashboard-v2` awaiting **design gate D**.
-- **Next (after gate D):** merge to `main` and verify the live deploy; then the next spec (§13: accounts, watchlists, alerts).
+- **Phase 9 merged and live** (691f8ff).
+- **v3 Regional Desk** (`docs/specs/SPEC_REGIONAL_DESK.md`): **R0 done** on `regional-desk`: place names at every zoom in both themes (Dawn had none), a road hierarchy, metro divisions at their own counties (Orange County's column had stood in Los Angeles), and an Orange County region view. **Next:** R1 local data (Orange County ZIPs and cities), then R2 (gate E); R3 needs a Supabase project from the owner.
 
 ## Session 8 (2026-09-29): dashboard phase 3 polish + sparkline contract
 

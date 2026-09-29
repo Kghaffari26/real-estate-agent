@@ -4,6 +4,7 @@
  * MapboxOverlay, so columns sit correctly among buildings. Lazy-loaded (its own
  * chunk) by ./index.tsx. Pure presentation: every value arrives preformatted/computed.
  */
+import { atlasStyle, mixRgb, type BasemapTokens } from './basemap';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { HexagonLayer } from '@deck.gl/aggregation-layers';
 import { ColumnLayer, PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
@@ -72,56 +73,14 @@ export interface AtlasMapProps {
   onFail: (reason: string) => void;
 }
 
-// ---------- the basemap, recolored ----------
+// ---------- the basemap, recolored (src/atlas/basemap.ts) ----------
 function tokens() {
   const css = getComputedStyle(document.documentElement);
   const rgb = (name: string) => parseChannels(css.getPropertyValue(`--mp-${name}`));
-  return { bg: rgb('bg'), bg2: rgb('bg-2'), ink: rgb('ink'), ink3: rgb('ink-3'), accent: rgb('accent') };
+  return { bg: rgb('bg'), bg2: rgb('bg-2'), ink: rgb('ink'), ink2: rgb('ink-2'), ink3: rgb('ink-3'), accent: rgb('accent') } as BasemapTokens;
 }
 const css = ([r, g, b]: RGB, a = 1) => (a === 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a})`);
-const mixRgb = (a: RGB, b: RGB, t: number): RGB => [0, 1, 2].map((k) => Math.round(a[k]! + (b[k]! - a[k]!) * t)) as RGB;
 
-type AnyLayer = StyleSpecification['layers'][number] & { paint?: Record<string, unknown>; layout?: Record<string, unknown> };
-
-/** OpenFreeMap's style, restyled as the atlas's quiet canvas: the data is the hero. */
-function atlasStyle(base: StyleSpecification, dark: boolean): StyleSpecification {
-  const t = tokens();
-  // Night: land lifts slightly off the canvas. Dawn: near-white land on blue-gray water.
-  const land = dark ? mixRgb(t.bg, t.bg2, 0.9) : mixRgb(t.bg, [255, 255, 255], 0.7);
-  const water = dark ? mixRgb(t.bg, [0, 0, 0], 0.35) : mixRgb(t.bg2, t.ink, 0.09);
-  const line = dark ? [150, 180, 255] as RGB : [11, 16, 32] as RGB;
-  const layers = (base.layers as AnyLayer[])
-    .filter((l) => {
-      if (l.type === 'fill-extrusion') return false;
-      // Labels stay sparse: states and large cities (the stand-in style in tests has none).
-      if (l.type === 'symbol') return /place_(state|city_large|city)$/.test(l.id);
-      if (l.id === 'building') return false; // replaced by the extrusion layer
-      return true;
-    })
-    .map((l): AnyLayer => {
-      const paint = { ...(l.paint ?? {}) };
-      if (l.type === 'background') paint['background-color'] = css(land);
-      else if (l.type === 'fill' && /water/.test(l.id)) paint['fill-color'] = css(water);
-      else if (l.type === 'fill' && /^land$|land(cover|use)/.test(l.id)) {
-        paint['fill-color'] = /^land$/.test(l.id) ? css(land) : css(mixRgb(land, t.ink, dark ? 0.03 : 0.02));
-        paint['fill-opacity'] = /^land$/.test(l.id) ? 1 : 0.6;
-      } else if (l.type === 'fill') paint['fill-color'] = css(mixRgb(land, t.ink, 0.04));
-      else if (l.type === 'line' && /water/.test(l.id)) paint['line-color'] = css(water);
-      else if (l.type === 'line' && /boundary|border/.test(l.id)) {
-        paint['line-color'] = css(t.accent, /state|border/.test(l.id) ? (dark ? 0.2 : 0.3) : dark ? 0.35 : 0.45);
-      } else if (l.type === 'line') paint['line-color'] = css(line, dark ? 0.09 : 0.1);
-      else if (l.type === 'raster') paint['raster-opacity'] = 0.08;
-      else if (l.type === 'symbol') {
-        // No labels at the national view: the columns are the picture. They return as you zoom in.
-        (l as { minzoom?: number }).minzoom = l.id === 'place_city' ? 6 : l.id === 'place_city_large' ? 4.6 : 4.2;
-        paint['text-color'] = css(t.ink3, 0.85);
-        paint['text-halo-color'] = css(land, 0.9);
-        paint['text-halo-width'] = 1.2;
-      }
-      return { ...l, paint } as AnyLayer;
-    });
-  return { ...base, layers: layers as StyleSpecification['layers'] };
-}
 
 const cache: Record<string, Promise<StyleSpecification>> = {};
 function fetchStyle(dark: boolean): Promise<StyleSpecification> {
@@ -337,7 +296,7 @@ const Atlas = forwardRef<AtlasMapHandle, AtlasMapProps>(function AtlasMap(props,
         const c = propsRef.current.camera;
         const map = new MLMap({
           container: el,
-          style: atlasStyle(base, props.dark),
+          style: atlasStyle(base, props.dark, tokens()),
           center: [c.lon, c.lat],
           zoom: c.zoom,
           pitch: c.pitch,
@@ -417,7 +376,7 @@ const Atlas = forwardRef<AtlasMapHandle, AtlasMapProps>(function AtlasMap(props,
     if (!map || themeRef.current === props.dark) return;
     themeRef.current = props.dark;
     fetchStyle(props.dark)
-      .then((base) => map.setStyle(atlasStyle(base, props.dark)))
+      .then((base) => map.setStyle(atlasStyle(base, props.dark, tokens())))
       .catch(() => undefined);
   }, [props.dark]);
 

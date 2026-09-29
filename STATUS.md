@@ -16,7 +16,8 @@ Spec: `docs/specs/SPEC_DASHBOARD_V2.md`. v1 pages still serve `/`, `/metros`, `/
 - **Gate B approved with changes (applied):** proportional heights (value from zero; YoY centered on zero around a floating zero plane), `.gitattributes` + LF normalization, deterministic pages test, exact deck.gl/MapLibre/luma pins with patch guards. 139/139 unit tests, 60 e2e. `dashboard-v2` is pushed as a backup; no merge until after Phase 5.
 - **Phase 4 (Arrival, `#/arrival`):** a GlobeView globe with dotted land and proportional light columns, three counters, and the "Enter the market" dive into the atlas. Sections: the brief, the heat field, rates vs prices, movers and alerts, the investigations, sources. Poster-first LCP 1.8-1.9 s on a throttled phone profile; 60 fps rotation on the laptop GPU. 11 new e2e checks. Stills: `docs/screenshots/v2/p4-arrival-*`.
 - **Phase 8 E1 (timeline since 2012):** the agent publishes `timeline/<metric>.json` x 5 (schema 1.3.0, spec section 6.4), and the time machine runs Jan 2013 to Aug 2026 with a real YoY in every month. The sample snapshot gained the timelines from the real Redfin files, verified month-for-month against its metro files. Python 250 tests (was 242), dashboard 142 unit / 72 e2e.
-- **Next:** Phase 5 (dossier + 3D house, Gate C), then the single v1-to-v2 swap; Phase 8 E2-E4 later.
+- **Phase 5 (dossier, `#/dossier/:slug`):** the R3F house sized by price / U.S. median and lit by the temperature, region plates, the instrument cluster, chips that drive the chart (1Y/3Y/All to 2012, Level/YoY, index to U.S., rate strip), temperature drivers, Zillow/permits states, affordability. Gate C sheet: `docs/screenshots/v2/gate-c/sheet.png`. 150 unit / 89 e2e / 250 Python.
+- **Next:** Gate C review, then the single v1-to-v2 swap (merge to main); Phases 6-7, 8 E2-E4 and 9 after.
 
 ## Session 8 (2026-09-29): dashboard phase 3 polish + sparkline contract
 

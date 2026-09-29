@@ -10,6 +10,7 @@ import { usePrefersReducedMotion } from '../hooks/useMediaQuery';
 import { DUR, EASE, riseVariants, staggerVariants } from '../motion/presets';
 import { Chip, Segmented } from '../ui/controls';
 import { GlassPanel } from '../ui/Glass';
+import { metroPath } from '../ui/atlasState';
 
 // ---------- frame ----------
 export function Section({ id, eyebrow, title, lede, children, wide = false }: { id: string; eyebrow: string; title: ReactNode; lede?: ReactNode; children: ReactNode; wide?: boolean }) {
@@ -453,7 +454,7 @@ export function WhyMoving({ stories, empty }: { stories: readonly StoryCard[]; e
               <Chip key={c.key}>{c.label}</Chip>
             ))}
           </div>
-          <Link to={`/metro/${s.slug}`} className="mt-6 inline-flex items-center gap-1.5 text-sm text-mp-accent no-underline hover:underline">
+          <Link to={metroPath(s.slug)} className="mt-6 inline-flex items-center gap-1.5 text-sm text-mp-accent no-underline hover:underline">
             Open the dossier <ArrowRight size={15} strokeWidth={1.5} aria-hidden="true" />
           </Link>
         </GlassPanel>

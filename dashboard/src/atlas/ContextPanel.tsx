@@ -7,6 +7,7 @@ import { RADIUS_MAX, RADIUS_MIN } from '../lib/area';
 import { Button, Chip, Slider } from '../ui/controls';
 import { MiniSpark } from '../ui/dataviz';
 import type { AtlasMetro } from '../viewmodels/atlas';
+import { metroPath } from '../ui/atlasState';
 import { fmtChange, fmtMetric, TEMPERATURE_ORDER, TEMPERATURE_TONE, toneClass } from './format';
 
 const REG_PRICE = { key: 'median_sale_price', format: 'currency', change_kind: 'ratio' } as MetricRegistryEntry;
@@ -240,7 +241,7 @@ export function MetroPanel({
         {stat('months_of_supply', 'Months of supply', { format: 'decimal1' })}
       </dl>
       <div className="mt-4 flex flex-wrap gap-2">
-        <Link to={`/metro/${m.slug}`} className="inline-flex h-10 items-center gap-2 rounded-control bg-mp-accent px-4 text-sm font-medium text-mp-accent-ink no-underline">
+        <Link to={metroPath(m.slug)} className="inline-flex h-10 items-center gap-2 rounded-control bg-mp-accent px-4 text-sm font-medium text-mp-accent-ink no-underline">
           Open dossier <ArrowRight size={15} strokeWidth={1.5} aria-hidden="true" />
         </Link>
         <Button onClick={() => onFly(m)}>Fly there</Button>

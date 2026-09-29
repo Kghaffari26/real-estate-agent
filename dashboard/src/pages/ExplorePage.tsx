@@ -26,6 +26,7 @@ import { formatMonth, formatValue } from '../lib/format';
 import { monthEnds, monthIndex, YOY_LEAD } from '../lib/timeline';
 import { TICK_MS, timeStore, useTime } from '../state/timeStore';
 import { AtlasChrome } from '../ui/AtlasChrome';
+import { metroPath } from '../ui/atlasState';
 import { Dock } from '../ui/Dock';
 import { GlassPanel } from '../ui/Glass';
 import { Scrubber } from '../ui/Scrubber';
@@ -407,7 +408,7 @@ function Explore({ index }: { index: IndexOutput }) {
         onCamera={(c) => setQuery({ cam: formatCamera(c) })}
         onHover={setHover}
         onSelect={(s) => select([s])}
-        onOpen={(s) => navigate(`/metro/${s}`)}
+        onOpen={(s) => navigate(metroPath(s))}
         onPickEmpty={(lat, lon) => dropPin(lat, lon)}
         onLasso={(s) => (s.length ? select(s) : undefined)}
       />

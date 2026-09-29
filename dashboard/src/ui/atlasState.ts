@@ -29,3 +29,6 @@ export function useMediaPaused(): [boolean, (v: boolean) => void] {
   };
   return [paused, set];
 }
+
+/** Where a metro's v2 dossier lives (one place to change at the v1 → v2 swap). */
+export const metroPath = (slug: string) => `/dossier/${slug}`;

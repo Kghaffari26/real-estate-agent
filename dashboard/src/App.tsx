@@ -19,6 +19,7 @@ const MetrosPage = lazy(() => import('./pages/MetrosPage').then((m) => ({ defaul
 const MetroPage = lazy(() => import('./pages/MetroPage').then((m) => ({ default: m.MetroPage })));
 const ComparePage = lazy(() => import('./pages/ComparePage').then((m) => ({ default: m.ComparePage })));
 const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const DossierPage = lazy(() => import('./pages/DossierPage').then((m) => ({ default: m.DossierPage })));
 const ArrivalPage = lazy(() => import('./pages/ArrivalPage').then((m) => ({ default: m.ArrivalPage })));
 const ExplorePage = lazy(() => import('./pages/ExplorePage').then((m) => ({ default: m.ExplorePage })));
 const StyleguidePage = lazy(() => import('./pages/StyleguidePage').then((m) => ({ default: m.StyleguidePage })));
@@ -89,6 +90,14 @@ export function App() {
     <ToastProvider>
       <EntityColorsProvider>
         <Routes>
+          <Route
+            path="dossier/:slug"
+            element={
+              <Suspense fallback={null}>
+                <DossierPage />
+              </Suspense>
+            }
+          />
           <Route
             path="arrival"
             element={

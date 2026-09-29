@@ -103,6 +103,7 @@ Every route is deep-linkable:
 | `#/metro/:slug` | `?metric=&range=&rates=0&vs=1` |
 | `#/compare` | `?m=a,b,c&metrics=&range=&indexed=1` |
 | `#/about` (alias `#/methodology`) | none |
+| `#/arrival` (v2 landing) | none |
 | `#/explore` (v2 atlas) | `?m=&t=YYYY-MM&style=&h=value|yoy&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low` |
 | `#/styleguide` (v2 design system) | none |
 
@@ -123,8 +124,10 @@ screen; `data/`, `lib/` and `viewmodels/` stay the contract.
   search is a homes-sold-weighted mean of metro medians. deck.gl and MapLibre are
   pinned exactly; `src/atlas/maplibreCompat.ts` carries the MapLibre 6 patch and its
   tests.
-- **Design captures**: `design/gate-a/` (art-direction frames), `design/gate-b/`
-  (`shots.mjs`, `record.mjs` against `vite preview`).
+- **Arrival** (`#/arrival`): `src/arrival/` (GlobeView globe, sections), land dots from
+  `scripts/make-land-dots.mjs`, posters from `design/arrival/poster.mjs`.
+- **Design captures**: `design/gate-a/` (art-direction frames), `design/gate-b/` and
+  `design/arrival/` (`shots.mjs`, `record.mjs`, `poster.mjs` against `vite preview`).
 - **Local e2e** can point at any Chromium with `PW_CHROMIUM=...`.
 
 ## Design system (v1)

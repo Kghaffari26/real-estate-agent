@@ -2,7 +2,8 @@ import { useState } from 'react';
 
 export const ATLAS_NAV = [
   { to: '/explore', label: 'Atlas' },
-  { to: '/', label: 'Brief', end: true },
+  // The v2 landing lives at /arrival until the single v1→v2 swap after Phase 5.
+  { to: '/arrival', label: 'Brief' },
   { to: '/compare', label: 'Compare' },
   { to: '/methodology', label: 'Method' },
 ] as const;

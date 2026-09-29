@@ -267,3 +267,28 @@
   background: rgb(var(--mp-accent));
   border: none;
 }
+
+/* Arrival: a procedural starfield (no media) and the globe's atmosphere glow. */
+.mp-stars {
+  background-color: rgb(var(--mp-bg));
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgb(var(--mp-ink) / 0.55), transparent 60%),
+    radial-gradient(1px 1px at 27% 72%, rgb(var(--mp-ink) / 0.35), transparent 60%),
+    radial-gradient(1.2px 1.2px at 43% 34%, rgb(var(--mp-ink) / 0.5), transparent 60%),
+    radial-gradient(1px 1px at 61% 12%, rgb(var(--mp-ink) / 0.4), transparent 60%),
+    radial-gradient(1px 1px at 78% 58%, rgb(var(--mp-ink) / 0.3), transparent 60%),
+    radial-gradient(1.4px 1.4px at 88% 26%, rgb(var(--mp-ink) / 0.55), transparent 60%),
+    radial-gradient(1px 1px at 6% 88%, rgb(var(--mp-ink) / 0.35), transparent 60%),
+    radial-gradient(1px 1px at 52% 92%, rgb(var(--mp-ink) / 0.3), transparent 60%),
+    radial-gradient(ellipse at 70% 60%, rgb(var(--mp-bg-2)), rgb(var(--mp-bg)) 70%);
+  background-size: 310px 290px, 370px 330px, 430px 410px, 290px 270px, 350px 390px, 470px 450px, 330px 310px, 390px 350px, 100% 100%;
+}
+:root:not(.dark) .mp-stars {
+  background-image: radial-gradient(ellipse at 70% 55%, rgb(var(--mp-bg-2)), rgb(var(--mp-bg)) 72%);
+  background-size: 100% 100%;
+}
+.mp-atmosphere {
+  /* Sized at 2.5 × the globe radius: the limb sits at 40%, the glow just outside it. */
+  background: radial-gradient(circle, rgb(var(--mp-bg-2) / 0.9) 0 39.6%, rgb(var(--mp-accent) / 0.42) 40.3%, rgb(var(--mp-accent) / 0.12) 42.5%, rgb(var(--mp-cool-2) / 0.08) 46%, transparent 54%);
+  filter: blur(3px);
+}

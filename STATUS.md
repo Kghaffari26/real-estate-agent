@@ -10,11 +10,12 @@ Spec: `docs/specs/SPEC_DASHBOARD_V2.md`. v1 pages still serve `/`, `/metros`, `/
 - **Gate A:** the owner picked A, Night Atlas (frames in `docs/screenshots/v2/gate-a/`, built from the sample data by `dashboard/design/gate-a/`).
 - **Phase 2:** Night/Dawn tokens (`src/styles/atlas.css`), motion presets, primitives in `src/ui/`, `#/styleguide`.
 - **Phase 3:** `#/explore`: 3D columns/bubbles/heat/flat on a restyled OpenFreeMap basemap, 3D buildings and terrain toggles, hover card, select and fly, area search with a log radius slider, lasso to Compare, the time machine (36 months, rate moments detected in code, 1x/4x playback), table view, keyboard map, phone bottom sheet, and a designed 2D fallback (`?tier=low`). Gate B recording: `docs/screenshots/v2/gate-b-explore.webm`.
-- **Checks:** 133/135 unit tests (the 2 local-only failures are below), 58 e2e including 13 new atlas checks (area numbers = the pure function, scrub = published history, table, low tier, reduced motion, axe in both themes), lint clean, initial JS 110.6 KB gz. Python untouched (no `uv` on this machine, so the 242 Python tests were not re-run here).
+- **Checks (Phase 3):** 133/135 unit tests, 58 e2e including 13 new atlas checks (area numbers = the pure function, scrub = published history, table, low tier, reduced motion, axe in both themes), lint clean, initial JS 110.6 KB gz. Python untouched (no `uv` on this machine, so the 242 Python tests were not re-run here).
 - **Local-only issue on this Windows machine:** Smart App Control blocks Rollup's native binary, so `node_modules/rollup/dist` was swapped for `@rollup/wasm-node` 4.63.5 (not committed; a fresh `npm ci` here needs the same swap). The CRLF and flaky-test issues are fixed (see Gate B changes).
 - **Not generated:** Runway (no API key) and Everygen (inactive subscription), so all imagery is procedural. Figma, Canva and Adobe need the owner to sign in.
 - **Gate B approved with changes (applied):** proportional heights (value from zero; YoY centered on zero around a floating zero plane), `.gitattributes` + LF normalization, deterministic pages test, exact deck.gl/MapLibre/luma pins with patch guards. 139/139 unit tests, 60 e2e. `dashboard-v2` is pushed as a backup; no merge until after Phase 5.
-- **Next:** Phase 4 (Arrival), then Phase 8 E1 (timeline since 2012), then Phase 5.
+- **Phase 4 (Arrival, `#/arrival`):** a GlobeView globe with dotted land and proportional light columns, three counters, and the "Enter the market" dive into the atlas. Sections: the brief, the heat field, rates vs prices, movers and alerts, the investigations, sources. Poster-first LCP 1.8-1.9 s on a throttled phone profile; 60 fps rotation on the laptop GPU. 11 new e2e checks. Stills: `docs/screenshots/v2/p4-arrival-*`.
+- **Next:** Phase 8 E1 (timeline since 2012), then Phase 5; then the single v1-to-v2 swap.
 
 ## Session 8 (2026-09-29): dashboard phase 3 polish + sparkline contract
 

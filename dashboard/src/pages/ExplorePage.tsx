@@ -24,7 +24,8 @@ import { areaSearch, countySearch, formatPin, metrosNearRing, milesBetween, pars
 import { copyText } from '../lib/clipboard';
 import { parseChannels, type DivergingStops, type RGB } from '../lib/columns';
 import { railMoments } from '../lib/moments';
-import { drill, zipAreaInputs, zipLayer, zipValueAt } from '../viewmodels/region';
+import { drill, placeAt, zipAreaInputs, zipLayer, zipValueAt } from '../viewmodels/region';
+import { nearestPlace } from '../lib/places';
 import { regionBySlug } from '../lib/regions';
 import { formatMonth, formatValue } from '../lib/format';
 import { monthEnds, monthIndex, YOY_LEAD } from '../lib/timeline';
@@ -234,8 +235,14 @@ function Explore({ index }: { index: IndexOutput }) {
     [pin?.lat, pin?.lon, radius, countyFiles, index.areas.length], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const areaZips = useMemo(() => (pin && region ? countySearch(pin, radius, [{ slug: region.slug, areas: zipAreaInputs(region) }]) : null), [pin?.lat, pin?.lon, radius, region]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The place under the pin, read from the basemap's labels once its tiles are in.
+  const [pinPlace, setPinPlace] = useState<string | null>(null);
   const pinLabel = useMemo(() => {
     if (!pin) return '';
+    // Inside a loaded region: its city and ZIP. Else the basemap's nearest place. Else the nearest metro.
+    const inRegion = regionLayer ? placeAt(regionLayer, pin.lat, pin.lon) : null;
+    if (inRegion) return inRegion.city ? `${inRegion.city} (${inRegion.zip})` : inRegion.zip;
+    if (pinPlace) return pinPlace;
     // Metros that share a centroid (Redfin divisions) tie on distance: prefer the city over a
     // "… County" division, then the larger market.
     const near = metros
@@ -243,7 +250,7 @@ function Explore({ index }: { index: IndexOutput }) {
       .sort((a, b) => a.d - b.d || Number(/ County,/.test(a.m.name)) - Number(/ County,/.test(b.m.name)) || (b.m.homesSold12m ?? 0) - (a.m.homesSold12m ?? 0))[0];
     if (near && near.d <= 20) return near.m.name;
     return `${Math.abs(pin.lat).toFixed(2)}°${pin.lat >= 0 ? 'N' : 'S'}, ${Math.abs(pin.lon).toFixed(2)}°${pin.lon >= 0 ? 'E' : 'W'}`;
-  }, [pin, metros]);
+  }, [pin, metros, regionLayer, pinPlace]);
 
   // ---------- actions ----------
   const select = useCallback((slugsNext: string[]) => setQuery({ sel: slugsNext.length ? slugsNext.join(',') : null }), [setQuery]);
@@ -257,6 +264,12 @@ function Explore({ index }: { index: IndexOutput }) {
 
   // A new pin flies the camera to its ring (not on radius changes, not on first load with a saved camera).
   const [mapReady, setMapReady] = useState(false);
+  useEffect(() => {
+    setPinPlace(null);
+    if (!pin || !mapReady) return;
+    const t = window.setTimeout(() => setPinPlace(nearestPlace(mapRef.current?.placesNear() ?? [], pin)?.name ?? null), 900);
+    return () => window.clearTimeout(t);
+  }, [pin?.lat, pin?.lon, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
   const pinKey = pin ? formatPin(pin) : '';
   const hadCamera = useRef(Boolean(params.get('cam')));
   // `?region=` (from ⌘K or a link) frames the region, also when chosen on this page.

@@ -6,6 +6,7 @@
  */
 import { atlasStyle, mixRgb, type BasemapTokens } from './basemap';
 import type { ZipFeature, ZipLayer } from '../viewmodels/region';
+import type { PlacePoint } from '../lib/places';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { HexagonLayer } from '@deck.gl/aggregation-layers';
 import { ColumnLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
@@ -47,6 +48,8 @@ export interface AtlasMapHandle {
   flyTo: (lon: number, lat: number, zoom?: number) => void;
   /** Zoom out (never in) so the view is at most `zoom`. */
   zoomOutTo: (zoom: number) => void;
+  /** Place labels (city, town, suburb…) from the loaded basemap tiles, to name a spot. */
+  placesNear: () => PlacePoint[];
   reset: (camera: Camera) => void;
   /** A PNG of the current view (map + columns), for the share menu. */
   snapshot: () => Promise<string | null>;
@@ -500,6 +503,20 @@ const Atlas = forwardRef<AtlasMapHandle, AtlasMapProps>(function AtlasMap(props,
         const target = { center: [lon, lat] as [number, number], zoom: z ?? Math.max(m.getZoom(), 6.2), pitch: Math.max(m.getPitch(), 50) };
         if (props.reducedMotion) m.jumpTo(target);
         else m.flyTo({ ...target, ...CAMERA_FLIGHT });
+      },
+      placesNear: () => {
+        const m = mapRef.current;
+        if (!m || !m.getSource('openmaptiles')) return [];
+        try {
+          return m.querySourceFeatures('openmaptiles', { sourceLayer: 'place' }).flatMap((f) => {
+            const name = (f.properties?.['name:en'] ?? f.properties?.name) as string | undefined;
+            const cls = f.properties?.class as string | undefined;
+            const g = f.geometry as { type: string; coordinates: [number, number] };
+            return name && cls && g.type === 'Point' ? [{ name, cls, lon: g.coordinates[0], lat: g.coordinates[1] }] : [];
+          });
+        } catch {
+          return [];
+        }
       },
       zoomOutTo: (z) => {
         const m = mapRef.current;

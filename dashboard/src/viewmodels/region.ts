@@ -8,6 +8,7 @@
 import type { MetricRegistryEntry, RegionGeometry, RegionOutput } from '../data/schema.gen';
 import { divergingColor, robustBound, sequentialColor, type DivergingStops, type RGB } from '../lib/columns';
 import { changeAt } from '../lib/timeline';
+import { pointInPolygon } from './atlas';
 
 export type RegionArea = RegionOutput['zips'][number];
 export type RegionLevel = 'zip' | 'city';
@@ -99,6 +100,15 @@ export function zipLayer(region: RegionOutput, geometry: RegionGeometry, metric:
     }
   }
   return { features, cities, labels, month: shown ?? region.data_through, scale: colorBy === 'yoy' ? { kind: 'yoy', bound, clamped: sampled.some((v) => v.change != null && Math.abs(v.change) > bound) } : { kind: 'value', low, high } };
+}
+
+/** The ZIP (and its city) whose shape contains a point, or null. */
+export function placeAt(layer: ZipLayer, lat: number, lon: number): { zip: string; city: string | null } | null {
+  for (const f of layer.features) {
+    const outer = f.polygon[0];
+    if (outer && pointInPolygon(lon, lat, outer)) return { zip: f.zip, city: f.city };
+  }
+  return null;
 }
 
 // ---------- the panel ----------

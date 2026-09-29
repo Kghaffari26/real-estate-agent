@@ -33,8 +33,8 @@ test('area search: counties inside the ring equal the pure function on the publi
   const expected = countySearch(PHILLY, 40, near.map((s) => areaFiles[s]));
   expect(expected.counties.length).toBeGreaterThan(2);
   const block = page.getByTestId('area-counties');
-  await expect(block.getByTestId('area-county-count')).toHaveText(String(expected.counties.length));
-  await expect(block.getByTestId('area-county-price')).toHaveText(formatValue(expected.price, 'currency_compact'));
+  await expect(block.getByTestId('area-counties-count')).toHaveText(String(expected.counties.length));
+  await expect(block.getByTestId('area-counties-price')).toHaveText(formatValue(expected.price, 'currency_compact'));
   await expect(block).toContainText(expected.counties[0]!.name);
 });
 

@@ -56,6 +56,7 @@ def test_build_region_zips_cities_ranks_and_missing_geometry():
     assert irv.latest["sold_above_list"].value == 0.25 and irv.latest["sold_above_list"].yoy == 0.0  # pp: a difference
     assert irv.series["median_sale_price"][-1] == 1_250_000 and irv.series["median_sale_price"][0] is None  # 26 of 36 months
     assert irv.ranks["median_sale_price"] == 1 and next(z for z in out.zips if z.id == "92602").ranks["median_dom"] == 1
+    assert not irv.low_sample
     [city] = out.cities
     assert (city.id, city.zips, city.lat) == ("0636770", ["92602", "92618"], 33.68)
     assert city.latest["homes_sold"].value == 60
@@ -82,3 +83,12 @@ def test_the_committed_orange_county_config_and_geometry():
     assert len(info.zips) >= 85 and info.zips["92618"][0] == "Irvine" and info.zips["92660"][0] == "Newport Beach"
     assert all(33.3 < lat < 34.0 and -118.2 < lon < -117.4 for _, lat, lon in info.zips.values() if lat is not None)
     assert region.geometry_size(region.load_geometry(oc.geometry)) < 450 * 1024
+
+
+def test_low_sample_areas_are_flagged_and_unranked():
+    data = [*rows("92657", median_sale_price=8_000_000, homes_sold=3), *rows("92618", median_sale_price=1_000_000, homes_sold=40)]
+    geo = region.GeoInfo(zips={"92657": ("Newport Beach", 33.6, -117.8), "92618": ("Irvine", 33.67, -117.73)}, cities={})
+    out = region.build_region(data, CFG, {"Anaheim, CA metro area"}, geo, THROUGH)
+    rich = next(z for z in out.zips if z.id == "92657")
+    assert rich.low_sample and rich.ranks == {}
+    assert next(z for z in out.zips if z.id == "92618").ranks["median_sale_price"] == 1  # the 3-sale ZIP doesn't outrank it

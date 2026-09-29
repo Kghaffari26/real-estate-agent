@@ -417,6 +417,7 @@ export const RegionAreaSchema = z.object({
   lat: optionalField(z.number().nullable(), null, "RegionArea.lat"),
   latest: tolerantRecord(RegionMetricSchema, "RegionArea.latest"),
   lon: optionalField(z.number().nullable(), null, "RegionArea.lon"),
+  low_sample: optionalField(z.boolean(), false, "RegionArea.low_sample"),
   name: z.string(),
   ranks: optionalField(z.record(z.string(), z.number()), {}, "RegionArea.ranks"),
   series: z.record(z.string(), z.array(seriesNumber)),

@@ -364,6 +364,7 @@ class RegionArea(BaseModel):
     latest: dict[str, RegionMetric]
     series: dict[str, list[float | int | None]] = Field(description="metric -> values aligned to the region's `dates`")
     ranks: dict[str, int] = Field(default_factory=dict, description="Within the region: 1 = highest price / fastest growth / fewest days")
+    low_sample: bool = Field(default=False, description="Fewer than 10 homes sold in the window: volatile values, left out of ranks")
 
 
 class RegionOutput(BaseModel):

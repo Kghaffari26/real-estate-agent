@@ -67,13 +67,23 @@ export function useQueryList(key: string, max?: number): [string[], (values: str
  * setters called in the same handler each start from the same snapshot, so the
  * second would overwrite the first.
  */
+/** The hash router's current query, read from the address bar (null outside a hash route, e.g. tests with a memory router). */
+function liveHashSearch(): string | null {
+  if (typeof window === 'undefined' || !window.location.hash.startsWith('#/')) return null;
+  const q = window.location.hash.indexOf('?');
+  return q < 0 ? '' : window.location.hash.slice(q + 1);
+}
+
 export function useSetQuery(): (updates: Record<string, string | null>) => void {
   const [, setParams] = useSearchParams();
   return useCallback(
     (updates) => {
       setParams(
         (prev) => {
-          const next = new URLSearchParams(prev);
+          // Merge into the live URL, not this render's copy: two writes in one tick (a click
+          // that sets ?city= and a camera jump whose moveend writes ?cam= synchronously) would
+          // otherwise start from the same stale snapshot and the second would drop the first.
+          const next = new URLSearchParams(liveHashSearch() ?? prev);
           for (const [key, value] of Object.entries(updates)) {
             if (value === null || value === '') next.delete(key);
             else next.set(key, value);

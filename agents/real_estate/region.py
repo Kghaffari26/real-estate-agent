@@ -7,7 +7,9 @@ centroids (`scripts/build_region_geometry.py`). Output: `regions/<slug>.json`.
 - **ZIPs**: Redfin's levels for the latest month (percents → ratios, rounded), changes
   computed here with `compute.compute_metric_series` and each metric's registry
   `change_kind` (ratio for levels, pp for shares, a difference for days and months),
-  exactly as for metros; 36 months of the main series; ranks within the region.
+  exactly as for metros; 36 months of the main series; ranks within the region. An
+  area with fewer than `MIN_SALES` homes sold in the window is `low_sample` (its median
+  is one or two sales) and gets no rank.
 - **Cities and the region summary**: each month aggregated from their ZIPs, sums for
   counts (homes sold, new listings, inventory) and **homes-sold-weighted means** of the
   ZIP medians and ratios for the rest (labelled as weighted on the site: there are no
@@ -53,6 +55,9 @@ SUMMED = ("homes_sold", "new_listings", "inventory")
 SERIES_METRICS = ("median_sale_price", "homes_sold", "inventory", "median_dom")
 DECIMALS: dict[str, int] = {"avg_sale_to_list": 4, "sold_above_list": 4, "off_market_in_two_weeks": 4, "months_of_supply": 1}
 HISTORY_MONTHS = 36
+# Under this many homes sold in the (3-month) window a median is one or two sales:
+# the area is flagged `low_sample` and left out of the ranks.
+MIN_SALES = 10
 
 
 @dataclass(frozen=True)
@@ -136,11 +141,15 @@ def _area(
         ch = compute.compute_metric_series(pairs, metric_registry.get(key).change_kind, as_of=through)
         latest[key] = RegionMetric(value=_round(key, ch.value), yoy=_change_round(key, ch.yoy))
     series = {key: [_round(key, monthly.get(d, {}).get(key)) for d in dates] for key in SERIES_METRICS}
-    return RegionArea(id=area_id, name=name, kind=kind, city=city, zips=zips or [], lat=lat, lon=lon, latest=latest, series=series)
+    sold = latest["homes_sold"].value
+    low = sold is None or sold < MIN_SALES
+    return RegionArea(id=area_id, name=name, kind=kind, city=city, zips=zips or [], lat=lat, lon=lon, latest=latest, series=series, low_sample=low)
 
 
 def _rank(areas: list[RegionArea]) -> None:
-    """1 = highest price, fastest price growth, fastest sales (fewest days on market)."""
+    """1 = highest price, fastest price growth, fastest sales (fewest days on market);
+    low-sample areas are left out."""
+    areas = [a for a in areas if not a.low_sample]
 
     def assign(get: Callable[[RegionArea], float | None], label: str, descending: bool) -> None:
         present = sorted((a for a in areas if get(a) is not None), key=lambda a: get(a), reverse=descending)  # type: ignore[arg-type, return-value]

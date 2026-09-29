@@ -2666,6 +2666,12 @@
               "default": null,
               "title": "Lon"
             },
+            "low_sample": {
+              "default": false,
+              "description": "Fewer than 10 homes sold in the window: volatile values, left out of ranks",
+              "title": "Low Sample",
+              "type": "boolean"
+            },
             "name": {
               "title": "Name",
               "type": "string"

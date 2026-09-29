@@ -47,9 +47,11 @@ test('time machine: the rail shows the agent’s events and jumps to them', asyn
   await expect(high).toBeAttached();
   await high.click();
   await expect(page.getByRole('slider', { name: 'Month' })).toHaveAttribute('aria-valuetext', 'October 2023');
-  // Markers are thinned to 24 px targets; the Moments menu lists every published event.
+  // Markers are thinned to 24 px targets; the Moments menu lists every published event on
+  // the axis (the time machine starts Jan 2013, so each month has a YoY; 2012 events fall off).
   const menu = page.getByRole('combobox', { name: 'Jump to a moment' });
-  await expect(menu.locator('option')).toHaveCount(read('events.json').events.length + 1);
+  const onAxis = read('events.json').events.filter((e: { date: string }) => e.date >= '2013-01-01').length;
+  await expect(menu.locator('option')).toHaveCount(onAxis + 1);
   await menu.selectOption({ label: 'U.S. prices turn down (−1.9% YoY) · Mar 2023' });
   await expect(page.getByRole('slider', { name: 'Month' })).toHaveAttribute('aria-valuetext', 'March 2023');
 });

@@ -1,24 +1,26 @@
 import { Link } from 'react-router-dom';
-import { NotFoundIllustration } from '../components/ui/Illustrations';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { AtlasChrome } from '../ui/AtlasChrome';
 
-export function NotFoundPage({ what = 'page' }: { what?: 'page' | 'metro' }) {
+/** Nothing at this address: say so plainly and offer the two ways back in. */
+export function NotFoundPage() {
   useDocumentTitle('Not found');
   return (
-    <div className="card flex flex-col items-center gap-4 px-6 py-14 text-center">
-      <NotFoundIllustration />
-      <div>
-        <h1 className="text-xl font-semibold">{what === 'metro' ? 'Metro not found' : 'Page not found'}</h1>
-        <p className="mt-1 text-sm text-text-3">{what === 'metro' ? "We don't track a metro at that address." : "There's nothing at this address."}</p>
+    <AtlasChrome>
+      <div className="grid min-h-[70vh] place-items-center px-6 text-center">
+        <div>
+          <div className="mp-label">404</div>
+          <h1 className="mp-display mt-2 text-[40px] leading-tight sm:text-[56px]">There’s nothing at this address.</h1>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link to="/explore" className="inline-flex h-11 items-center rounded-control bg-mp-accent px-5 text-sm font-medium text-mp-accent-ink no-underline">
+              Browse the atlas
+            </Link>
+            <Link to="/" className="inline-flex h-11 items-center rounded-control border border-mp-line px-5 text-sm text-mp-ink no-underline">
+              Today’s brief
+            </Link>
+          </div>
+        </div>
       </div>
-      <div className="flex gap-2">
-        <Link to="/metros" className="btn btn-primary">
-          Browse all metros
-        </Link>
-        <Link to="/" className="btn">
-          Overview
-        </Link>
-      </div>
-    </div>
+    </AtlasChrome>
   );
 }

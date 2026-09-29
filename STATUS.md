@@ -18,7 +18,9 @@ Spec: `docs/specs/SPEC_DASHBOARD_V2.md`. v1 pages still serve `/`, `/metros`, `/
 - **Phase 8 E1 (timeline since 2012):** the agent publishes `timeline/<metric>.json` x 5 (schema 1.3.0, spec section 6.4), and the time machine runs Jan 2013 to Aug 2026 with a real YoY in every month. The sample snapshot gained the timelines from the real Redfin files, verified month-for-month against its metro files. Python 250 tests (was 242), dashboard 142 unit / 72 e2e.
 - **Phase 5 (dossier, `#/dossier/:slug`):** the R3F house sized by price / U.S. median and lit by the temperature, region plates, the instrument cluster, chips that drive the chart (1Y/3Y/All to 2012, Level/YoY, index to U.S., rate strip), temperature drivers, Zillow/permits states, affordability. Gate C sheet: `docs/screenshots/v2/gate-c/sheet.png`. 150 unit / 89 e2e / 250 Python.
 - **Swap (merged to main):** `/` = Arrival, `/metro/:slug` = dossier, `/explore` = atlas; old links redirect; v1 Overview/Metros/Metro retired (the CSV export and print one-pager went with them). Initial JS 98.6 KB gz.
-- **Next:** Phase 6 (affordability studio), Phase 7 (compare arena, methodology restyle), Phase 8 E2-E4, Phase 9 (polish, perf, trailer, pruning v1 components).
+- **Phase 6 (affordability studio, `#/metro/:slug/afford`):** the house scaled by your price with the year-ago ghost, log-price/down/rate/term sliders in the URL, the payment vs a year ago, the 2.5D payment stack, the income ring ("needs income data" for now), Reset to published. All 50 published payments reproduce to the cent. On `dashboard-v2`; not yet on `main`.
+- **Phase 7 (compare arena + methodology):** `#/compare` is the three-house arena with entity-colored plots, linked-crosshair charts (up to 2 metrics, 1Y/3Y/All with timelines, indexed) and the leaders table; `#/methodology` is v2, with map, terrain and type credits and the procedural-visuals note; the v1 shell is retired. On `dashboard-v2`; not yet on `main`.
+- **Next:** Phase 8 E2-E4, Phase 9 (polish, perf, trailer, pruning v1 components).
 
 ## Session 8 (2026-09-29): dashboard phase 3 polish + sparkline contract
 

@@ -11,10 +11,13 @@ interface MetroSearchProps {
   /** Slugs to leave out (e.g. metros already being compared). */
   exclude?: readonly string[];
   maxResults?: number;
+  /** 'atlas' styles it with the v2 (Night Atlas / Dawn) tokens. */
+  tone?: 'v1' | 'atlas';
 }
 
 /** ARIA 1.2 combobox with a listbox popup: type, ↑/↓ to move, Enter to open, Esc to close. */
-export function MetroSearch({ items, onSelect, label = 'Find a metro', placeholder = 'Search metros…', exclude, maxResults }: MetroSearchProps) {
+export function MetroSearch({ items, onSelect, label = 'Find a metro', placeholder = 'Search metros…', exclude, maxResults, tone = 'v1' }: MetroSearchProps) {
+  const atlas = tone === 'atlas';
   const id = useId();
   const listId = `${id}-list`;
   const inputRef = useRef<HTMLInputElement>(null);
@@ -67,7 +70,7 @@ export function MetroSearch({ items, onSelect, label = 'Find a metro', placehold
         aria-controls={listId}
         aria-activedescendant={expanded && results.length ? `${id}-opt-${active}` : undefined}
         autoComplete="off"
-        className="input"
+        className={atlas ? 'h-10 w-full rounded-control border border-mp-line bg-mp-panel/60 px-3 text-sm text-mp-ink placeholder:text-mp-ink-3' : 'input'}
         placeholder={placeholder}
         value={query}
         onChange={(e) => {
@@ -84,7 +87,7 @@ export function MetroSearch({ items, onSelect, label = 'Find a metro', placehold
         role="listbox"
         aria-label={`${label} results`}
         hidden={!expanded}
-        className="absolute left-0 right-0 z-[1100] mt-1 max-h-72 overflow-auto rounded-md border border-border bg-surface py-1 shadow-2"
+        className={`absolute left-0 right-0 z-[1100] mt-1 max-h-72 overflow-auto py-1 ${atlas ? 'rounded-control border border-mp-line bg-mp-panel shadow-[var(--mp-shadow)]' : 'rounded-md border border-border bg-surface shadow-2'}`}
       >
         {results.length === 0 ? (
           <li role="option" aria-selected={false} aria-disabled="true" className="px-3 py-1.5 text-sm muted">
@@ -97,7 +100,7 @@ export function MetroSearch({ items, onSelect, label = 'Find a metro', placehold
               id={`${id}-opt-${i}`}
               role="option"
               aria-selected={i === active}
-              className={`cursor-pointer px-3 py-1.5 text-sm ${i === active ? 'bg-accent-soft text-text' : 'text-text'}`}
+              className={`cursor-pointer px-3 py-1.5 text-sm ${atlas ? (i === active ? 'bg-mp-accent/15 text-mp-ink' : 'text-mp-ink') : i === active ? 'bg-accent-soft text-text' : 'text-text'}`}
               // mousedown (not click) so the input's blur doesn't close the list first
               onMouseDown={(e) => {
                 e.preventDefault();

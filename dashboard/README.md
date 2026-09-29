@@ -104,8 +104,9 @@ Every route is deep-linkable:
 | `#/` (Arrival: globe, brief, heat field, rates vs prices, movers, investigations) | none |
 | `#/explore` (the atlas) | `?m=&t=YYYY-MM&style=&h=value|yoy&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low` |
 | `#/metro/:slug` (dossier) | `?m=&range=1Y|3Y|All&mode=yoy&vs=1&section=affordability&tier=low` (v1's `?metric=` still works) |
-| `#/compare` (v1 look until Phase 7) | `?m=a,b,c&metrics=&range=&indexed=1` |
-| `#/about` (alias `#/methodology`; v1 look until Phase 7) | none |
+| `#/metro/:slug/afford` (affordability studio) | `?price=&down=&rate=&term=15|20|30&tier=low` |
+| `#/compare` (the arena) | `?m=a,b,c&metrics=x,y&range=1Y\|3Y\|All&indexed=1&tier=low` |
+| `#/methodology` (`#/about` redirects) | `?section=<id>` |
 | `#/metros`, `#/arrival`, `#/dossier/:slug` | redirects to `#/explore?view=table`, `#/`, `#/metro/:slug` |
 | `#/styleguide` (v2 design system) | none |
 

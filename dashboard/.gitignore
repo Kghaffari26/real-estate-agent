@@ -4,3 +4,4 @@ public/data
 playwright-report
 test-results
 *.tsbuildinfo
+design/gate-a/out/

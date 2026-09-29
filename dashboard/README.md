@@ -101,22 +101,22 @@ Every route is deep-linkable:
 
 | Route | Query parameters |
 |---|---|
-| `#/` | `?metric=&range=&rates=&map=` |
-| `#/metros` | `?q=&type=&temp=&flag=&sort=&dir=&metric=&view=&cols=` |
-| `#/metro/:slug` | `?metric=&range=&rates=0&vs=1` |
-| `#/compare` | `?m=a,b,c&metrics=&range=&indexed=1` |
-| `#/about` (alias `#/methodology`) | none |
-| `#/arrival` (v2 landing) | none |
-| `#/explore` (v2 atlas) | `?m=&t=YYYY-MM&style=&h=value|yoy&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low` |
+| `#/` (Arrival: globe, brief, heat field, rates vs prices, movers, investigations) | none |
+| `#/explore` (the atlas) | `?m=&t=YYYY-MM&style=&h=value|yoy&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low` |
+| `#/metro/:slug` (dossier) | `?m=&range=1Y|3Y|All&mode=yoy&vs=1&section=affordability&tier=low` (v1's `?metric=` still works) |
+| `#/compare` (v1 look until Phase 7) | `?m=a,b,c&metrics=&range=&indexed=1` |
+| `#/about` (alias `#/methodology`; v1 look until Phase 7) | none |
+| `#/metros`, `#/arrival`, `#/dossier/:slug` | redirects to `#/explore?view=table`, `#/`, `#/metro/:slug` |
 | `#/styleguide` (v2 design system) | none |
 
 Any view also takes `?section=<id>` to scroll to a section. "Copy link" buttons
 produce these URLs.
 
-## Metro Pulse v2 ("Night Atlas", in progress)
+## Metro Pulse v2 ("Night Atlas")
 
-`docs/specs/SPEC_DASHBOARD_V2.md` is replacing the presentation layer screen by
-screen; `data/`, `lib/` and `viewmodels/` stay the contract.
+`docs/specs/SPEC_DASHBOARD_V2.md` replaced the presentation layer (Arrival, Atlas and
+Dossier are live; Compare, Methodology and the affordability studio follow in Phases
+6-7); `data/`, `lib/` and `viewmodels/` stay the contract.
 
 - **Tokens**: `src/styles/atlas.css` (`--mp-*`, Tailwind `mp-*`), Night by default
   (`.dark`) and Dawn. **Motion**: `src/motion/presets.ts`. **Primitives**: `src/ui/`.

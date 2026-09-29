@@ -37,6 +37,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useIsDark, usePrefersReducedMotion } from '../hooks/useMediaQuery';
 import { withAttribution } from '../lib/attribution';
 import { parseChannels } from '../lib/columns';
+import { hasWebGL } from '../lib/webgl';
 import { detectRateEvents } from '../lib/events';
 import { formatDate, formatDateTime, formatDelta, formatMonth, formatValue } from '../lib/format';
 import { buildRegistry } from '../lib/metrics';
@@ -123,8 +124,10 @@ function Arrival({ index }: { index: IndexOutput }) {
   const globe = useGlobeLayout();
 
   // Mount the WebGL globe after first paint (the poster covers until its first frame).
+  // Without WebGL (or on the low tier) the poster simply stays.
   useEffect(() => {
-    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (!hasWebGL() || new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tier') === 'low') return;
+    const idle =(window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
     if (idle) idle(() => setMountGlobe(true), { timeout: 600 });
     else window.setTimeout(() => setMountGlobe(true), 200);
   }, []);

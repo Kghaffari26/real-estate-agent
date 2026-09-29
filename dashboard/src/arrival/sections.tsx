@@ -238,6 +238,8 @@ export function RatesPrices({ rateDates, rates, priceDates, prices, events, fmtR
     if (reduce) return;
     const el = ref.current;
     if (!el) return;
+    // Without IntersectionObserver (old browsers, tests), draw at once.
+    if (typeof IntersectionObserver === 'undefined') return setDrawn(true);
     const io = new IntersectionObserver(([e]) => e?.isIntersecting && setDrawn(true), { threshold: 0.35 });
     io.observe(el);
     return () => io.disconnect();

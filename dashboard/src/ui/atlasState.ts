@@ -2,8 +2,7 @@ import { useState } from 'react';
 
 export const ATLAS_NAV = [
   { to: '/explore', label: 'Atlas' },
-  // The v2 landing lives at /arrival until the single v1→v2 swap after Phase 5.
-  { to: '/arrival', label: 'Brief' },
+  { to: '/', label: 'Brief', end: true },
   { to: '/compare', label: 'Compare' },
   { to: '/methodology', label: 'Method' },
 ] as const;
@@ -30,5 +29,5 @@ export function useMediaPaused(): [boolean, (v: boolean) => void] {
   return [paused, set];
 }
 
-/** Where a metro's v2 dossier lives (one place to change at the v1 → v2 swap). */
-export const metroPath = (slug: string) => `/dossier/${slug}`;
+/** Where a metro's dossier lives (the one place that names the route). */
+export const metroPath = (slug: string) => `/metro/${slug}`;

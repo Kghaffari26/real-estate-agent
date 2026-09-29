@@ -22,6 +22,8 @@ interface Arena3DProps {
   dark: boolean;
   animate: boolean;
   onReady?: () => void;
+  /** Max device pixel ratio (quality tier). */
+  dpr?: number;
 }
 
 const rgb = ([r, g, b]: [number, number, number]) => new THREE.Color(r / 255, g / 255, b / 255);
@@ -95,7 +97,7 @@ function Stage({ houses, dark, animate }: Arena3DProps) {
 
 export default function Arena3D(props: Arena3DProps) {
   return (
-    <Canvas data-testid="arena-canvas" aria-hidden="true" dpr={[1, 2]} camera={{ position: [0, 10.5, 26], fov: 30 }} gl={{ antialias: true, alpha: true }} frameloop={props.animate ? 'always' : 'demand'} onCreated={() => props.onReady?.()}>
+    <Canvas data-testid="arena-canvas" aria-hidden="true" dpr={[1, props.dpr ?? 2]} camera={{ position: [0, 10.5, 26], fov: 30 }} gl={{ antialias: true, alpha: true }} frameloop={props.animate ? 'always' : 'demand'} onCreated={() => props.onReady?.()}>
       <Stage {...props} />
     </Canvas>
   );

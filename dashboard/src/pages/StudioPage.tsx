@@ -169,7 +169,7 @@ function Studio({ index, m, published, income }: { index: IndexOutput; m: MetroD
 
         {/* ---------- the house ---------- */}
         <section aria-label="The house" className="relative order-1 min-h-[340px] lg:order-2 lg:min-h-[560px]">
-          <HouseStage className="absolute inset-0" scale={r.houseScale} rim={light.rim} lean={light.lean} dark={dark} animate={!reduce && !mediaPaused} lowTier={params.get('tier') === 'low'} ghostScale={ghost} />
+          <HouseStage className="absolute inset-0" scale={r.houseScale} rim={light.rim} lean={light.lean} dark={dark} animate={!reduce && !mediaPaused} ghostScale={ghost} />
           <p className="absolute inset-x-0 bottom-0 text-center text-xs text-mp-ink-3" data-testid="house-caption">
             House {r.houseScale.toFixed(2)}× the U.S. median ({usd(usMedian)}).{ghost != null && ` Dashed: a year ago, ${usd(agoPrice)} at ${a.assumptions.rate_year_ago?.toFixed(2)}%.`}
           </p>

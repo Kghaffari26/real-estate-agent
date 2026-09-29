@@ -1,4 +1,4 @@
-import { forwardRef, lazy, Suspense, useState } from 'react';
+import { forwardRef, lazy, Suspense, useEffect, useState } from 'react';
 import { hasWebGL } from '../lib/webgl';
 import type { AtlasMapHandle, AtlasMapProps } from './AtlasMap';
 
@@ -21,6 +21,10 @@ type Props = Omit<AtlasMapProps, 'onFail' | 'onReady'> & {
  */
 export const Atlas = forwardRef<AtlasMapHandle, Props>(function Atlas({ tier, onModeChange, ...props }, ref) {
   const [failure, setFailure] = useState<string | null>(() => (tier === 'low' ? 'low tier' : hasWebGL() ? null : 'WebGL is unavailable'));
+  // Follow a tier change in place (e.g. `?tier=` edited on the same page); real failures stay.
+  useEffect(() => {
+    setFailure((f) => (tier === 'low' ? (f ?? 'low tier') : f === 'low tier' ? (hasWebGL() ? null : 'WebGL is unavailable') : f));
+  }, [tier]);
   if (failure) {
     return (
       <div className="absolute inset-0" data-atlas-mode="2d" data-atlas-reason={failure}>

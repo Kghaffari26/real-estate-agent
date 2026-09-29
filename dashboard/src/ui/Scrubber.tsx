@@ -1,5 +1,6 @@
 import { Pause, Play } from 'lucide-react';
-import { useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { thinMoments } from '../lib/moments';
 import { Segmented } from './controls';
 
 export interface ScrubberEvent {
@@ -38,6 +39,16 @@ export function Scrubber({ dates, index, onChange, playing, onPlayToggle, speed,
   const pct = (i: number) => `${((i / last) * 100).toFixed(3)}%`;
   const firstYear = Number(dates[0]?.slice(0, 4) ?? 0);
   const yearStep = Number(dates[dates.length - 1]?.slice(0, 4) ?? 0) - firstYear > 9 ? 2 : 1;
+  const railRef = useRef<HTMLDivElement>(null);
+  const [railWidth, setRailWidth] = useState(0);
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setRailWidth(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const shown = thinMoments(events, last, railWidth);
   return (
     <div className={`flex items-center gap-4 ${className}`}>
       <div className="flex flex-none flex-col items-center gap-1.5">
@@ -59,14 +70,29 @@ export function Scrubber({ dates, index, onChange, playing, onPlayToggle, speed,
             { value: '4', label: '4×' },
           ]}
         />
+        {events.length > 0 && (
+          <select
+            aria-label="Jump to a moment"
+            className="w-[86px] rounded-control border border-mp-line bg-mp-panel px-1 py-0.5 text-[11px] text-mp-ink-2"
+            value=""
+            onChange={(e) => e.target.value !== '' && onChange(Number(e.target.value))}
+          >
+            <option value="">Moments</option>
+            {events.map((e) => (
+              <option key={`${e.kind}-${e.index}-${e.label}`} value={e.index}>
+                {e.label}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       <div className="relative min-w-0 flex-1 pt-6">
-        {/* moments rail */}
-        <div className="absolute inset-x-0 top-0 h-5">
-          {events.map((e) => {
+        {/* moments rail: markers thinned to 24 px targets; every moment is also in the menu */}
+        <div ref={railRef} className="absolute inset-x-0 -top-1 h-6">
+          {shown.map((e) => {
             const right = e.index > last / 2;
             // A featured label yields (to a dot + tooltip) when the next featured one is too close.
-            const featured = events.filter((x) => x.showLabel !== false).sort((a, b) => a.index - b.index);
+            const featured = shown.filter((x) => x.showLabel !== false).sort((a, b) => a.index - b.index);
             const next = featured[featured.indexOf(e) + 1];
             const crowded = e.showLabel !== false && next !== undefined && (next.index - e.index) / last < 0.32;
             return (
@@ -75,12 +101,14 @@ export function Scrubber({ dates, index, onChange, playing, onPlayToggle, speed,
                 type="button"
                 onClick={() => onChange(e.index)}
                 // The dot sits on its month; a label hangs off it toward the middle of the rail.
-                className={`absolute top-0 flex items-center gap-1.5 whitespace-nowrap text-xs text-mp-ink-2 hover:text-mp-ink ${e.showLabel !== false && !crowded ? 'z-10' : ''} ${right ? 'flex-row-reverse -translate-x-[calc(100%-5px)]' : '-translate-x-[5px]'}`}
+                className={`absolute top-0 flex h-6 items-center whitespace-nowrap text-xs text-mp-ink-2 hover:text-mp-ink ${e.showLabel !== false && !crowded ? 'z-10' : ''} ${right ? 'flex-row-reverse -translate-x-[calc(100%-12px)]' : '-translate-x-[12px]'}`}
                 style={{ left: pct(e.index) }}
                 aria-label={`Jump to ${e.label}`}
                 title={e.label}
               >
-                <span className={`h-2.5 w-2.5 flex-none rounded-full border-[1.5px] ${e.kind === 'high' ? 'border-mp-hot-2' : 'border-mp-cool-2'}`} aria-hidden="true" />
+                <span className="grid h-6 w-6 flex-none place-items-center" aria-hidden="true">
+                  <span className={`h-2.5 w-2.5 rounded-full border-[1.5px] ${e.kind === 'high' ? 'border-mp-hot-2' : 'border-mp-cool-2'}`} />
+                </span>
                 {/* Featured labels sit on a panel-colored backing, above neighboring dots. */}
                 {e.showLabel !== false && !crowded && <span className="hidden rounded bg-mp-panel px-1 sm:inline">{e.label}</span>}
               </button>

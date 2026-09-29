@@ -5,3 +5,6 @@ playwright-report
 test-results
 *.tsbuildinfo
 design/gate-a/out/
+lighthouse-report
+.lh/
+e2e/__visual__/

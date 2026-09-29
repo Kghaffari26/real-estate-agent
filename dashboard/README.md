@@ -1,15 +1,25 @@
 # Metro Pulse — the dashboard
 
-A market-intelligence web app for the `real_estate` agent's published data: a
-national overview, all 50 metros on a map and in a sortable table, a page per
-metro, a comparison view and a methodology page. Every view and setting is
-deep-linkable.
+**Metro Pulse v2 ("Night Atlas")**: a living 3D atlas of the U.S. housing market built
+on the `real_estate` agent's published data. You arrive at a globe, dive into a
+tilted 3D map of 50 metros, scrub monthly history back to 2012, search any radius
+down to counties, open a metro's dossier (a 3D house lit by its market's
+temperature), set your own numbers in the affordability studio, and compare three
+metros side by side. Every number is the agent's; the dashboard formats, positions
+and animates it. Every view and setting is deep-linkable.
+
+<img src="../docs/media/hero.gif" alt="Metro Pulse: the globe, then the dive into the 3D atlas" width="800">
+
+Trailer (~45 s): [`docs/media/trailer.webm`](../docs/media/trailer.webm). Stills:
+[`docs/screenshots/v2/`](../docs/screenshots/v2/).
 
 **Stack:** Vite, React 18, TypeScript (strict), Tailwind (token-driven), React
-Router (hash router), Recharts (lazy), MapLibre GL with OpenFreeMap tiles (lazy),
-framer-motion (async features), and self-hosted Inter Variable (`@fontsource`).
-Tests use Vitest with Testing Library, plus Playwright with axe. It's deployed to
-GitHub Pages at `/real-estate-agent/` by `.github/workflows/dashboard.yml`.
+Router (hash router), MapLibre GL 6 + deck.gl 9 (the atlas and the globe, lazy),
+three.js via react-three-fiber (the houses, lazy), framer-motion and GSAP
+(ScrollTrigger), zustand (the time machine), d3-geo, and self-hosted Instrument
+Serif, Inter Tight and Geist Mono (`@fontsource`). Tests: Vitest + Testing Library,
+Playwright with axe, Lighthouse. Deployed to GitHub Pages at `/real-estate-agent/`
+by `.github/workflows/dashboard.yml`.
 
 ## Run locally
 
@@ -24,10 +34,12 @@ npm run dev             # http://localhost:5173/real-estate-agent/
 |---|---|
 | `npm run fetch-data` | Fill `public/data/` (see "Data flow"). `RE_DATA_DIR=../public-data npm run fetch-data` uses a local agent run instead. |
 | `npm run gen:schema` | Regenerate `src/data/schema.gen.ts` from `../schemas/real_estate.schema.json`. `check:schema` fails if it's stale. |
-| `npm run lint` / `typecheck` / `test` | ESLint (0 warnings), `tsc -b`, Vitest + Testing Library (110 tests). |
+| `npm run lint` / `typecheck` / `test` | ESLint (0 warnings), `tsc -b`, Vitest + Testing Library. |
 | `npm run build` / `preview` | Production build into `dist/`. `DASHBOARD_BASE` overrides the base path. |
-| `npm run check:bundle` | Performance budget: initial JS ≤ 300 KB gzipped (CI enforces it). |
-| `npm run e2e` | Playwright smoke + axe: every route in light and dark, desktop and 360 px, plus the interactions and phone checks (39 checks). |
+| `npm run check:bundle` | Performance budget: initial JS ≤ 300 KB gzipped (CI enforces it; the spec allows 350). |
+| `npm run e2e` | Playwright: axe (WCAG 2.1 AA) on every route in both themes, desktop and 360 px, the forced low tier and reduced motion, every interaction in the spec, and a frame-timing smoke (warning only). |
+| `npm run lighthouse` | Lighthouse on Arrival and Explore, mobile and desktop, against `vite preview` (accessibility must be 100; performance is reported). |
+| `npm run visual` / `visual:update` | Visual regression: every route × both themes × 390/1024/1440 px + the low tier, against local baselines. |
 | `npm run screenshots` | Rewrite `../docs/screenshots/*.png`: every view in light, dark and mobile. |
 | `npm run brand-assets` | Re-render `public/og.png` and `public/apple-touch-icon.png` from the brand config. |
 
@@ -83,25 +95,28 @@ sample-data/ ──► public/data/  +  source.json {source: data-branch | sampl
 
 ```
 src/
-├── config/brand.ts   the product name, tagline, URL and theme colors (one place)
-├── data/             schema.gen.ts (generated), tolerant.ts, manifest.ts, api.ts, hooks
-├── lib/              pure, unit-tested logic: format (every StatFormat), amortization,
-│                     series (ranges, index-to-100, weekly→monthly), metrics, scale
-│                     (diverging/sequential buckets), geo (de-overlap, bubble size),
-│                     tokens (CSS-variable colors for JS), csv, exportPng, palette, labels…
-├── viewmodels/       pure data → display models: overview, metros, metro, compare, map, columns
-├── components/
-│   ├── shell/        AppShell (sidebar, top bar, bottom nav, footer), CommandPalette, FreshnessChip
-│   ├── ui/           Card (copy link + PNG export), Badge, Status, Delta, SegmentedControl,
-│   │                 Select, Checkbox, Skeleton, StateViews + illustrations, Collapsible…
-│   ├── charts/       TimeSeriesChart + RateStrip (Recharts, lazy), Sparkline, AnimatedNumber
-│   ├── map/          MetroMap (MapLibre, lazy), MapLegend
-│   └── data/         KpiCard, TemperatureGauge, TemperatureComponents, HeatGrid, RankedBars,
-│                     AlertCards, AnalystNote, InvestigationCard, FlagCards, DataTable,
-│                     ColumnPicker, SparkCell, AffordabilityCalculator
-├── pages/            containers: URL state + data hooks → view models → components
-├── hooks/            useQueryState (URL = state), useTheme, EntityColors, Toast, useInView…
-└── styles/           tokens.css (the design tokens) + index.css (Tailwind layers, print CSS)
+├── config/        brand.ts (name, tagline, URL, theme colors), features.ts (stubs, off)
+├── data/          schema.gen.ts (generated from the agent's schema), api.ts (loaders,
+│                  tolerant optional files), hooks, manifest.ts
+├── lib/           pure, unit-tested logic: format (every StatFormat), amortization,
+│                  studio, dossier (house scale, temperature light), area (radius and
+│                  county search), columns, timeline, moments (the event rail), quality
+│                  (tiers), series, metrics, csv, tokens, text…
+├── viewmodels/    pure data → display models: atlas, dossier, compare, pulse, overview…
+├── state/         timeStore (the time machine, zustand)
+├── ui/            v2 primitives: AtlasChrome, CommandBar, Glass, controls (Button, Chip,
+│                  Segmented, Slider, Toggle), Scrubber, Instrument, Dock, Counter, dataviz
+├── atlas/         the 3D map (MapLibre + deck.gl, lazy), the designed 2D atlas, panels,
+│                  the table view, the MapLibre 6 compatibility shim
+├── arrival/       the globe (deck.gl GlobeView), story sections, the pulse ticker
+├── dossier/       the 3D house (three.js), its isometric SVG twin, region plates, charts
+├── studio/        the payment stack
+├── compare/       the arena (three houses) and the linked-crosshair charts
+├── components/    shared pieces kept from v1: CommandPalette, MetroSearch, state views,
+│                  alert/flag/investigation cards
+├── pages/         containers: URL state + data hooks → view models → components
+├── hooks/         useQueryState (URL = state), useQuality, useTheme, EntityColors, Toast…
+└── styles/        atlas.css (the v2 tokens), tokens.css (shared v1 tokens), index.css
 ```
 
 Every route is deep-linkable:
@@ -120,116 +135,100 @@ Every route is deep-linkable:
 Any view also takes `?section=<id>` to scroll to a section. "Copy link" buttons
 produce these URLs.
 
-## Metro Pulse v2 ("Night Atlas")
+## Quality tiers
 
-`docs/specs/SPEC_DASHBOARD_V2.md` replaced the presentation layer (Arrival, Atlas and
-Dossier are live; Compare, Methodology and the affordability studio follow in Phases
-6-7); `data/`, `lib/` and `viewmodels/` stay the contract.
+`src/lib/quality.ts` (spec §9) picks a tier once per page load from browser hints;
+`?tier=low|medium|high` overrides it (tests and screenshots use it).
 
-- **Tokens**: `src/styles/atlas.css` (`--mp-*`, Tailwind `mp-*`), Night by default
-  (`.dark`) and Dawn. **Motion**: `src/motion/presets.ts`. **Primitives**: `src/ui/`.
-- **Atlas** (`#/explore`): `src/atlas/` (MapLibre + deck.gl, lazy; 2D fallback),
-  `src/viewmodels/atlas.ts`, `src/lib/{area,columns,timeline,moments}.ts`,
-  `src/state/timeStore.ts`. Every figure is published or read from the published
-  series. Heights are proportional: value from zero, YoY centered on zero. Area
-  search is a homes-sold-weighted mean of metro medians. deck.gl and MapLibre are
-  pinned exactly; `src/atlas/maplibreCompat.ts` carries the MapLibre 6 patch and its
-  tests.
-- **Arrival** (`#/arrival`): `src/arrival/` (GlobeView globe, sections), land dots from
-  `scripts/make-land-dots.mjs`, posters from `design/arrival/poster.mjs`.
-- **Design captures**: `design/gate-a/` (art-direction frames), `design/gate-b/` and
-  `design/arrival/` (`shots.mjs`, `record.mjs`, `poster.mjs` against `vite preview`).
-- **Local e2e** can point at any Chromium with `PW_CHROMIUM=...`.
+| Tier | When | What it gets |
+|---|---|---|
+| **High** | WebGL2 and a capable machine | 3D everywhere, terrain available, 3D buildings from zoom 12, DPR ≤ 2 |
+| **Medium** | phones, ≤ 4 cores or ≤ 4 GB, save-data, or software GL | 3D, no terrain, buildings from zoom 13, DPR ≤ 1.5 |
+| **Low** | no WebGL2, < 2 cores or < 2 GB | the designed 2D atlas, the globe poster, the isometric SVG houses |
 
-## Design system (v1)
-
-- **Type.** Inter Variable, self-hosted, with the `cv11` and `ss01` features.
-  Figures use tabular numerals (`.num`). The scale is 11/12/13/14/16/20/24/32/40 on
-  a 4/8 px spacing grid.
-- **Surfaces.** A calm warm-gray neutral ramp with hairline borders and three
-  elevation levels.
-- **One accent.** Indigo.
-- **Dark mode** is its own palette, not an inversion. Surfaces step up in lightness
-  with elevation, and chart and scale steps are re-chosen for the dark surface.
-- **Color jobs** follow the dataviz method. Each role is validated with the palette
-  validator against this app's surfaces (`#ffffff` light, `#17181b` dark):
-
-  | Job | Tokens | Rule |
-  |---|---|---|
-  | Categorical (identity) | `cat-1…4` (blue, orange, aqua, yellow) | Fixed order. Adjacent pairs pass in both modes: worst CVD ΔE 9.1 light / 8.4 dark, normal-vision ≥ 19. Slots 1–3 pass *all-pairs* (ΔE 9.2 / 9.4), so Compare caps at 3 metros. A metro keeps its slot for the session (`hooks/EntityColors.tsx`). Aqua is under 3:1 on white, so lines carry direct labels and a table. |
-  | Diverging (YoY) | `div-neg-3…div-pos-3` | Blue ↔ red with a gray midpoint, 7 steps. Dark mode flips the arms so near-zero recedes into the surface. |
-  | Sequential (magnitude) | `seq-1…6` | One hue (orange "heat"), low → high, used for temperature. Ink on each step is chosen for ≥ 4.5:1 (`inkOnSequential`). |
-  | Status | `good`, `warning`, `bad` | Reserved for state, always with an icon and a label (`ui/Status.tsx`). |
-
-- **Charts.**
-  - One y-axis only. A second measure gets a synced strip (the metro page's
-    mortgage-rate strip shares the x-axis and crosshair) or an indexed-to-100
-    comparison.
-  - 2 px lines, soft area gradients, and hairline solid grids.
-  - A custom crosshair tooltip, direct end labels (collision-resolved) for up to
-    4 series, and high/low/latest annotations.
-  - Transitions on range changes.
-- **Motion.** Subtle: a page fade, gauge arcs drawing in, and KPI count-ups. All of
-  it respects `prefers-reduced-motion` (framer-motion's `MotionConfig
-  reducedMotion="user"`, CSS duration tokens that drop to 0, and the count-up is
-  skipped).
+Reduced motion keeps the tier's visuals minus every decorative animation (high is
+capped at medium). Save-data connections keep the globe poster instead of loading
+the WebGL globe. Detection doesn't use detect-gpu, which downloads its benchmark
+tables from a CDN on every visit. There is no bloom pass in any tier.
 
 ## How to restyle
 
-1. **Tokens first.** `src/styles/tokens.css` defines every color (light and
-   `.dark`), font, radius, shadow and motion duration. `tailwind.config.js` maps
-   them to utilities (`bg-surface`, `text-text-3`, `border-border`, `bg-seq-4`…).
-   `src/lib/tokens.ts` hands them to Recharts as CSS expressions, and to MapLibre
-   and the PNG export as resolved values. Change a token, and components, charts,
-   the map and exports all follow in both themes.
-2. **Primitives.** `@layer components` in `src/styles/index.css` (`.card`, `.btn`,
-   `.input`, `.chip`, `.table-base`, `.skeleton`, `.eyebrow`, `.num`) and
-   `components/ui/`.
-3. **Views.** Components take preformatted props. Pages and view models own the
-   data, so a restyle never touches `lib/`, `data/` or `viewmodels/`.
-4. **Inline styles** are only data-driven geometry: bar widths, chart heights, a
-   color picked by value, and the hover-card position.
-5. If you change a categorical, diverging or sequential step, re-run the palette
-   validator in both modes. Keep `npm run e2e` green: axe runs on every route in
-   both themes, at 360 px too.
+1. **Tokens first.** `src/styles/atlas.css` defines the v2 palette for Night
+   (`.dark`, the default) and Dawn: surfaces, ink, the accent, the cool/hot data ramps,
+   the temperature light and the entity colors `--mp-e1..e3`. `tailwind.config.js`
+   maps them to `mp-*` utilities. Change a token, and panels, the map, the houses and
+   the charts follow in both themes.
+2. **Primitives.** `src/ui/` (GlassPanel, controls, Scrubber, Instrument, CommandBar)
+   and the `/styleguide` route, which shows every primitive in both themes.
+3. **Motion.** `src/motion/presets.ts` (durations, springs, variants). Every animation
+   honors `prefers-reduced-motion` and the command bar's media pause.
+4. **Views** take preformatted props; pages and view models own the data, so a
+   restyle never touches `lib/`, `data/` or `viewmodels/`.
+5. Keep `npm run e2e` (axe everywhere) and `npm run lighthouse` (accessibility 100)
+   green, and review `npm run visual` diffs.
 
 ## How to rebrand
 
 1. `src/config/brand.ts`: name, tagline, description, site URL, theme colors.
    `vite.config.ts` injects these into `index.html` (title, description, Open
-   Graph/Twitter tags, theme-color). The UI reads them from the same object.
-2. The logo: `components/brand/Logo.tsx`, `public/favicon.svg`, and the `MARK`
-   geometry in `scripts/make-brand-assets.mjs` (the same path in all three).
-3. The accent: `--color-accent*` in `src/styles/tokens.css`, for both themes.
+   Graph/Twitter tags, theme-color); the UI reads the same object.
+2. The mark: `AtlasMark` in `src/ui/CommandBar.tsx`, `public/favicon.svg`, and the
+   `MARK` geometry in `scripts/make-brand-assets.mjs`.
+3. The accent: `--mp-accent*` in `src/styles/atlas.css`, for both themes.
 4. `npm run brand-assets` re-renders `public/og.png` (1200×630) and
    `public/apple-touch-icon.png`.
-5. `npm run screenshots`, then check the README.
+5. Regenerate the media (below) and `npm run screenshots`, then check the READMEs.
 
-The print one-pager (Print report on a metro page) uses the brand name in its
-header and footer, so it's the starting point for a white-label PDF report.
+## How to regenerate media
+
+All media is rendered from the running app, never generated or stock. Start
+`npx vite preview --port 4173` in `dashboard/`, then:
+
+| Output | Command (from `dashboard/`) |
+|---|---|
+| Trailer (`docs/media/trailer.webm`, ~45 s, 1280×720) and README hero (`docs/media/hero.gif`, 800×450) | `node design/trailer/record.mjs` (or `… trailer` / `… gif`). Uses this machine's GPU; no ffmpeg: the trailer is Playwright's own WebM and the GIF is encoded with gifenc. |
+| Arrival globe posters (`public/media/arrival-globe-*.jpg`) | `node design/arrival/poster.mjs` |
+| Design stills (`docs/screenshots/v2/`) | `node design/<phase>/shots.mjs`, e.g. `design/compare/shots.mjs`, `design/p8-shots.mjs` |
+| README screenshots (`docs/screenshots/*.png`) | `npm run screenshots` |
+| Frame timing on this GPU | `node design/fps.mjs` |
+
+Committed site media stays small (`public/`: 1.6 MB); the trailer and GIF add 7.4 MB
+under `docs/`.
 
 ## Performance
 
-- **Initial JS: 110 KB gzipped**: 45 KB app + 65 KB React/Router/zod. The budget is
-  300 KB, checked in CI by `npm run check:bundle`.
-- **Lazy chunks:**
-  - Recharts: ~110 KB, loaded when a chart nears the viewport.
-  - MapLibre: ~280 KB, plus its worker, loaded when the map nears the viewport.
-  - framer-motion's animation features: 15 KB, loaded asynchronously.
-  - Every page except the Overview.
-- **Lighthouse on the Overview** (2026-09-29, local `vite preview`, Lighthouse 12):
+- **Initial JS: 72 KB gzipped** (budget 300 KB, `npm run check:bundle` in CI).
+- **Lazy chunks:** MapLibre ~272 KB, deck.gl ~224 KB (the atlas and the globe),
+  three.js ~215 KB (the houses), GSAP ScrollTrigger ~18 KB, and every page.
+- **Poster first.** `index.html` paints Arrival's globe poster before any JS loads and
+  preloads `latest.json`; the WebGL globe replaces it after first paint.
+- **Frame rate** (`design/fps.mjs`, AMD Radeon 860M integrated): 60 fps panning and
+  tilting the atlas; the time machine at 4× holds the display rate.
+- **Lighthouse** (Lighthouse 12, local `vite preview`, software WebGL):
 
-  | | Performance | Accessibility | Best practices | SEO |
+  | Route | Accessibility | Best practices | Performance (mobile / desktop) | LCP (mobile / desktop) |
   |---|---|---|---|---|
-  | Mobile (simulated Moto G, 4× CPU) | 95 | 100 | 100 | 100 |
-  | Desktop | 99 | 100 | 100 | 100 |
+  | Arrival | 100 | 100 | 43 / 74 | 5.8 s* / 0.4 s |
+  | Explore | 100 | 100 | 44 / 77 | 6.9 s / 1.4 s |
+
+  \*Lighthouse's simulated throttling replays the LCP element of an unthrottled load,
+  where React covers the pre-JS poster before it paints; with applied throttling
+  (`npm run lighthouse -- --applied`, slow 4G + 4× CPU) Arrival's mobile LCP is
+  **2.2 s**, the poster. Performance scores here are dominated by WebGL running on the
+  CPU (SwiftShader), which no phone with a GPU pays; they are reported in CI, not
+  enforced. Accessibility 100 is enforced.
 
 ## Known limitations
 
 - **Basemap in tests.** OpenFreeMap tiles are unreachable from CI and the build
-  sandbox, so the e2e tests and screenshots use an offline stand-in style (U.S.
-  land and state lines from `us-atlas`). The live site uses OpenFreeMap's
-  `positron` and `dark` styles. If WebGL or the basemap fails, the map is replaced
-  by a list, and the full table is always on the Metros page.
+  sandbox, so e2e tests and screenshots use an offline stand-in style (U.S. land and
+  state lines from `us-atlas`). The live site uses OpenFreeMap's `positron` and `dark`
+  styles. If WebGL or the basemap fails, the atlas switches to its designed 2D mode,
+  and the table view always lists every metro.
 - **Missing sources.** Permits and ACS income are null in the current data, so those
-  panels show friendly empty states and payment-to-income is unavailable.
+  panels show plain empty states and payment-to-income waits for income data.
+- **Visual baselines are local** (`e2e/__visual__/`, gitignored): WebGL and font
+  rendering differ by OS and GPU, so they are regenerated and reviewed at each gate
+  rather than committed.
+- **Save** (`src/config/features.ts`) is a hidden stub for the accounts work in the
+  next spec.

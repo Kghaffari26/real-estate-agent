@@ -37,7 +37,9 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useIsDark, usePrefersReducedMotion } from '../hooks/useMediaQuery';
 import { withAttribution } from '../lib/attribution';
 import { parseChannels } from '../lib/columns';
+import { removeBoot } from '../lib/boot';
 import { hasWebGL } from '../lib/webgl';
+import { useQuality } from '../hooks/useQuality';
 import { rateMarkers } from '../lib/moments';
 import { PulseTicker } from '../arrival/PulseTicker';
 import { tickerItems } from '../viewmodels/pulse';
@@ -102,7 +104,14 @@ function HeroBackdrop({ children, wrapRef, globeReady = false, diving = false }:
           style={{ width: globe.r * 2, height: globe.r * 2 }}
           fetchPriority="high"
           decoding="async"
-          onError={(e) => (e.currentTarget.style.display = 'none')}
+          ref={(el) => {
+            if (el?.complete) removeBoot();
+          }}
+          onLoad={removeBoot}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            removeBoot();
+          }}
         />
         {children}
       </div>
@@ -125,16 +134,18 @@ function Arrival({ index }: { index: IndexOutput }) {
   const [globeReady, setGlobeReady] = useState(false);
   const [diving, setDiving] = useState(false);
   const [mountGlobe, setMountGlobe] = useState(false);
+  const quality = useQuality();
   const globe = useGlobeLayout();
 
   // Mount the WebGL globe after first paint (the poster covers until its first frame).
   // Without WebGL (or on the low tier) the poster simply stays.
+  // Save-data connections keep the poster too (§9: nothing heavy autoplays on mobile data).
   useEffect(() => {
-    if (!hasWebGL() || new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tier') === 'low') return;
-    const idle =(window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (!hasWebGL() || !quality.webgl || quality.saveData) return;
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
     if (idle) idle(() => setMountGlobe(true), { timeout: 600 });
     else window.setTimeout(() => setMountGlobe(true), 200);
-  }, []);
+  }, [quality.webgl, quality.saveData]);
 
   // The globe recedes as the page scrolls past the hero (GSAP ScrollTrigger, §5.4).
   useEffect(() => {
@@ -214,7 +225,7 @@ function Arrival({ index }: { index: IndexOutput }) {
         <HeroBackdrop wrapRef={globeWrapRef} globeReady={globeReady} diving={diving}>
           {mountGlobe && (
             <Suspense fallback={null}>
-              <Globe ref={globeRef} columns={columns} dark={dark} reducedMotion={reduce} paused={mediaPaused} zoom={globe.zoom} onFirstFrame={() => setGlobeReady(true)} />
+              <Globe ref={globeRef} columns={columns} dark={dark} reducedMotion={reduce} paused={mediaPaused} zoom={globe.zoom} dpr={quality.dpr} onFirstFrame={() => setGlobeReady(true)} />
             </Suspense>
           )}
         </HeroBackdrop>

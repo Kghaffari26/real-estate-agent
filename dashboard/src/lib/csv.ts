@@ -24,3 +24,21 @@ export function downloadBlob(blob: Blob, filename: string): void {
 export function slugifyFilename(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'export';
 }
+
+export interface CsvTableRow {
+  slug: string;
+  name: string;
+  value: number | null;
+  change: number | null;
+  temperature: number | null;
+  temperatureLabel: string | null;
+  miles: number | null;
+}
+
+/** The atlas table as CSV, in its current order: raw published values (ratios as ratios), so a spreadsheet can recompute. */
+export function tableCsv(rows: readonly CsvTableRow[], metric: { key: string }, monthLabel: string): string {
+  return toCsv(
+    ['slug', 'metro', `${metric.key} (${monthLabel})`, `${metric.key}_yoy`, 'temperature', 'temperature_label', 'miles_from_pin'],
+    rows.map((r) => [r.slug, r.name, r.value, r.change, r.temperature, r.temperatureLabel, r.miles == null ? null : Math.round(r.miles * 10) / 10]),
+  );
+}

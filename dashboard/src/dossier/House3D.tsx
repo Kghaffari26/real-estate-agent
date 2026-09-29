@@ -24,6 +24,8 @@ export interface House3DProps {
   /** A wireframe comparison house at this scale (e.g. a year ago). */
   ghostScale?: number | null;
   onReady?: () => void;
+  /** Max device pixel ratio (quality tier). */
+  dpr?: number;
 }
 
 const rgb = ([r, g, b]: [number, number, number]) => new THREE.Color(r / 255, g / 255, b / 255);
@@ -122,7 +124,7 @@ export default function House3D(props: House3DProps) {
     <Canvas
       data-testid="house-canvas"
       aria-hidden="true"
-      dpr={[1, 2]}
+      dpr={[1, props.dpr ?? 2]}
       // Framed for the largest house (1.6×) with room for its glow.
       camera={{ position: [11.2, 7.2, 12.4], fov: 30 }}
       onCreated={({ camera }) => camera.lookAt(0, 0.4, 0)}

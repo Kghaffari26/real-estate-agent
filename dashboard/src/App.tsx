@@ -1,8 +1,9 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { EntityColorsProvider } from './hooks/EntityColors';
 import { ToastProvider } from './hooks/Toast';
+import { removeBoot } from './lib/boot';
 
 // Every screen is v2 ("Night Atlas") and brings its own AtlasChrome.
 const ArrivalPage = lazy(() => import('./pages/ArrivalPage').then((m) => ({ default: m.ArrivalPage })));
@@ -24,6 +25,10 @@ const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ de
 
 function Page({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
+  // index.html's pre-JS poster belongs to Arrival only (which removes it once its own poster paints).
+  useEffect(() => {
+    if (pathname !== '/') removeBoot();
+  }, [pathname]);
   return (
     <ErrorBoundary resetKey={pathname}>
       <Suspense fallback={null}>{children}</Suspense>

@@ -19,6 +19,7 @@ import { HouseSvg } from '../dossier/HouseSvg';
 import { useEntityColors } from '../hooks/EntityColors';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useIsDark, usePrefersReducedMotion } from '../hooks/useMediaQuery';
+import { useQuality } from '../hooks/useQuality';
 import { useQueryList, useSetQuery } from '../hooks/useQueryState';
 import { useToast } from '../hooks/Toast';
 import { copyText } from '../lib/clipboard';
@@ -174,7 +175,6 @@ function Arena({ index, metros }: { index: IndexOutput; metros: MetroDetailOutpu
   const [mediaPaused] = useMediaPaused();
   const slotOf = useSlotOf();
   const registry = useMemo(() => buildRegistry(index.metric_registry), [index]);
-  const lowTier = params.get('tier') === 'low';
 
   // ---------- the stage ----------
   const usMedian = index.national.latest.median_sale_price?.value ?? null;
@@ -224,7 +224,6 @@ function Arena({ index, metros }: { index: IndexOutput; metros: MetroDetailOutpu
           }))}
           dark={dark}
           animate={!reduce && !mediaPaused}
-          lowTier={lowTier}
         />
         <ul
           className="grid gap-3 sm:gap-4"
@@ -356,8 +355,9 @@ interface StageHouse {
 }
 
 /** 3D when WebGL allows (lazy); the isometric SVG trio paints first and stays as the fallback. */
-function Stage({ houses, dark, animate, lowTier }: { houses: StageHouse[]; dark: boolean; animate: boolean; lowTier: boolean }) {
-  const webgl = useMemo(() => !lowTier && hasWebGL(), [lowTier]);
+function Stage({ houses, dark, animate }: { houses: StageHouse[]; dark: boolean; animate: boolean }) {
+  const quality = useQuality();
+  const webgl = useMemo(() => quality.webgl && hasWebGL(), [quality.webgl]);
   const [ready, setReady] = useState(false);
   return (
     <div className="relative h-[300px] sm:h-[420px]" data-arena-mode={webgl ? '3d' : '2d'}>
@@ -374,7 +374,7 @@ function Stage({ houses, dark, animate, lowTier }: { houses: StageHouse[]; dark:
       {webgl && (
         <Suspense fallback={null}>
           <div className={`absolute inset-0 transition-opacity duration-500 ${ready ? 'opacity-100' : 'opacity-0'}`}>
-            <Arena3D houses={houses} dark={dark} animate={animate} onReady={() => setReady(true)} />
+            <Arena3D houses={houses} dark={dark} animate={animate} dpr={quality.dpr} onReady={() => setReady(true)} />
           </div>
         </Suspense>
       )}

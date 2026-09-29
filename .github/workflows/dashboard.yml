@@ -55,12 +55,23 @@ jobs:
       - run: npm run build
         env:
           DASHBOARD_BASE: /real-estate-agent/
-      - name: Performance budget (initial JS <= 300 KB gzipped)
+      - name: Performance budget (initial JS <= 300 KB gzipped; the spec allows 350)
         run: npm run check:bundle
-      - name: Playwright smoke + axe
+      - name: Playwright smoke + axe (+ the fps smoke, warning only)
         run: |
           npx playwright install --with-deps chromium
           npm run e2e
+      - name: Lighthouse on Arrival + Explore (accessibility 100 required; performance reported)
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          for i in $(seq 1 30); do curl -sf http://localhost:4173/real-estate-agent/ > /dev/null && break; sleep 1; done
+          npm run lighthouse
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-report
+          path: dashboard/lighthouse-report
+          if-no-files-found: ignore
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

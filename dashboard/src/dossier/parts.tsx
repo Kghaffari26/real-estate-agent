@@ -4,6 +4,7 @@
  * and the temperature drivers.
  */
 import { lazy, Suspense, useMemo, useState } from 'react';
+import { useQuality } from '../hooks/useQuality';
 import { hasWebGL } from '../lib/webgl';
 import type { Driver, Region } from '../lib/dossier';
 import { HouseSvg } from './HouseSvg';
@@ -73,22 +74,22 @@ interface StageProps {
   lean: number;
   dark: boolean;
   animate: boolean;
-  lowTier: boolean;
   ghostScale?: number | null;
   className?: string;
 }
 
 /** The 3D house when WebGL allows (lazy), with the SVG house painted first and kept as the fallback. */
-export function HouseStage({ lowTier, className = '', ...p }: StageProps) {
+export function HouseStage({ className = '', ...p }: StageProps) {
   const [ready, setReady] = useState(false);
-  const webgl = useMemo(() => !lowTier && hasWebGL(), [lowTier]);
+  const quality = useQuality();
+  const webgl = useMemo(() => quality.webgl && hasWebGL(), [quality.webgl]);
   return (
     <div className={`${/\b(absolute|fixed)\b/.test(className) ? '' : 'relative'} ${className}`} data-house-mode={webgl ? '3d' : '2d'}>
       <HouseSvg scale={p.scale} rim={p.rim} lean={p.lean} dark={p.dark} ghostScale={p.ghostScale} className={`absolute inset-0 h-full w-full transition-opacity duration-500 ${ready ? 'opacity-0' : 'opacity-100'}`} />
       {webgl && (
         <Suspense fallback={null}>
           <div className={`absolute inset-0 transition-opacity duration-500 ${ready ? 'opacity-100' : 'opacity-0'}`}>
-            <House3D {...p} onReady={() => setReady(true)} />
+            <House3D {...p} dpr={quality.dpr} onReady={() => setReady(true)} />
           </div>
         </Suspense>
       )}

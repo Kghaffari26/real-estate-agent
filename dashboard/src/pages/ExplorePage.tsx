@@ -16,6 +16,7 @@ import type { IndexOutput } from '../data/schema.gen';
 import { useResource } from '../data/useResource';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useIsDark, useIsMobile, usePrefersReducedMotion } from '../hooks/useMediaQuery';
+import { useQuality } from '../hooks/useQuality';
 import { useSetQuery } from '../hooks/useQueryState';
 import { useToast } from '../hooks/Toast';
 import { areaSearch, countySearch, formatPin, metrosNearRing, milesBetween, parsePin, parseRadius, ringPolygon } from '../lib/area';
@@ -116,7 +117,8 @@ function Explore({ index }: { index: IndexOutput }) {
   const radius = parseRadius(params.get('r'));
   const selected = (params.get('sel') ?? '').split(',').filter((s) => bySlug.has(s)).slice(0, 12);
   const table = params.get('view') === 'table';
-  const tier = params.get('tier') === 'low' ? 'low' : 'high';
+  const quality = useQuality();
+  const tier = quality.webgl ? 'high' : 'low';
   // The default view fits the U.S. into the space between the panels at any desktop width.
   // The time axis: with a published timeline (§6.4), from its start + 12 months (so every
   // month has a year-ago value) to the latest; otherwise the metro files' 36 months.
@@ -335,7 +337,8 @@ function Explore({ index }: { index: IndexOutput }) {
       onBuildings={(v) => setQuery({ b: v ? null : '0' })}
       terrain={terrain}
       onTerrain={(v) => setQuery({ terrain: v ? '1' : null })}
-      canTerrain={!mobile && tier === 'high'}
+      canTerrain={!mobile && quality.terrain}
+      canBuildings={tier === 'high'}
       legend={legend}
       onTable={() => setQuery({ view: table ? null : 'table' })}
       onShortcuts={() => setShortcuts(true)}
@@ -402,7 +405,9 @@ function Explore({ index }: { index: IndexOutput }) {
         pin={pin}
         selected={selected}
         buildings={buildings}
-        terrain={terrain}
+        terrain={terrain && quality.terrain}
+        pixelRatio={quality.dpr}
+        buildingsMinZoom={quality.buildingsMinZoom}
         dark={dark}
         reducedMotion={reducedMotion}
         camera={initialCamera}

@@ -23,13 +23,26 @@ function brandHtml(): Plugin {
   };
 }
 
+/** Preloads the index (every route's first request) alongside the app code (spec §9: LCP). */
+function preloadIndex(base: string, version: string): Plugin {
+  return {
+    name: 'preload-index',
+    transformIndexHtml: () => [
+      { tag: 'link', attrs: { rel: 'preload', href: `${base}data/latest.json?v=${encodeURIComponent(version)}`, as: 'fetch', crossorigin: 'anonymous' }, injectTo: 'head' },
+    ],
+  };
+}
+
 // GitHub Pages serves the site at /real-estate-agent/; override with DASHBOARD_BASE.
+const BASE = process.env.DASHBOARD_BASE ?? '/real-estate-agent/';
+// Cache-busts every data URL per dataset (see scripts/data-version.mjs); prebuild's
+// fetch-data has already filled public/data when this runs.
+const DATA_VERSION = dataVersion(fileURLToPath(new URL('./public/data', import.meta.url)));
+
 export default defineConfig({
-  base: process.env.DASHBOARD_BASE ?? '/real-estate-agent/',
-  // Cache-busts every data URL per dataset (see scripts/data-version.mjs); prebuild's
-  // fetch-data has already filled public/data when this runs.
-  define: { __DATA_VERSION__: JSON.stringify(dataVersion(fileURLToPath(new URL('./public/data', import.meta.url)))) },
-  plugins: [react(), brandHtml()],
+  base: BASE,
+  define: { __DATA_VERSION__: JSON.stringify(DATA_VERSION) },
+  plugins: [react(), brandHtml(), preloadIndex(BASE, DATA_VERSION)],
   worker: { format: 'es' },
   build: {
     chunkSizeWarningLimit: 1100,
@@ -37,9 +50,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules/maplibre-gl')) return 'map';
-          // d3-geo serves the atlas (rings, the 2D fallback), not the charts: keep Recharts out of /explore.
+          // d3-geo serves the atlas (rings, the 2D fallback) and the globe.
           if (/node_modules[\\/]d3-(geo|array)[\\/]/.test(id)) return 'geo';
-          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-') || id.includes('node_modules/victory-vendor')) return 'charts';
           if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler|zod)\//.test(id)) return 'vendor';
           return undefined;
         },

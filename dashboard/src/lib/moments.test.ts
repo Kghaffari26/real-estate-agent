@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EventsOutputSchema } from '../data/schema.gen';
-import { momentLabel, railMoments, rateMarkers, type NationalEvent } from './moments';
+import { momentLabel, railMoments, rateMarkers, thinMoments, type NationalEvent } from './moments';
 
 const sample = EventsOutputSchema.parse(JSON.parse(readFileSync(resolve(__dirname, '../../sample-data/events.json'), 'utf8')));
 const ev = (date: string, kind: NationalEvent['kind'], value: number, metric: NationalEvent['metric'] = 'mortgage30'): NationalEvent => ({ date, kind, value, metric, prominence: null });
@@ -44,5 +44,24 @@ describe('moments (the published event rail)', () => {
     const got = railMoments(sample.events, dates);
     expect(got).toHaveLength(sample.events.length);
     expect(got.filter((m) => m.showLabel).map((m) => m.label)).toEqual(['30-yr low 2.65% · Jan 2021', '30-yr high 7.79% · Oct 2023']);
+  });
+});
+
+describe('thinning the rail', () => {
+  it('keeps 24 px between markers: featured first, then prominent rate turns', () => {
+    const m = (index: number, metric: NationalEvent['metric'], prominence: number | null, showLabel = false) => ({ index, showLabel, event: { ...ev('2020-01-01', 'rate_high', 1, metric), prominence } });
+    const moments = [m(0, 'mortgage30', 0.6), m(1, 'mortgage30', 1.2), m(2, 'median_sale_price', null), m(50, 'mortgage30', 0.5, true), m(51, 'mortgage30', 3), m(100, 'inventory', null)];
+    // 100 steps over 200 px: 2 px per step, so markers must be 12 steps apart.
+    expect(thinMoments(moments, 100, 200).map((x) => x.index)).toEqual([1, 50, 100]);
+    expect(thinMoments(moments, 100, 0)).toHaveLength(6); // unmeasured: keep all
+  });
+
+  it('on the sample 2012+ axis at 700 px, no two markers are closer than 24 px', () => {
+    const dates: string[] = [];
+    for (let y = 2012; y <= 2026; y++) for (let mo = 1; mo <= 12; mo++) if (y < 2026 || mo <= 8) dates.push(`${y}-${String(mo).padStart(2, '0')}-28`);
+    const kept = thinMoments(railMoments(sample.events, dates), dates.length - 1, 700);
+    const xs = kept.map((k) => (k.index / (dates.length - 1)) * 700);
+    xs.slice(1).forEach((x, i) => expect(x - xs[i]!).toBeGreaterThanOrEqual(24));
+    expect(kept.filter((k) => k.showLabel)).toHaveLength(2);
   });
 });

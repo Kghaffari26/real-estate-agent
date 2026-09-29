@@ -47,7 +47,7 @@ export function indexTo100(values: readonly (number | null)[]): (number | null)[
 
 export type Row = { date: string } & Record<string, number | null | string>;
 
-/** Zip `dates` and named columns into Recharts rows. */
+/** Zip `dates` and named columns into rows (one object per date). */
 export function toRows(dates: readonly string[], columns: Record<string, readonly (number | null)[]>): Row[] {
   return dates.map((date, i) => {
     const row: Row = { date };

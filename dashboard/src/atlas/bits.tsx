@@ -1,8 +1,9 @@
-import { X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { MetricRegistryEntry } from '../data/schema.gen';
 import { formatValue } from '../lib/format';
+import { downloadBlob, slugifyFilename, tableCsv } from '../lib/csv';
 import { MiniSpark } from '../ui/dataviz';
 import { GlassPanel } from '../ui/Glass';
 import type { AtlasMetro } from '../viewmodels/atlas';
@@ -93,6 +94,14 @@ export function AtlasTable({ rows, metric, monthLabel, caption, selected, onSele
         </h2>
         <span className="text-sm text-mp-ink-3">{caption}</span>
         <span className="flex-1" />
+        <button
+          type="button"
+          onClick={() => downloadBlob(new Blob([tableCsv(sorted, metric, monthLabel)], { type: 'text/csv;charset=utf-8' }), `metro-pulse-${slugifyFilename(`${metric.label} ${monthLabel}`)}.csv`)}
+          className="inline-flex items-center gap-1.5 rounded-control px-2 py-1.5 text-xs text-mp-ink-2 hover:bg-mp-ink/[.06] hover:text-mp-ink"
+          data-testid="table-csv"
+        >
+          <Download size={14} strokeWidth={1.5} aria-hidden="true" /> CSV
+        </button>
         <button type="button" onClick={onClose} className="rounded-control p-1.5 text-mp-ink-3 hover:text-mp-ink" aria-label="Back to the map (T)">
           <X size={16} strokeWidth={1.5} aria-hidden="true" />
         </button>
@@ -212,7 +221,10 @@ export function BottomSheet({ tabs, active, onTab, open, onToggle }: { tabs: Rea
   return (
     // Solid on phones: the sheet sits over busy map pixels with no room to blur them away.
     <GlassPanel as="section" solid aria-label="Atlas controls" className="absolute inset-x-2 bottom-2 z-20 flex max-h-[62vh] flex-col rounded-[22px] pb-[env(safe-area-inset-bottom)]">
-      <button type="button" onClick={onToggle} aria-expanded={open} className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-mp-ink/25" aria-label={open ? 'Collapse the panel' : 'Expand the panel'} />
+      {/* A 64×24 hit area around the visible 48×6 grip (WCAG 2.5.8 target size). */}
+      <button type="button" onClick={onToggle} aria-expanded={open} className="mx-auto mt-1 flex h-6 w-16 items-center justify-center" aria-label={open ? 'Collapse the panel' : 'Expand the panel'}>
+        <span className="h-1.5 w-12 rounded-full bg-mp-ink/25" aria-hidden="true" />
+      </button>
       <div role="tablist" aria-label="Panels" className="flex gap-1 px-3 pt-2">
         {tabs.map((t) => (
           <button

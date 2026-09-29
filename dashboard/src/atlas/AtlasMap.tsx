@@ -51,6 +51,9 @@ export interface AtlasMapProps {
   selected: readonly string[];
   buildings: boolean;
   terrain: boolean;
+  /** Quality tier (§9): the canvas's max device pixel ratio and the zoom 3D buildings start at. */
+  pixelRatio: number;
+  buildingsMinZoom: number;
   dark: boolean;
   reducedMotion: boolean;
   camera: Camera;
@@ -131,7 +134,7 @@ function fetchStyle(dark: boolean): Promise<StyleSpecification> {
   return cache[key];
 }
 
-function addExtras(map: MLMap, dark: boolean, buildings: boolean, terrain: boolean) {
+function addExtras(map: MLMap, dark: boolean, buildings: boolean, terrain: boolean, buildingsMinZoom = 12) {
   const t = tokens();
   if (map.getSource('openmaptiles') && !map.getLayer('mp-buildings')) {
     const firstSymbol = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
@@ -141,11 +144,11 @@ function addExtras(map: MLMap, dark: boolean, buildings: boolean, terrain: boole
         type: 'fill-extrusion',
         source: 'openmaptiles',
         'source-layer': 'building',
-        minzoom: 12,
+        minzoom: buildingsMinZoom,
         layout: { visibility: buildings ? 'visible' : 'none' },
         paint: {
           'fill-extrusion-color': css(dark ? mixRgb(t.bg2, t.accent, 0.08) : mixRgb(t.bg, t.ink, 0.1)),
-          'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 12, 0, 13.5, ['coalesce', ['get', 'render_height'], 0]],
+          'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], buildingsMinZoom, 0, buildingsMinZoom + 1.5, ['coalesce', ['get', 'render_height'], 0]],
           'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
           'fill-extrusion-opacity': 0.85,
         },
@@ -342,6 +345,7 @@ const Atlas = forwardRef<AtlasMapHandle, AtlasMapProps>(function AtlasMap(props,
           maxPitch: 70,
           attributionControl: false,
           boxZoom: false,
+          pixelRatio: Math.min(window.devicePixelRatio || 1, props.pixelRatio),
           canvasContextAttributes: { antialias: true, preserveDrawingBuffer: false },
         });
         mapRef.current = map;
@@ -357,7 +361,7 @@ const Atlas = forwardRef<AtlasMapHandle, AtlasMapProps>(function AtlasMap(props,
         overlayRef.current = overlay;
         (el as HTMLDivElement & { __overlay?: MapboxOverlay }).__overlay = overlay;
         map.addControl(overlay as never);
-        map.on('style.load', () => addExtras(map, themeRef.current, propsRef.current.buildings, propsRef.current.terrain));
+        map.on('style.load', () => addExtras(map, themeRef.current, propsRef.current.buildings, propsRef.current.terrain, propsRef.current.buildingsMinZoom));
         map.setPadding(propsRef.current.padding);
         map.on('load', () => {
           window.clearTimeout(timeout);

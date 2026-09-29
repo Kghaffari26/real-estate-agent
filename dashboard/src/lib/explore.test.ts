@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTimeStore } from '../state/timeStore';
+import { tableCsv } from './csv';
 import { areaSearch, milesBetween, parsePin, parseRadius, ringPolygon, type AreaMetro } from './area';
 import { changeHeight, divergingBound, divergingColor, extentOf, MIN_STUB, parseChannels, robustBound, valueHeight } from './columns';
 import { changeAt, monthEnds, monthIndex, timelineFromSeries, YOY_LEAD } from './timeline';
@@ -173,5 +174,24 @@ describe('time store', () => {
     expect(s.getState().playing).toBe(false);
     s.getState().setCount(24, 5);
     expect(s.getState().index).toBe(5);
+  });
+});
+
+describe('table CSV', () => {
+  it('writes the rows in order with raw values, quoting names with commas', () => {
+    const csv = tableCsv(
+      [
+        { slug: 'austin-tx', name: 'Austin, TX', value: 447540, change: -0.063, temperature: 12, temperatureLabel: 'Cold', miles: 12.34 },
+        { slug: 'x', name: 'X', value: null, change: null, temperature: null, temperatureLabel: null, miles: null },
+      ],
+      { key: 'median_sale_price' },
+      'Aug 2026',
+    );
+    expect(csv.split('\r\n')).toEqual([
+      'slug,metro,median_sale_price (Aug 2026),median_sale_price_yoy,temperature,temperature_label,miles_from_pin',
+      'austin-tx,"Austin, TX",447540,-0.063,12,Cold,12.3',
+      'x,X,,,,,',
+      '',
+    ]);
   });
 });

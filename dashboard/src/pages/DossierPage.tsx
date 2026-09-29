@@ -83,7 +83,6 @@ function Dossier({ index, m }: { index: IndexOutput; m: MetroDetailOutput }) {
   const range = (RANGES as string[]).includes(params.get('range') ?? '') ? (params.get('range') as ChartRange) : '3Y';
   const mode: ChartMode = params.get('mode') === 'yoy' ? 'yoy' : 'level';
   const indexed = params.get('vs') === '1';
-  const lowTier = params.get('tier') === 'low';
 
   // "All" reaches back to 2012 when the metric has a published timeline (§6.4).
   const ref = index.timelines.find((t) => t.metric === metricKey);
@@ -208,7 +207,7 @@ function Dossier({ index, m }: { index: IndexOutput; m: MetroDetailOutput }) {
             </div>
           </div>
           <div className="relative min-h-[320px] lg:min-h-[480px]">
-            <HouseStage className="absolute inset-0" scale={scale} rim={light.rim} lean={light.lean} dark={dark} animate={!reduce && !mediaPaused} lowTier={lowTier} />
+            <HouseStage className="absolute inset-0" scale={scale} rim={light.rim} lean={light.lean} dark={dark} animate={!reduce && !mediaPaused} />
             <p className="sr-only" data-testid="house-summary">
               A stylized house sized {scale.toFixed(2)} times the U.S. median price ({formatValue(price, 'currency')} vs {formatValue(usMedian, 'currency')}), lit {light.side < 0 ? 'cool blue' : light.side > 0 ? 'warm amber' : 'neutral'} for a temperature of {temp ?? 'unknown'}.
             </p>

@@ -1,6 +1,7 @@
 /**
- * The product's identity, in one place. Rebrand = edit this file, the logo in
- * src/components/brand/Logo.tsx, and the accent tokens in src/styles/tokens.css.
+ * The product's identity, in one place. Rebrand = edit this file, the mark
+ * (`AtlasMark` in src/ui/CommandBar.tsx), and the accent tokens (`--mp-accent*` in
+ * src/styles/atlas.css), then `npm run brand-assets` for the favicon and OG image.
  * vite.config.ts injects these values into index.html (title, description, OG tags).
  */
 export const BRAND = {

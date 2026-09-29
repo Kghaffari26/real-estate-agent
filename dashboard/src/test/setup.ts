@@ -4,7 +4,7 @@ import { afterEach } from 'vitest';
 
 afterEach(() => cleanup());
 
-// jsdom lacks these; Recharts' ResponsiveContainer and the theme hook use them.
+// jsdom lacks these; ResizeObserver-driven charts and the theme hook use them.
 class ResizeObserverStub {
   observe() {}
   unobserve() {}

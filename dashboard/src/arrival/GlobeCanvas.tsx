@@ -24,6 +24,8 @@ interface GlobeProps {
   paused: boolean;
   /** Resting zoom (the page sizes the globe to the viewport). */
   zoom: number;
+  /** Max device pixel ratio (quality tier). */
+  dpr?: number;
   onFirstFrame: () => void;
   onHover?: (info: { slug: string; x: number; y: number } | null) => void;
 }
@@ -49,7 +51,7 @@ const mix = (a: RGB, b: RGB, t: number): RGB => [0, 1, 2].map((k) => Math.round(
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
-export const GlobeCanvas = forwardRef<GlobeHandle, GlobeProps>(function GlobeCanvas({ columns, dark, reducedMotion, paused, zoom, onFirstFrame, onHover }, ref) {
+export const GlobeCanvas = forwardRef<GlobeHandle, GlobeProps>(function GlobeCanvas({ columns, dark, reducedMotion, paused, zoom, dpr = 2, onFirstFrame, onHover }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const deckRef = useRef<Deck<GlobeView> | null>(null);
   const view = useRef({ ...HOME, zoom });
@@ -93,7 +95,7 @@ export const GlobeCanvas = forwardRef<GlobeHandle, GlobeProps>(function GlobeCan
       initialViewState: { ...view.current },
       controller: { scrollZoom: false, doubleClickZoom: false, keyboard: false, dragPan: true, dragRotate: false, inertia: true },
       layers: layers(),
-      useDevicePixels: Math.min(window.devicePixelRatio || 1, 2),
+      useDevicePixels: Math.min(window.devicePixelRatio || 1, dpr),
       onViewStateChange: ({ viewState }) => {
         view.current = { longitude: viewState.longitude, latitude: viewState.latitude, zoom: viewState.zoom };
         return viewState;

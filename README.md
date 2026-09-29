@@ -98,42 +98,55 @@ uv run pytest tests/test_investigate.py -k replay   # the 6 recorded trajectorie
 
 ## Dashboard
 
-**Metro Pulse** (`dashboard/`) is the market-intelligence front end for this agent's
-output: a national overview, all 50 metros on a MapLibre map and in a sortable
-table, a page per metro, a comparison view and a methodology page. It's live at
-<https://kghaffari26.github.io/real-estate-agent/> and redeploys by
-`.github/workflows/dashboard.yml` after every push to it and after every
-successful agent run.
+**Metro Pulse** (`dashboard/`) is a living 3D atlas of this agent's output. You arrive
+at a globe and dive into a tilted 3D map of the 50 metros. From there you can:
+
+- scrub monthly history back to 2012, with the agent's national events on the rail
+- search any radius down to counties
+- open a metro's dossier: a 3D house lit by its market's temperature, with the last
+  12 weeks and county by county
+- price a home in the affordability studio
+- compare three metros in an arena
+
+It's live at <https://kghaffari26.github.io/real-estate-agent/> and redeploys through
+`.github/workflows/dashboard.yml` after every push to it and after every successful
+agent run.
+
+<img src="docs/media/hero.gif" alt="Metro Pulse: the globe, then the dive into the 3D atlas" width="800">
+
+Trailer (~45 s): [`docs/media/trailer.webm`](docs/media/trailer.webm).
 
 - **Numbers from the agent.** Types are generated from
-  `schemas/real_estate.schema.json`, and parsing is tolerant: older files and bad
-  items never crash a view. The only client-side math is formatting,
-  indexed-to-100 comparisons and the mortgage calculator, which reproduces all 50
-  published payments.
-- **Design.** Inter with tabular figures, token-driven light and dark palettes, and
-  validated colorblind-safe chart colors. No dual axes. There's a ⌘K command
-  palette, deep links on everything, PNG and CSV export, and a print-ready metro
-  one-pager.
-- **Quality.** Axe-clean on every route in both themes; no horizontal scroll at
-  360 px; 110 KB of initial JS (budget 300 KB, checked in CI). Lighthouse on the
-  Overview: performance 95 mobile and 99 desktop, accessibility 100.
+  `schemas/real_estate.schema.json`, and every optional file is tolerated when
+  missing. The browser only formats and positions the published numbers. The
+  exceptions are indexed-to-100 comparisons and the studio's mortgage formula,
+  which reproduces all 50 published payments to the cent. Events, weekly YoY and
+  county YoY are computed in Python.
+- **Quality tiers.** High, medium and a designed 2D low tier (no WebGL2). Reduced
+  motion is honored everywhere, and there's a media pause.
+- **Checks.** Axe (WCAG 2.1 AA) runs on every route in both themes, at 360 px and on
+  the low tier. Lighthouse accessibility is 100 on Arrival and Explore. Initial JS
+  is 72 KB (budget 300 KB); MapLibre, deck.gl and three.js load lazily. CI runs a
+  frame-timing smoke, and visual regression runs locally.
 
 ```bash
 cd dashboard && npm ci && npm run fetch-data && npm run dev
 ```
 
-Details, including how to restyle and rebrand: [`dashboard/README.md`](dashboard/README.md).
+Details, including the architecture, how to restyle and rebrand, and how to
+regenerate the media: [`dashboard/README.md`](dashboard/README.md).
 
 | | Light | Dark | Mobile |
 |---|---|---|---|
-| **Overview** | <img src="docs/screenshots/overview.png" alt="Overview, light" width="260"> | <img src="docs/screenshots/overview-dark.png" alt="Overview, dark" width="260"> | <img src="docs/screenshots/overview-mobile.png" alt="Overview, mobile" width="90"> |
-| **Metros** | <img src="docs/screenshots/metros.png" alt="Metros, light" width="260"> | <img src="docs/screenshots/metros-dark.png" alt="Metros, dark" width="260"> | <img src="docs/screenshots/metros-mobile.png" alt="Metros, mobile" width="90"> |
-| **Metro** | <img src="docs/screenshots/metro-detail.png" alt="Metro detail, light" width="260"> | <img src="docs/screenshots/metro-detail-dark.png" alt="Metro detail, dark" width="260"> | <img src="docs/screenshots/metro-detail-mobile.png" alt="Metro detail, mobile" width="90"> |
+| **Arrival** | <img src="docs/screenshots/overview.png" alt="Arrival, light" width="260"> | <img src="docs/screenshots/overview-dark.png" alt="Arrival, dark" width="260"> | <img src="docs/screenshots/overview-mobile.png" alt="Arrival, mobile" width="90"> |
+| **Atlas** | <img src="docs/screenshots/metros.png" alt="Atlas, light" width="260"> | <img src="docs/screenshots/metros-dark.png" alt="Atlas, dark" width="260"> | <img src="docs/screenshots/metros-mobile.png" alt="Atlas, mobile" width="90"> |
+| **Dossier** | <img src="docs/screenshots/metro-detail.png" alt="Dossier, light" width="260"> | <img src="docs/screenshots/metro-detail-dark.png" alt="Dossier, dark" width="260"> | <img src="docs/screenshots/metro-detail-mobile.png" alt="Dossier, mobile" width="90"> |
 | **Compare** | <img src="docs/screenshots/compare.png" alt="Compare, light" width="260"> | <img src="docs/screenshots/compare-dark.png" alt="Compare, dark" width="260"> | <img src="docs/screenshots/compare-mobile.png" alt="Compare, mobile" width="90"> |
 | **Methodology** | <img src="docs/screenshots/about.png" alt="Methodology, light" width="260"> | <img src="docs/screenshots/about-dark.png" alt="Methodology, dark" width="260"> | <img src="docs/screenshots/about-mobile.png" alt="Methodology, mobile" width="90"> |
 
-The screenshots use an offline stand-in basemap (U.S. outline) because map tiles
-aren't reachable where they're taken; the live site uses OpenFreeMap.
+The screenshots use an offline stand-in basemap (the U.S. outline), because map tiles
+aren't reachable where they're taken; the live site uses OpenFreeMap. The hero and
+the trailer are recorded from the running app with real OpenFreeMap tiles.
 
 ## How it works
 

@@ -45,9 +45,13 @@ test('time machine: the rail shows the agent’s events and jumps to them', asyn
   await waitForAtlas(page);
   const high = page.getByRole('button', { name: 'Jump to 30-yr high 7.79% · Oct 2023' });
   await expect(high).toBeAttached();
-  await expect(page.getByRole('button', { name: /Jump to U\.S\. prices turn down \(−1\.9% YoY\) · Mar 2023/ })).toBeAttached();
   await high.click();
   await expect(page.getByRole('slider', { name: 'Month' })).toHaveAttribute('aria-valuetext', 'October 2023');
+  // Markers are thinned to 24 px targets; the Moments menu lists every published event.
+  const menu = page.getByRole('combobox', { name: 'Jump to a moment' });
+  await expect(menu.locator('option')).toHaveCount(read('events.json').events.length + 1);
+  await menu.selectOption({ label: 'U.S. prices turn down (−1.9% YoY) · Mar 2023' });
+  await expect(page.getByRole('slider', { name: 'Month' })).toHaveAttribute('aria-valuetext', 'March 2023');
 });
 
 test('the weekly pulse ticker: every metro, fastest first, pausable; still under reduced motion', async ({ page }) => {

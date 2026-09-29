@@ -32,6 +32,28 @@
     </script>
   </head>
   <body>
+    <div id="boot" aria-hidden="true"></div>
+    <script>
+      // Arrival's globe poster, painted before any JS loads (spec §9: poster first).
+      // Same geometry as ArrivalPage's useGlobeLayout; React removes this once its own
+      // poster is in place (src/lib/boot.ts). Other routes never draw it.
+      (function () {
+        var h = location.hash;
+        if (h && h !== '#/' && h.indexOf('#/?') !== 0) return;
+        var w = innerWidth, ht = Math.max(innerHeight, 640), phone = w < 768;
+        var r = Math.min(phone ? w * 0.46 : ht * 0.4, 520) + 1; // 1 px over React's poster, so the first paint stays the LCP
+        var cx = phone ? w * 0.5 : w * 0.72, cy = phone ? ht * 0.61 : ht * 0.53;
+        var dark = document.documentElement.classList.contains('dark');
+        var boot = document.getElementById('boot');
+        boot.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:' + ht + 'px;overflow:hidden;pointer-events:none;background:rgb(' + (dark ? '5 7 13' : '242 244 248') + ')';
+        var img = document.createElement('img');
+        img.alt = '';
+        img.setAttribute('fetchpriority', 'high');
+        img.src = './media/arrival-globe-' + (dark ? 'night' : 'dawn') + '.jpg';
+        img.style.cssText = 'position:absolute;border-radius:50%;left:' + (cx - r) + 'px;top:' + (cy - r) + 'px;width:' + 2 * r + 'px;height:' + 2 * r + 'px';
+        boot.appendChild(img);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

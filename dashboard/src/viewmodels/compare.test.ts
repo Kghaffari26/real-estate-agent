@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { IndexOutputSchema, MetroDetailOutputSchema } from '../data/schema.gen';
 import { formatValue } from '../lib/format';
 import { buildRegistry } from '../lib/metrics';
-import { arenaSeries, comparableMetrics, compareRows, compareTable, leaderIndex } from './compare';
+import { arenaSeries, comparableMetrics, compareTable, leaderIndex } from './compare';
 
 const read = (p: string) => JSON.parse(readFileSync(resolve(__dirname, '../../sample-data', p), 'utf8'));
 const registry = buildRegistry(IndexOutputSchema.parse(read('latest.json')).metric_registry);
@@ -16,16 +16,6 @@ describe('compare view model', () => {
     const metrics = comparableMetrics([a, b], registry);
     expect(metrics[0]).toBe('median_sale_price');
     expect(metrics).not.toContain('permits_total');
-  });
-
-  it('overlays metros on shared dates and indexes to 100 at the first non-null month', () => {
-    const rows = compareRows([a, b], 'median_sale_price', 'All', true);
-    expect(rows.length).toBe(a.series.dates!.length);
-    const first = rows.findIndex((r) => r['pittsburgh-pa'] !== null);
-    expect(rows[first]!['pittsburgh-pa']).toBe(100);
-    const raw = compareRows([a, b], 'median_sale_price', '1Y', false);
-    expect(raw.length).toBe(13);
-    expect(raw[raw.length - 1]!['pittsburgh-pa']).toBe(a.latest.median_sale_price!.value);
   });
 
   it('builds a side-by-side table with a leader per row', () => {

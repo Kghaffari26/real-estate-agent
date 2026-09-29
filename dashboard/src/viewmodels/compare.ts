@@ -1,10 +1,10 @@
-/** View model for Compare: overlay rows and the side-by-side table (pure). */
+/** View model for Compare: the arena's series and the side-by-side table (pure). */
 import type { MetricRegistryEntry, MetroDetailOutput } from '../data/schema.gen';
 import type { Timeline } from '../lib/timeline';
 import { dossierChart, type ChartRange } from './dossier';
 import { formatValue } from '../lib/format';
 import { deltaFormat, metricLabel, valueScale, type Registry } from '../lib/metrics';
-import { indexTo100, mergeOnDates, numericSeries, rangeStart, seriesDates, type Range, type Row } from '../lib/series';
+import { indexTo100, numericSeries } from '../lib/series';
 
 export const MAX_COMPARE = 3;
 
@@ -13,19 +13,6 @@ export function comparableMetrics(metros: readonly MetroDetailOutput[], registry
   return [...registry.keys()].filter(
     (key) => metros.length > 0 && metros.some((m) => numericSeries(m.series, key)?.some((v) => v !== null)),
   );
-}
-
-/** One column per metro (keyed by slug) for `metric`, optionally rebased to 100. */
-export function compareRows(metros: readonly MetroDetailOutput[], metric: string, range: Range, indexed: boolean): Row[] {
-  const columns = Object.fromEntries(
-    metros.map((m) => {
-      const dates = seriesDates(m.series);
-      const start = rangeStart(dates, range);
-      const values = (numericSeries(m.series, metric) ?? []).slice(start);
-      return [m.slug, { dates: dates.slice(start), values: indexed ? indexTo100(values) : values }];
-    }),
-  );
-  return mergeOnDates(columns);
 }
 
 export interface CompareTableRow {

@@ -30,7 +30,7 @@ real-estate-agent/
 ├── evals/                  # history.jsonl + results/ (agents_core.evals, committed);
 │                           # real_estate/: suites.py (3 suites), checks.py, fixtures.py,
 │                           # investigator_{world.json,cases.jsonl}, trajectories/ (recorded loops)
-├── dashboard/              # "Metro Pulse" web app (Vite + React + TS, Recharts, MapLibre), see
+├── dashboard/              # "Metro Pulse" v2 web app (Vite + React + TS, MapLibre + deck.gl, three.js), see
 │                           # dashboard/README.md; sample-data/ = a committed real run; types
 │                           # generated from schemas/; brand in src/config/brand.ts
 ├── docs/                   # specs/, case-studies.md, screenshots/ (dashboard, from Playwright)
@@ -146,12 +146,14 @@ no permissions**; each calling job must grant exactly what it needs:
     `cd dashboard && npm run gen:schema` (a dashboard test and CI fail if stale).
   - `dashboard/` never computes a number the agent should own; it formats published
     values and runs the calculator (same formula, shared vectors).
-  - Styling lives only in `dashboard/src/styles/tokens.css` + the Tailwind theme;
+  - Styling lives only in `dashboard/src/styles/atlas.css` (v2 tokens), `tokens.css` + the Tailwind theme;
     data/logic in `data/`, `lib/`, `viewmodels/`; components are presentational.
   - Chart colors have jobs (categorical/diverging/sequential/status); re-validate
     with the dataviz palette validator if you change a step. No dual y-axes.
   - Keep `npm run check:bundle` (initial JS ≤ 300 KB gz) and `npm run e2e` (axe in
-    both themes, 360 px) green; Recharts and MapLibre stay lazy.
+    both themes, 360 px, low tier) green; MapLibre, deck.gl and three.js stay lazy.
+  - `npm run lighthouse` keeps accessibility at 100 on Arrival and Explore (CI enforces it);
+    `npm run visual` compares every route against local baselines before a design gate.
   - `.github/workflows/dashboard.yml` grants only `contents: read`, `pages: write`,
     `id-token: write`.
 - **Keep published paths generic**: use `agents_core.settings.publish_dir()`

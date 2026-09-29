@@ -8,6 +8,8 @@ const localChromium = process.env.PW_CHROMIUM ?? '/opt/pw-browsers/chromium';
 
 export default defineConfig({
   testDir: './e2e',
+  // Visual baselines (e2e/visual.spec.ts, VISUAL=1) stay local: rendering differs by OS/GPU.
+  snapshotPathTemplate: '{testDir}/__visual__/{arg}{ext}',
   timeout: 30_000,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),

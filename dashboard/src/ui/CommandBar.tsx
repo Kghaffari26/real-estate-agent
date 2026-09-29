@@ -1,7 +1,8 @@
-import { Moon, Pause, Play, Search, Share2, Sun } from 'lucide-react';
+import { Bookmark, Moon, Pause, Play, Search, Share2, Sun } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { BRAND } from '../config/brand';
+import { FEATURES } from '../config/features';
 import { formatDate, formatMonth } from '../lib/format';
 import { IconButton } from './controls';
 
@@ -86,6 +87,12 @@ export function CommandBar({ nav, freshness, onOpenPalette, dark, onToggleTheme,
       <IconButton label={dark ? 'Switch to Dawn (light) theme' : 'Switch to Night (dark) theme'} onClick={onToggleTheme}>
         {dark ? <Moon size={15} strokeWidth={1.5} aria-hidden="true" /> : <Sun size={15} strokeWidth={1.5} aria-hidden="true" />}
       </IconButton>
+      {/* §13 stub: "Save" slots in here once accounts exist (FEATURES.save). */}
+      {FEATURES.save && (
+        <IconButton label="Save this view" onClick={() => undefined} className="hidden sm:grid">
+          <Bookmark size={15} strokeWidth={1.5} aria-hidden="true" />
+        </IconButton>
+      )}
       {onShare && (
         <IconButton label="Share this view" onClick={onShare} className="hidden sm:grid">
           <Share2 size={15} strokeWidth={1.5} aria-hidden="true" />

@@ -71,3 +71,19 @@ export function rateMarkers(events: readonly NationalEvent[], rateDates: readonl
     .filter((e) => e.metric === 'mortgage30' && e.date >= first && e.date <= last)
     .map((e) => ({ date: e.date, value: e.value, kind: e.kind === 'rate_high' ? ('high' as const) : ('low' as const), label: `${e.value.toFixed(2)}%` }));
 }
+
+/**
+ * The markers that fit on a rail `widthPx` wide with at least `minGapPx` between
+ * them (WCAG 2.5.8: 24 px targets that don't overlap). Featured moments win, then
+ * rate turns by prominence, then the rest; the full list stays reachable through
+ * the scrubber's "Moments" menu.
+ */
+export function thinMoments<T extends { index: number; showLabel?: boolean; event?: { metric: string; prominence?: number | null } }>(moments: readonly T[], last: number, widthPx: number, minGapPx = 24): T[] {
+  if (widthPx <= 0 || last <= 0) return [...moments];
+  const x = (m: T) => (m.index / last) * widthPx;
+  const rank = (m: T) => (m.showLabel ? 0 : m.event?.metric === 'mortgage30' ? 1 : 2);
+  const order = [...moments].sort((a, b) => rank(a) - rank(b) || (b.event?.prominence ?? 0) - (a.event?.prominence ?? 0) || a.index - b.index);
+  const kept: T[] = [];
+  for (const m of order) if (kept.every((k) => Math.abs(x(k) - x(m)) >= minGapPx)) kept.push(m);
+  return kept.sort((a, b) => a.index - b.index);
+}

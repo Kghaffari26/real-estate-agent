@@ -22,6 +22,8 @@ export interface LayerDockProps {
   /** Formatted ends of the legend. */
   legend: { min: string; max: string; valueMax: string; note: string | null };
   canTerrain: boolean;
+  /** 3D buildings exist only on the WebGL map (not the low tier's 2D atlas). */
+  canBuildings: boolean;
   onTable: () => void;
   onShortcuts: () => void;
 }
@@ -113,7 +115,7 @@ export function LayerDockBody(p: LayerDockProps) {
         )}
       </p>
       <div className="space-y-2.5 border-t border-mp-line pt-3">
-        <Toggle label="3D buildings" hint="At city zoom" checked={p.buildings} onChange={p.onBuildings} icon={<Building2 size={15} strokeWidth={1.5} aria-hidden="true" />} />
+        {p.canBuildings && <Toggle label="3D buildings" hint="At city zoom" checked={p.buildings} onChange={p.onBuildings} icon={<Building2 size={15} strokeWidth={1.5} aria-hidden="true" />} />}
         {p.canTerrain && <Toggle label="Terrain" checked={p.terrain} onChange={p.onTerrain} icon={<Mountain size={15} strokeWidth={1.5} aria-hidden="true" />} />}
       </div>
       <div className="flex items-center gap-2 border-t border-mp-line pt-3 text-xs">

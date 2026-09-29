@@ -1,6 +1,6 @@
 /**
- * JS access to design tokens for libraries that take color strings (Recharts,
- * MapLibre, canvas export). `color()` returns a CSS expression that follows the
+ * JS access to design tokens for libraries that take color strings (SVG
+ * charts, MapLibre, canvas export). `color()` returns a CSS expression that follows the
  * theme automatically; `resolveColor()` reads the current computed value for
  * libraries that can't evaluate CSS variables (MapLibre paint, PNG export).
  */

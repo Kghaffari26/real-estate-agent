@@ -4,7 +4,7 @@
  * or, for past months, read from the published series (see lib/timeline.ts).
  */
 import type { AreaMetro } from '../lib/area';
-import { divergingBound, divergingColor, extentOf, heightOf, sequentialColor, type DivergingStops, type Extent, type RGB } from '../lib/columns';
+import { changeHeight, divergingBound, divergingColor, extentOf, sequentialColor, valueHeight, type DivergingStops, type Extent, type RGB } from '../lib/columns';
 import { spreadOverlapping } from '../lib/geo';
 import { changeAt, type Timeline } from '../lib/timeline';
 import type { IndexOutput, MetricRegistryEntry } from '../data/schema.gen';
@@ -13,6 +13,9 @@ export type LayerStyle = 'columns' | 'bubbles' | 'heat' | 'flat';
 export const LAYER_STYLES: readonly LayerStyle[] = ['columns', 'bubbles', 'heat', 'flat'];
 export type ColorBy = 'yoy' | 'value';
 export const COLOR_BY: readonly ColorBy[] = ['yoy', 'value'];
+/** What column height encodes: the level (from zero) or YoY (centered on zero). */
+export type HeightBy = 'value' | 'yoy';
+export const HEIGHT_BY: readonly HeightBy[] = ['value', 'yoy'];
 
 export interface AtlasMetro {
   slug: string;
@@ -68,7 +71,7 @@ export interface ColumnDatum {
   lat: number;
   value: number | null;
   change: number | null;
-  /** 0…1, null when the metro has no value this month. */
+  /** Value: 0…1 from zero. YoY: −1…1 centered on zero. Null when there's nothing to show. */
   height: number | null;
   color: RGB;
   homesSold12m: number | null;
@@ -82,6 +85,7 @@ export interface ColumnInputs {
   isLatest: boolean;
   timeline: Timeline | null;
   colorBy: ColorBy;
+  heightBy?: HeightBy;
   stops: DivergingStops;
   /** Ramp for color-by-value. */
   low: RGB;
@@ -90,11 +94,14 @@ export interface ColumnInputs {
 
 export interface ColumnSet {
   columns: ColumnDatum[];
+  /** Range of the values in scope; heights run from zero to `extent.max`. */
   extent: Extent | null;
+  /** Largest |YoY| in scope: the diverging color bound and the YoY height bound. */
   bound: number;
+  heightBy: HeightBy;
 }
 
-export function columnSet({ metros, metric, monthIndex, isLatest, timeline, colorBy, stops, low, high }: ColumnInputs): ColumnSet {
+export function columnSet({ metros, metric, monthIndex, isLatest, timeline, colorBy, heightBy = 'value', stops, low, high }: ColumnInputs): ColumnSet {
   const kind = metric.change_kind;
   const at = (m: AtlasMetro) => {
     if (isLatest || !timeline) return m.latest[metric.key] ?? { value: null, yoy: null };
@@ -102,6 +109,7 @@ export function columnSet({ metros, metric, monthIndex, isLatest, timeline, colo
     return { value: s?.[monthIndex] ?? null, yoy: changeAt(s, monthIndex, kind) };
   };
   // Scales span the whole history once it's loaded, so scrubbing is comparable month to month.
+  // Heights start from zero (value) or zero-centered (YoY); `extent.max` and `bound` are the 100% marks.
   const allValues = timeline ? Object.values(timeline.metros).flat() : metros.map((m) => m.latest[metric.key]?.value ?? null);
   const extent = extentOf([...allValues, ...metros.map((m) => m.latest[metric.key]?.value ?? null)]);
   const changes: Array<number | null> = metros.map((m) => m.latest[metric.key]?.yoy ?? null);
@@ -109,7 +117,8 @@ export function columnSet({ metros, metric, monthIndex, isLatest, timeline, colo
   const bound = divergingBound(changes);
   const columns = metros.map((m) => {
     const { value, yoy } = at(m);
-    const height = heightOf(value, extent);
+    const share = valueHeight(value, extent?.max);
+    const height = heightBy === 'yoy' ? changeHeight(yoy, bound) : share;
     return {
       slug: m.slug,
       name: m.name,
@@ -118,11 +127,11 @@ export function columnSet({ metros, metric, monthIndex, isLatest, timeline, colo
       value,
       change: yoy,
       height,
-      color: colorBy === 'yoy' ? divergingColor(yoy, bound, stops) : sequentialColor(height, low, high),
+      color: colorBy === 'yoy' ? divergingColor(yoy, bound, stops) : sequentialColor(share, low, high),
       homesSold12m: m.homesSold12m,
     };
   });
-  return { columns, extent, bound };
+  return { columns, extent, bound, heightBy };
 }
 
 /** Area-search inputs from the latest published values (true centroids). */

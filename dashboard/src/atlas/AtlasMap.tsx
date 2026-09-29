@@ -13,7 +13,8 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { parseChannels, type RGB } from '../lib/columns';
 import { CAMERA_FLIGHT } from '../motion/presets';
-import { pointInPolygon, type Camera, type ColumnDatum, type LayerStyle } from '../viewmodels/atlas';
+import { pointInPolygon, type Camera, type ColumnDatum, type HeightBy, type LayerStyle } from '../viewmodels/atlas';
+import { shimTransform } from './maplibreCompat';
 
 setWorkerUrl(workerUrl);
 
@@ -43,6 +44,8 @@ export interface AtlasMapHandle {
 export interface AtlasMapProps {
   columns: readonly ColumnDatum[];
   style: LayerStyle;
+  /** Column height: level from zero, or YoY centered on zero. */
+  heightBy: HeightBy;
   ring: Array<[number, number]> | null;
   pin: { lat: number; lon: number } | null;
   selected: readonly string[];
@@ -161,18 +164,6 @@ function setTerrain(map: MLMap, on: boolean) {
   map.setTerrain(on ? { source: 'mp-dem', exaggeration: 1.35 } : null);
 }
 
-/**
- * deck.gl 9.4's interleaved renderer reads `map.transform` (size, near/far planes,
- * terrain elevation). MapLibre 6 no longer exposes it on the map; the painter's
- * transform carries the same fields. Alias it when missing. Remove once deck.gl
- * supports MapLibre 6 natively.
- */
-function shimTransform(map: MLMap) {
-  const m = map as unknown as { transform?: unknown; painter?: { transform?: unknown } };
-  if (m.transform !== undefined) return;
-  Object.defineProperty(map, 'transform', { configurable: true, get: () => m.painter?.transform });
-}
-
 // ---------- deck layers ----------
 // Columns keep a similar on-screen size as you zoom (never taller than at the national view).
 const zoomFactor = (zoom: number) => 2 ** (0.9 * (3.35 - Math.max(zoom, 2.9)));
@@ -196,28 +187,55 @@ function deckLayers(p: AtlasMapProps, zoom: number, accent: RGB) {
   }
   const common = { data, pickable: true, autoHighlight: true, highlightColor: [...accent, 255] as [number, number, number, number], getPosition: (d: ColumnDatum) => [d.lon, d.lat] as [number, number] };
   if (p.style === 'columns') {
-    layers.push(
-      new ScatterplotLayer({ id: 'col-glow', data, getPosition: common.getPosition, getRadius: 52_000 * f, getFillColor: (d: ColumnDatum) => [...d.color, 55] as [number, number, number, number], pickable: false, updateTriggers: { getFillColor: data } }),
-      new ColumnLayer({
-        ...common,
-        id: 'columns',
-        diskResolution: 14,
-        radius: 21_000 * f,
-        extruded: true,
-        elevationScale: f,
-        getElevation: (d: ColumnDatum) => (d.height ?? 0) * 1_250_000,
-        getFillColor: (d: ColumnDatum) => [...d.color, sel.has(d.slug) ? 255 : 232] as [number, number, number, number],
-        material: { ambient: 0.42, diffuse: 0.62, shininess: 36, specularColor: [200, 220, 255] },
-        transitions: p.reducedMotion ? undefined : { getElevation: 450, getFillColor: 450 },
-        updateTriggers: { getElevation: data, getFillColor: [data, p.selected] },
-      }),
-    );
+    const FULL = 1_250_000 * f; // meters at full height
+    const glow = new ScatterplotLayer({ id: 'col-glow', data, getPosition: common.getPosition, getRadius: 52_000 * f, getFillColor: (d: ColumnDatum) => [...d.color, 55] as [number, number, number, number], pickable: false, updateTriggers: { getFillColor: data } });
+    const look = {
+      diskResolution: 14,
+      radius: 21_000 * f,
+      extruded: true,
+      getFillColor: (d: ColumnDatum) => [...d.color, sel.has(d.slug) ? 255 : 232] as [number, number, number, number],
+      material: { ambient: 0.42, diffuse: 0.62, shininess: 36, specularColor: [200, 220, 255] as [number, number, number] },
+    };
+    if (p.heightBy === 'yoy') {
+      // Centered on zero: the zero plane floats at half height; rising metros grow up from
+      // it, falling ones hang down toward the ground. A dim stem ties each to its city.
+      const zero = FULL / 2;
+      const half = FULL / 2;
+      layers.push(
+        glow,
+        new ColumnLayer({ id: 'col-stems', data, getPosition: common.getPosition, diskResolution: 8, radius: 5_000 * f, extruded: true, getElevation: zero, getFillColor: [...accent, 40], pickable: false }),
+        new ColumnLayer({
+          ...common,
+          ...look,
+          id: 'columns',
+          getPosition: (d: ColumnDatum) => [d.lon, d.lat, (d.height ?? 0) < 0 ? zero + (d.height ?? 0) * half : zero] as [number, number, number],
+          getElevation: (d: ColumnDatum) => Math.max(Math.abs(d.height ?? 0) * half, 600 * f),
+          transitions: p.reducedMotion ? undefined : { getElevation: 450, getFillColor: 450, getPosition: 450 },
+          updateTriggers: { getElevation: [data, zoom], getPosition: [data, zoom], getFillColor: [data, p.selected] },
+        }),
+        new ScatterplotLayer({ id: 'col-zero', data, getPosition: (d: ColumnDatum) => [d.lon, d.lat, zero] as [number, number, number], getRadius: 30_000 * f, filled: false, stroked: true, getLineColor: [...accent, 150], lineWidthUnits: 'pixels', getLineWidth: 1, pickable: false, updateTriggers: { getPosition: zoom } }),
+      );
+    } else {
+      layers.push(
+        glow,
+        new ColumnLayer({
+          ...common,
+          ...look,
+          id: 'columns',
+          elevationScale: f,
+          // From zero: height is the value's share of the largest value in scope.
+          getElevation: (d: ColumnDatum) => (d.height ?? 0) * 1_250_000,
+          transitions: p.reducedMotion ? undefined : { getElevation: 450, getFillColor: 450 },
+          updateTriggers: { getElevation: data, getFillColor: [data, p.selected] },
+        }),
+      );
+    }
   } else if (p.style === 'bubbles') {
     layers.push(
       new ScatterplotLayer({
         ...common,
         id: 'bubbles',
-        getRadius: (d: ColumnDatum) => 16_000 + Math.sqrt(d.height ?? 0) * 80_000,
+        getRadius: (d: ColumnDatum) => 16_000 + Math.sqrt(Math.abs(d.height ?? 0)) * 80_000,
         getFillColor: (d: ColumnDatum) => [...d.color, 205] as [number, number, number, number],
         stroked: true,
         getLineColor: (d: ColumnDatum) => (sel.has(d.slug) ? [...accent, 255] : [255, 255, 255, 60]) as [number, number, number, number],
@@ -237,7 +255,7 @@ function deckLayers(p: AtlasMapProps, zoom: number, accent: RGB) {
         coverage: 0.88,
         extruded: true,
         elevationScale: 1,
-        getElevationWeight: (d: ColumnDatum) => (d.height ?? 0) * 40_000,
+        getElevationWeight: (d: ColumnDatum) => Math.abs(d.height ?? 0) * 40_000,
         elevationAggregation: 'MAX',
         getColorWeight: (d: ColumnDatum) => d.change ?? 0,
         colorAggregation: 'MEAN',
@@ -337,6 +355,7 @@ const Atlas = forwardRef<AtlasMapHandle, AtlasMapProps>(function AtlasMap(props,
         map.addControl(new AttributionControl({ compact: true, customAttribution: [BASE_ATTRIBUTION, 'Data: Redfin'] }), 'bottom-right');
         const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
         overlayRef.current = overlay;
+        (el as HTMLDivElement & { __overlay?: MapboxOverlay }).__overlay = overlay;
         map.addControl(overlay as never);
         map.on('style.load', () => addExtras(map, themeRef.current, propsRef.current.buildings, propsRef.current.terrain));
         map.setPadding(propsRef.current.padding);

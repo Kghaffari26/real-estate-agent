@@ -34,6 +34,7 @@ import {
   atlasMetrics,
   atlasMetros,
   COLOR_BY,
+  HEIGHT_BY,
   columnSet,
   DEFAULT_CAMERA,
   formatCamera,
@@ -43,6 +44,7 @@ import {
   type AtlasMetro,
   type Camera,
   type ColorBy,
+  type HeightBy,
   type LayerStyle,
 } from '../viewmodels/atlas';
 
@@ -106,6 +108,7 @@ function Explore({ index }: { index: IndexOutput }) {
   const metric = metrics.find((m) => m.key === metricKey) ?? metrics[0]!;
   const style = (LAYER_STYLES as readonly string[]).includes(params.get('style') ?? '') ? (params.get('style') as LayerStyle) : 'columns';
   const colorBy = (COLOR_BY as readonly string[]).includes(params.get('by') ?? '') ? (params.get('by') as ColorBy) : 'yoy';
+  const heightBy = (HEIGHT_BY as readonly string[]).includes(params.get('h') ?? '') ? (params.get('h') as HeightBy) : 'value';
   const buildings = params.get('b') !== '0';
   const terrain = !mobile && params.get('terrain') === '1';
   const pin = parsePin(params.get('pin'));
@@ -160,8 +163,8 @@ function Explore({ index }: { index: IndexOutput }) {
   // ---------- columns ----------
   const palette = useMemo(readStops, [dark]);
   const set = useMemo(
-    () => columnSet({ metros, metric, monthIndex: time, isLatest: isLatest || !timeline, timeline, colorBy, ...palette }),
-    [metros, metric, time, isLatest, timeline, colorBy, palette],
+    () => columnSet({ metros, metric, monthIndex: time, isLatest: isLatest || !timeline, timeline, colorBy, heightBy, ...palette }),
+    [metros, metric, time, isLatest, timeline, colorBy, heightBy, palette],
   );
   const valuesBySlug = useMemo(() => Object.fromEntries(set.columns.map((c) => [c.slug, { value: c.value, change: c.change }])), [set]);
   const shownMonth = isLatest || !timeline ? last : time;
@@ -292,8 +295,7 @@ function Explore({ index }: { index: IndexOutput }) {
     note: noYoy ? `No year-ago value before ${formatMonth(dates[12], true)}: the history starts ${formatMonth(dates[0], true)}.` : null,
     min: fmtChange(metric, -set.bound),
     max: fmtChange(metric, set.bound),
-    heightMin: fmtMetric(metric, set.extent?.min),
-    heightMax: fmtMetric(metric, set.extent?.max),
+    valueMax: fmtMetric(metric, set.extent?.max),
   };
 
   const dock = (
@@ -305,6 +307,8 @@ function Explore({ index }: { index: IndexOutput }) {
       onStyle={(s) => setQuery({ style: s === 'columns' ? null : s })}
       colorBy={colorBy}
       onColorBy={(c) => setQuery({ by: c === 'yoy' ? null : c })}
+      heightBy={heightBy}
+      onHeightBy={(h) => setQuery({ h: h === 'value' ? null : h })}
       buildings={buildings}
       onBuildings={(v) => setQuery({ b: v ? null : '0' })}
       terrain={terrain}
@@ -370,6 +374,7 @@ function Explore({ index }: { index: IndexOutput }) {
         tier={tier}
         columns={set.columns}
         style={style}
+        heightBy={heightBy}
         ring={ring}
         pin={pin}
         selected={selected}

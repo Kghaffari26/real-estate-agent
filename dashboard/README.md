@@ -103,7 +103,7 @@ Every route is deep-linkable:
 | `#/metro/:slug` | `?metric=&range=&rates=0&vs=1` |
 | `#/compare` | `?m=a,b,c&metrics=&range=&indexed=1` |
 | `#/about` (alias `#/methodology`) | none |
-| `#/explore` (v2 atlas) | `?m=&t=YYYY-MM&style=&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low` |
+| `#/explore` (v2 atlas) | `?m=&t=YYYY-MM&style=&h=value|yoy&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low` |
 | `#/styleguide` (v2 design system) | none |
 
 Any view also takes `?section=<id>` to scroll to a section. "Copy link" buttons
@@ -119,7 +119,10 @@ screen; `data/`, `lib/` and `viewmodels/` stay the contract.
 - **Atlas** (`#/explore`): `src/atlas/` (MapLibre + deck.gl, lazy; 2D fallback),
   `src/viewmodels/atlas.ts`, `src/lib/{area,columns,timeline,events}.ts`,
   `src/state/timeStore.ts`. Every figure is published or read from the published
-  series. Area search is a homes-sold-weighted mean of metro medians.
+  series. Heights are proportional: value from zero, YoY centered on zero. Area
+  search is a homes-sold-weighted mean of metro medians. deck.gl and MapLibre are
+  pinned exactly; `src/atlas/maplibreCompat.ts` carries the MapLibre 6 patch and its
+  tests.
 - **Design captures**: `design/gate-a/` (art-direction frames), `design/gate-b/`
   (`shots.mjs`, `record.mjs` against `vite preview`).
 - **Local e2e** can point at any Chromium with `PW_CHROMIUM=...`.

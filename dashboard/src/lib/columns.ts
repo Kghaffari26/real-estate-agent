@@ -1,11 +1,13 @@
 /**
  * Column heights and colors for the atlas (pure; tested).
  *
- * Height encodes the metric's level, min→max across every metro (and, once history
- * is loaded, every month), so a column's rise and fall while scrubbing is comparable.
- * It is not zero-based: $229K–$1.22M would otherwise be indistinguishable. The floor
- * keeps the smallest value visible. Color encodes YoY on one symmetric diverging
- * scale (§5.3), or the level on a one-hue ramp.
+ * Heights are proportional:
+ * - value metrics start from zero: height = value / max, where max spans every metro
+ *   (and, once history is loaded, every month) so scrubbing is comparable. Tiny values
+ *   get a small visible stub (MIN_STUB); above it, height is exactly proportional.
+ * - YoY is centered on zero: height = change / bound in [-1, 1], where bound is the
+ *   largest |change|. Rising metros grow up, falling ones grow down.
+ * Color encodes YoY on one symmetric diverging scale (§5.3), or the level on a one-hue ramp.
  */
 export interface Extent {
   min: number;
@@ -23,14 +25,20 @@ export function extentOf(values: Iterable<number | null | undefined>): Extent | 
   return min === Infinity ? null : { min, max };
 }
 
-export const HEIGHT_FLOOR = 0.06;
+/** Smallest visible height for a positive value (a stub, so near-zero values still show). */
+export const MIN_STUB = 0.03;
 
-/** 0…1 height: HEIGHT_FLOOR at the minimum, 1 at the maximum, null when there's no value. */
-export function heightOf(value: number | null | undefined, extent: Extent | null): number | null {
-  if (value == null || !Number.isFinite(value) || !extent) return null;
-  if (extent.max === extent.min) return 1;
-  const t = (value - extent.min) / (extent.max - extent.min);
-  return HEIGHT_FLOOR + (1 - HEIGHT_FLOOR) * Math.min(1, Math.max(0, t));
+/** 0…1 from zero: value / max. Null without a value; 0 for zero or negative values. */
+export function valueHeight(value: number | null | undefined, max: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value) || max == null || !(max > 0)) return null;
+  if (value <= 0) return 0;
+  return Math.max(MIN_STUB, Math.min(1, value / max));
+}
+
+/** −1…1 centered on zero: change / bound (clamped). Null without a change. */
+export function changeHeight(change: number | null | undefined, bound: number): number | null {
+  if (change == null || !Number.isFinite(change) || !(bound > 0)) return null;
+  return Math.max(-1, Math.min(1, change / bound));
 }
 
 /** Symmetric bound for the diverging scale: the largest |change|, never zero. */
@@ -60,9 +68,9 @@ export function divergingColor(change: number | null | undefined, bound: number,
   return t > 0.5 ? lerp(s.hot1, s.hot2, (t - 0.5) * 2) : lerp(s.mid, s.hot1, t * 2);
 }
 
-/** One-hue ramp for "color by value": dim → accent. */
-export function sequentialColor(h: number | null, low: RGB, high: RGB): RGB {
-  return h == null ? low : lerp(low, high, h);
+/** One-hue ramp for "color by value": dim → accent, by the value's share of the max. */
+export function sequentialColor(share: number | null, low: RGB, high: RGB): RGB {
+  return share == null ? low : lerp(low, high, Math.max(0, Math.min(1, share)));
 }
 
 /** Reads an `--mp-*` channel triplet ("92 225 230") into RGB. */

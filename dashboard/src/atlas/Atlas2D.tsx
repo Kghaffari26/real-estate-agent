@@ -36,7 +36,7 @@ export function Atlas2D({ columns, selected, ring, pin, label, onSelect, onPickE
     .filter((c) => c.height != null)
     .map((c) => ({ c, p: projection([c.lon, c.lat]) }))
     .filter((d): d is { c: ColumnDatum; p: [number, number] } => d.p != null)
-    .sort((a, b) => (b.c.height ?? 0) - (a.c.height ?? 0));
+    .sort((a, b) => Math.abs(b.c.height ?? 0) - Math.abs(a.c.height ?? 0));
   const pinP = pin ? projection([pin.lon, pin.lat]) : null;
 
   const onClick = (e: MouseEvent<SVGSVGElement>) => {
@@ -63,7 +63,8 @@ export function Atlas2D({ columns, selected, ring, pin, label, onSelect, onPickE
         <path d={borders} fill="none" style={{ stroke: 'rgb(var(--mp-accent) / .18)' }} strokeWidth="0.8" />
         {ringPath && <path d={ringPath} style={{ fill: 'rgb(var(--mp-accent) / .08)', stroke: 'rgb(var(--mp-accent))' }} strokeWidth="1.5" />}
         {dots.map(({ c, p }) => {
-          const r = 3 + (c.height ?? 0) * 11;
+          // Area-true: radius ∝ √|height| (YoY heights are signed; color carries the sign).
+          const r = 3 + Math.sqrt(Math.abs(c.height ?? 0)) * 11;
           const fill = `rgb(${c.color.join(',')})`;
           return (
             <g

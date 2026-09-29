@@ -147,3 +147,42 @@ test('shortcut sheet opens with ? and closes with Escape', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
 });
+
+test('deck.gl × MapLibre 6 patch: deck picks what MapLibre projects', async ({ page, consoleErrors }, info) => {
+  test.skip(info.project.name !== 'desktop', 'one viewport is enough');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // Flat layer at a fixed camera: each metro is a dot exactly at its display position.
+  await gotoView(page, '/explore?style=flat&cam=-96.2,37.4,3.6,0,0');
+  await waitForAtlas(page);
+  const austin = atlasMetros(index).find((m) => m.slug === 'austin-tx')!;
+  const result = await page.evaluate(
+    ([lon, lat]) => {
+      type Probe = HTMLElement & {
+        __map?: { transform?: unknown; painter?: { transform?: unknown }; project: (ll: [number, number]) => { x: number; y: number } };
+        __overlay?: { pickObject: (o: { x: number; y: number; radius: number }) => { object?: { slug?: string } } | null };
+      };
+      const el = Array.from(document.querySelectorAll('div')).find((d) => (d as Probe).__map) as Probe;
+      const map = el.__map!;
+      const p = map.project([lon!, lat!]);
+      return {
+        aliased: map.transform !== undefined && map.transform === map.painter?.transform,
+        picked: el.__overlay!.pickObject({ x: p.x, y: p.y, radius: 3 })?.object?.slug ?? null,
+      };
+    },
+    [austin.lon, austin.lat],
+  );
+  expect(result.aliased, 'map.transform is the painter transform (patch active)').toBe(true);
+  expect(result.picked, "deck's picking agrees with MapLibre's projection").toBe('austin-tx');
+  expect(consoleErrors).toEqual([]);
+});
+
+test('height legend states the scale in use', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'desktop layout');
+  await gotoView(page, '/explore');
+  await waitForAtlas(page);
+  const max = Math.max(...atlasMetros(index).map((m) => m.latest.median_sale_price?.value ?? 0));
+  await expect(page.getByTestId('height-legend')).toHaveText(`Height: from zero to ${formatValue(max, 'currency')}, proportional.`);
+  await page.getByText('YoY', { exact: true }).first().click();
+  await expect(page).toHaveURL(/[?&]h=yoy/);
+  await expect(page.getByTestId('height-legend')).toContainText('Up = rising, down = falling');
+});

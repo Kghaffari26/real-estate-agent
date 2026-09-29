@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTimeStore } from '../state/timeStore';
 import { areaSearch, milesBetween, parsePin, parseRadius, ringPolygon, type AreaMetro } from './area';
-import { divergingBound, divergingColor, extentOf, heightOf, HEIGHT_FLOOR, parseChannels } from './columns';
+import { changeHeight, divergingBound, divergingColor, extentOf, MIN_STUB, parseChannels, valueHeight } from './columns';
 import { changeAt, monthIndex, timelineFromSeries } from './timeline';
 
 const metro = (slug: string, lat: number, lon: number, o: Partial<AreaMetro> = {}): AreaMetro => ({
@@ -75,15 +75,26 @@ describe('area search', () => {
 });
 
 describe('column scale', () => {
-  it('normalizes heights min→max with a visible floor', () => {
+  it('value heights are proportional from zero, with a small visible stub', () => {
     const e = extentOf([229_000, null, 1_220_000, 500_000, Number.NaN]);
     expect(e).toEqual({ min: 229_000, max: 1_220_000 });
-    expect(heightOf(229_000, e)).toBe(HEIGHT_FLOOR);
-    expect(heightOf(1_220_000, e)).toBe(1);
-    expect(heightOf(2_000_000, e)).toBe(1); // clamped
-    expect(heightOf(null, e)).toBeNull();
-    expect(heightOf(5, { min: 5, max: 5 })).toBe(1);
+    expect(valueHeight(1_220_000, e!.max)).toBe(1);
+    expect(valueHeight(610_000, e!.max)).toBe(0.5); // twice the value, twice the height
+    expect(valueHeight(229_000, e!.max)).toBeCloseTo(229_000 / 1_220_000, 12);
+    expect(valueHeight(1_000, e!.max)).toBe(MIN_STUB); // near-zero still shows
+    expect(valueHeight(0, e!.max)).toBe(0);
+    expect(valueHeight(2_000_000, e!.max)).toBe(1); // clamped
+    expect(valueHeight(null, e!.max)).toBeNull();
+    expect(valueHeight(5, 0)).toBeNull();
     expect(extentOf([null])).toBeNull();
+  });
+
+  it('YoY heights are centered on zero', () => {
+    expect(changeHeight(0.086, 0.086)).toBe(1);
+    expect(changeHeight(-0.043, 0.086)).toBe(-0.5);
+    expect(changeHeight(0, 0.086)).toBe(0);
+    expect(changeHeight(-0.2, 0.086)).toBe(-1); // clamped
+    expect(changeHeight(null, 0.086)).toBeNull();
   });
 
   it('colors YoY on a symmetric diverging scale', () => {

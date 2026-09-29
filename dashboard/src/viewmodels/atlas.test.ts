@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { IndexOutputSchema } from '../data/schema.gen';
-import { HEIGHT_FLOOR } from '../lib/columns';
+
 import { areaSearch } from '../lib/area';
 import { timelineFromSeries } from '../lib/timeline';
 import { areaMetros, atlasMetrics, atlasMetros, columnSet, formatCamera, parseCamera, pointInPolygon } from './atlas';
@@ -37,9 +37,16 @@ describe('atlas view model', () => {
     expect(austin.value).toBe(published.value);
     expect(austin.change).toBe('yoy' in published ? published.yoy : null);
     expect(set.bound).toBeCloseTo(Math.max(...metros.map((m) => Math.abs(m.latest.median_sale_price!.yoy!))), 12);
-    const heights = set.columns.map((c) => c.height!);
-    expect(Math.min(...heights)).toBe(HEIGHT_FLOOR);
-    expect(Math.max(...heights)).toBe(1);
+    // From zero: height is the value's share of the largest value in scope.
+    const max = Math.max(...set.columns.map((c) => c.value!));
+    expect(austin.height).toBeCloseTo(austin.value! / max, 12);
+    expect(Math.max(...set.columns.map((c) => c.height!))).toBe(1);
+    // YoY heights: centered on zero, the largest |YoY| is full height, sign kept.
+    const yoySet = columnSet({ ...base, monthIndex: 35, isLatest: true, timeline: null, heightBy: 'yoy' });
+    const a2 = yoySet.columns.find((c) => c.slug === 'austin-tx')!;
+    expect(a2.height).toBeCloseTo(a2.change! / yoySet.bound, 12);
+    expect(a2.height!).toBeLessThan(0);
+    expect(Math.max(...yoySet.columns.map((c) => Math.abs(c.height!)))).toBeCloseTo(1, 12);
   });
 
   it('reads past months from the history and derives their YoY', () => {

@@ -10,6 +10,15 @@ redfin_stale_after_days = 75
 # §6.4 timelines: monthly history (from this month) for the dashboard's time machine
 timeline_since = "2012-01"
 max_timeline_kb = 120
+# §6.5-6.7 dashboard extensions: the national event rail, the weekly pulse and
+# county areas (each optional and size-capped; the site works without them)
+use_events = true
+max_events_kb = 5
+use_pulse = true
+pulse_weeks = 12
+max_pulse_kb = 80
+use_areas = true
+max_area_kb = 60
 
 [flags]
 inventory_surge_yoy = 0.25

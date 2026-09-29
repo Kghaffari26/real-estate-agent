@@ -22,7 +22,13 @@ from agents_core.http import Http
 
 from agents.real_estate import fetch_redfin
 from agents.real_estate.agent import AGENT
-from agents.real_estate.schema import IndexOutput, MetroDetailOutput, TimelineOutput
+from agents.real_estate.schema import (
+    AreasOutput,
+    IndexOutput,
+    MetroDetailOutput,
+    PulseOutput,
+    TimelineOutput,
+)
 from tests import redfin_dc_fixtures as dc
 
 COLUMNS = [
@@ -73,6 +79,10 @@ redfin_region = "Beta, TX metro area"
 cbsa = "10002"
 lat = 31.0
 lon = -96.0
+"""
+
+CENTROIDS_CSV = """name,geoid,lat,lon
+"Alpha County, TX",48001,30.1,-97.1
 """
 
 SETTINGS_TOML = """
@@ -162,7 +172,13 @@ def workdir(tmp_path, monkeypatch):
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "metros.toml").write_text(METROS_TOML)
     (tmp_path / "config" / "real_estate.toml").write_text(SETTINGS_TOML)
+    (tmp_path / "config" / "county_centroids.csv").write_text(CENTROIDS_CSV)
     return tmp_path
+
+
+def _week_ends(n: int) -> list[date]:
+    last = date.today() - timedelta(days=(date.today().weekday() + 1) % 7 + 7)  # a recent Sunday
+    return [last - timedelta(weeks=k) for k in range(n)][::-1]
 
 
 def _dc_files() -> dict[str, bytes]:
@@ -175,6 +191,22 @@ def _dc_files() -> dict[str, bytes]:
         ),
         fetch_redfin.NATIONAL_URL: dc.housing_csv([("National", None, "Country", dc.default_values(420000))], months),
         fetch_redfin.PRICE_DROPS_NATIONAL_URL: dc.price_drops_csv([("National", "Country", 9.0)], months),
+        # §6.6 / §6.7: 60 weeks (a year-ago window exists) and 26 months of two counties.
+        fetch_redfin.WEEKLY_METRO_URL: dc.weekly_csv(
+            [
+                ("Alpha, TX metro area", {"MEDIAN SALE PRICE NSA ($)": lambda i: 400000 + 100 * i, "NEW LISTINGS NSA": 300, "ACTIVE LISTINGS NSA": 2000, "PENDING SALES NSA": 250}),
+                ("Beta, TX metro area", {"MEDIAN SALE PRICE NSA ($)": 300000, "NEW LISTINGS NSA": 200, "ACTIVE LISTINGS NSA": None, "PENDING SALES NSA": 150}),
+            ],
+            _week_ends(60),
+        ),
+        fetch_redfin.COUNTY_URL: dc.county_csv(
+            [
+                ("Alpha County, TX", "Alpha, TX metro area", {"HOMES SOLD": lambda i: 500 + i, "MEDIAN SALE PRICE NSA ($)": lambda i: 410000 + 1000 * i, "INVENTORY": 1200}),
+                ("Other County, TX", "Alpha, TX metro area", {"HOMES SOLD": 90, "MEDIAN SALE PRICE NSA ($)": 250000, "INVENTORY": None}),
+                ("Elsewhere County, OK", "Gamma, OK metro area", {"HOMES SOLD": 10, "MEDIAN SALE PRICE NSA ($)": 1, "INVENTORY": 1}),
+            ],
+            months,
+        ),
     }
 
 
@@ -223,7 +255,21 @@ def test_real_run_publishes_the_data_branch_contract_then_reuses_briefs(workdir)
     assert index.national.brief.narrative_source == "llm"
     assert index.national.brief.model == "claude-sonnet-5"
     assert [m.slug for m in index.metros] == ["alpha-tx", "beta-tx"]
-    assert index.meta.schema_version == "1.3.0"
+    assert index.meta.schema_version == "1.4.0"
+    # §6.5 no event rail without FRED rates; §6.6 the weekly pulse; §6.7 county areas.
+    assert index.events is None and not (pub / "events.json").exists()
+    assert index.pulse is not None and index.pulse.count == 2
+    pulse = PulseOutput.model_validate_json((pub / "pulse.json").read_text())
+    assert len(pulse.weeks) == 12 and pulse.weeks[-1] == index.pulse.through
+    assert pulse.metros["alpha-tx"]["median_sale_price"][-1] == 400000 + 100 * 59
+    assert pulse.yoy["alpha-tx"]["median_sale_price"] == round((400000 + 100 * 59) / (400000 + 100 * 7) - 1, 4)
+    assert pulse.yoy["beta-tx"]["active_listings"] is None
+    assert [(a.slug, a.count) for a in index.areas] == [("alpha-tx", 2)]
+    areas = AreasOutput.model_validate_json((pub / "areas" / "alpha-tx.json").read_text())
+    top, other = areas.areas
+    assert (top.name, top.geoid, top.lat, top.homes_sold) == ("Alpha County, TX", "48001", 30.1, 525)
+    assert top.median_sale_price_yoy == round((410000 + 25000) / (410000 + 13000) - 1, 4)
+    assert (other.lat, other.inventory, other.inventory_yoy) == (None, None, None)
     # §6.4 timelines: five metrics, monthly from 2012-01 to the latest month; the
     # fixture's 26 months are filled, earlier months are null.
     assert [t.metric for t in index.timelines] == ["median_sale_price", "inventory", "median_dom", "price_drops", "months_of_supply"]

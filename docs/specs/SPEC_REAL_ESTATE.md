@@ -611,6 +611,80 @@ any timeline file (it falls back to the metro files' 36 months).
 - **Optional:** a failed extract warns and publishes no timelines; it never fails
   the run.
 
+### 6.5-6.7 Additive (schema 1.4.0): `events.json`, `pulse.json`, `areas/<slug>.json`
+
+Added 2026-09-29 for the dashboard's event rail, weekly pulse and county-level area
+search (dashboard v2 spec §8.2 E2-E4). Additive with defaults: a 1.3.0 index still
+validates (`events: null`, `pulse: null`, `areas: []`), and the site renders fully
+without any of these files. Each is optional: a failed download or extract warns in
+`meta.warnings` and that file isn't published; it never fails the run. Each has a
+size budget in `config/real_estate.toml`; a file over budget isn't published that
+run (with a warning) rather than trimmed silently.
+
+**§6.5 `events.json`** (`EventsOutput`, ≤ `max_events_kb` = 5 KB; ~2.5 KB with 25
+events) - the national moments on the time machine's rail, detected in
+`events.py` from the weekly 30-yr rate (FRED `MORTGAGE30US`) and Redfin's national
+monthly series, from `timeline_since` (2012-01) through the later of `data_through`
+and `rates_as_of`:
+
+```json
+{ "since": "2012-01-01", "through": "2026-09-24",
+  "rules": { "rate_min_prominence_pp": 0.5, "rate_window_weeks": 8, "turn_hold_before_months": 3, "turn_hold_after_months": 3 },
+  "events": [ { "date": "2023-10-26", "kind": "rate_high", "metric": "mortgage30", "value": 7.79, "prominence": 1.81 },
+              { "date": "2023-03-31", "kind": "price_yoy_turn_down", "metric": "median_sale_price", "value": -0.0189, "prominence": null } ] }
+```
+
+- `rate_high` / `rate_low`: a week no week within 8 on either side beats (ties go to
+  the first week of a plateau) with topographic prominence ≥ 0.5 pp; the window's
+  overall high and low are always included. `value` is the rate in percent.
+- `price_yoy_turn_up` / `price_yoy_turn_down`: the national median sale price's YoY
+  (§5.1's ratio rule) crosses zero: the turn month is strictly the new sign, the 3
+  months before are never the new sign (at least one is the old), and it plus the next
+  2 are never the old sign. An exact zero sides with neither; a missing month breaks
+  the window. `value` is that month's YoY ratio.
+- `price_yoy_high` / `price_yoy_low`, `inventory_yoy_high` / `inventory_yoy_low`: the
+  window's single highest and lowest national YoY.
+- Over budget, the least prominent rate turns are dropped first (never the window's
+  rate high/low or the other kinds). Runs without FRED rates or on the legacy Redfin
+  source publish no events.
+
+**§6.6 `pulse.json`** (`PulseOutput`, ≤ `max_pulse_kb` = 80 KB; ~24 KB) - the last
+`pulse_weeks` (12) rolling 4-week windows for every tracked metro from Redfin's
+weekly metro file (`housing_market/weekly/all_metros.csv`; the top-50 file ranks by
+population and misses 5 of our 50):
+
+```json
+{ "window_weeks": 4, "weeks": ["2026-07-05", "...", "2026-09-20"],
+  "metros": { "austin-tx": { "median_sale_price": [441000, "..."], "new_listings": [], "pending_sales": [], "active_listings": [] } },
+  "yoy": { "austin-tx": { "median_sale_price": -0.021, "new_listings": 0.04, "pending_sales": null, "active_listings": 0.08 } } }
+```
+
+Values are Redfin's not-seasonally-adjusted levels (like the monthly pipeline),
+rounded to whole numbers. `yoy` is computed here, never copied from Redfin's YoY
+columns: the latest window / the window ending exactly 364 days earlier - 1, or null.
+
+**§6.7 `areas/<slug>.json`** (`AreasOutput`, ≤ `max_area_kb` = 60 KB each; the
+largest is ~6 KB) - the counties in each metro, from Redfin's monthly county file
+(`housing_market/monthly/all_counties.csv`, whose `METRO` column is our
+`redfin_region`), for the metro's latest month:
+
+```json
+{ "slug": "philadelphia-pa", "level": "county", "data_through": "2026-08-31",
+  "areas": [ { "name": "Philadelphia County, PA", "geoid": "42101", "lat": 40.00761, "lon": -75.134,
+               "median_sale_price": 282000, "median_sale_price_yoy": 0.053, "inventory": 5210,
+               "inventory_yoy": 0.12, "homes_sold": 1103, "homes_sold_yoy": -0.02 } ] }
+```
+
+Counties are ordered by homes sold. YoY uses §5.1's ratio rule against the same county
+12 months earlier. Centroids are Census Gazetteer internal points from the committed
+`config/county_centroids.csv` (`scripts/build_county_centroids.py`, 2024 Gazetteer,
+2020 for Connecticut's former counties, independent cities by their Gazetteer
+spelling); a weekly run never fetches the Gazetteer. ZIP codes are not published:
+Redfin's ZIP file is 364 MB, too large for a weekly run.
+
+**Index:** `events` and `pulse` are `{path, count, through}` or null; `areas` is
+`[{slug, path, count}]`, listing exactly the files this run published.
+
 ---
 
 ## 7. LLM usage

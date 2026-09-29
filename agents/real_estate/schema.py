@@ -266,6 +266,86 @@ class TimelineRef(BaseModel):
     months: int
 
 
+EventKind = Literal[
+    "rate_high",
+    "rate_low",
+    "price_yoy_turn_up",
+    "price_yoy_turn_down",
+    "price_yoy_high",
+    "price_yoy_low",
+    "inventory_yoy_high",
+    "inventory_yoy_low",
+]
+
+
+class NationalEvent(BaseModel):
+    """§6.5 one national moment, detected in code (`events.py`, documented thresholds)."""
+
+    date: date
+    kind: EventKind
+    metric: Literal["mortgage30", "median_sale_price", "inventory"]
+    value: float = Field(description="mortgage30: the rate in percent; others: the YoY ratio that month")
+    prominence: float | None = Field(default=None, description="Rate turns: prominence in percentage points")
+
+
+class EventsOutput(BaseModel):
+    """§6.5 `events.json`: the national event rail."""
+
+    since: date
+    through: date
+    rules: dict[str, float] = Field(description="The thresholds this file was detected with")
+    events: list[NationalEvent]
+
+
+class PulseOutput(BaseModel):
+    """§6.6 `pulse.json`: the last weeks of Redfin's rolling 4-week metro data."""
+
+    window_weeks: int = Field(description="Each point is a rolling window of this many weeks, ending on its date")
+    weeks: list[date] = Field(description="Window end dates, oldest first, shared by every series")
+    metros: dict[str, dict[str, list[int | None]]] = Field(description="slug -> metric -> values aligned to `weeks`")
+    yoy: dict[str, dict[str, float | None]] = Field(
+        description="slug -> metric -> latest window vs the window ending 52 weeks earlier (ratio)"
+    )
+
+
+class AreaOut(BaseModel):
+    """§6.7 one county within a metro, with its latest month and YoY (computed here)."""
+
+    name: str
+    geoid: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    median_sale_price: int | None = None
+    median_sale_price_yoy: float | None = None
+    inventory: int | None = None
+    inventory_yoy: float | None = None
+    homes_sold: int | None = None
+    homes_sold_yoy: float | None = None
+
+
+class AreasOutput(BaseModel):
+    """§6.7 `areas/<slug>.json`: the counties in one metro."""
+
+    slug: str
+    level: Literal["county"] = "county"
+    data_through: date
+    areas: list[AreaOut]
+
+
+class ExtensionRef(BaseModel):
+    """§6.5-6.7: a published extension file (the site fetches only what's listed)."""
+
+    path: str
+    count: int = Field(description="events: events; pulse: metros; areas: counties")
+    through: date
+
+
+class AreaRef(BaseModel):
+    slug: str
+    path: str
+    count: int
+
+
 class IndexOutput(AgentOutput):
     headline: str
     key_stats: list[KeyStat]
@@ -279,6 +359,9 @@ class IndexOutput(AgentOutput):
     sources: list[Citation]
     investigations: list[InvestigationSummary] = Field(default_factory=list)  # §6.3, additive
     timelines: list[TimelineRef] = Field(default_factory=list)  # §6.4, additive (1.3.0)
+    events: ExtensionRef | None = None  # §6.5, additive (1.4.0)
+    pulse: ExtensionRef | None = None  # §6.6, additive (1.4.0)
+    areas: list[AreaRef] = Field(default_factory=list)  # §6.7, additive (1.4.0)
 
 
 class MetroDetailOutput(BaseModel):
@@ -300,7 +383,7 @@ class MetroDetailOutput(BaseModel):
 
 
 def export_json_schema(path: Path | str = Path("schemas/real_estate.schema.json")) -> None:
-    """Writes a combined JSON Schema document (index + metro detail) used
+    """Writes a combined JSON Schema document (index, metro detail and the §6.5-6.7 files) used
     by the site and by `tests/test_schema.py`'s stability snapshot."""
     combined = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -308,6 +391,10 @@ def export_json_schema(path: Path | str = Path("schemas/real_estate.schema.json"
         "definitions": {
             "IndexOutput": IndexOutput.model_json_schema(),
             "MetroDetailOutput": MetroDetailOutput.model_json_schema(),
+            # §6.5-6.7 extension files (1.4.0)
+            "EventsOutput": EventsOutput.model_json_schema(),
+            "PulseOutput": PulseOutput.model_json_schema(),
+            "AreasOutput": AreasOutput.model_json_schema(),
         },
     }
     path = Path(path)

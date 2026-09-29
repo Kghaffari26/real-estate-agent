@@ -1,11 +1,11 @@
 import { m } from 'framer-motion';
 import { AlertTriangle, ArrowRight, CheckCircle2, Crosshair, Flag, Mountain, Building2, OctagonAlert, Plane, RotateCcw } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useIndex } from '../data/hooks';
+import { useEvents, useIndex } from '../data/hooks';
 import type { IndexOutput } from '../data/schema.gen';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery';
-import { detectRateEvents } from '../lib/events';
+import { railMoments } from '../lib/moments';
 import { formatDelta, formatMonth, formatValue } from '../lib/format';
 import { DUR, panelVariants, riseVariants, staggerVariants, STAGGER, SPRING_PANEL } from '../motion/presets';
 import { AtlasChrome } from '../ui/AtlasChrome';
@@ -252,15 +252,8 @@ function TimeMachine({ index }: { index: IndexOutput }) {
   const [i, setI] = useState(dates.length - 1);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<'1' | '4'>('1');
-  const events = useMemo(() => {
-    const monthOf = (d: string) => dates.findIndex((x) => x.slice(0, 7) === d.slice(0, 7));
-    const found = detectRateEvents(nat.rates.dates, nat.rates.mortgage30, { minProminence: 0.3, window: 8 })
-      .map((e) => ({ ...e, month: monthOf(e.date) }))
-      .filter((e) => e.month >= 0);
-    const top = (k: 'high' | 'low') => found.filter((e) => e.kind === k).sort((a, b) => b.prominence - a.prominence)[0];
-    const featured = new Set([top('high'), top('low')]);
-    return found.map((e) => ({ index: e.month, kind: e.kind, label: `30-yr ${e.kind} ${e.value.toFixed(2)}% · ${formatMonth(e.date)}`, showLabel: featured.has(e) }));
-  }, [dates, nat.rates]);
+  const published = useEvents(Boolean(index.events));
+  const events = useMemo(() => (published.status === 'ready' && published.data ? railMoments(published.data.events, dates) : []), [published, dates]);
   useEffect(() => {
     if (!playing) return;
     const t = window.setInterval(() => setI((x) => (x >= dates.length - 1 ? 0 : x + 1)), speed === '4' ? 180 : 700);

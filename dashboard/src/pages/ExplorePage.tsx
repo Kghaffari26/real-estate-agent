@@ -10,18 +10,18 @@ import { AreaPanel, IdlePanel, MetroPanel } from '../atlas/ContextPanel';
 import { AtlasTable, BottomSheet, Dialog, HoverCard, ShortcutList, type TableRow } from '../atlas/bits';
 import { fmtChange, fmtMetric } from '../atlas/format';
 import { LayerDockBody } from '../atlas/LayerDock';
-import { loadTimeline } from '../data/api';
-import { useIndex } from '../data/hooks';
+import { loadArea, loadTimeline } from '../data/api';
+import { useEvents, useIndex } from '../data/hooks';
 import type { IndexOutput } from '../data/schema.gen';
 import { useResource } from '../data/useResource';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useIsDark, useIsMobile, usePrefersReducedMotion } from '../hooks/useMediaQuery';
 import { useSetQuery } from '../hooks/useQueryState';
 import { useToast } from '../hooks/Toast';
-import { areaSearch, formatPin, milesBetween, parsePin, parseRadius, ringPolygon } from '../lib/area';
+import { areaSearch, countySearch, formatPin, metrosNearRing, milesBetween, parsePin, parseRadius, ringPolygon } from '../lib/area';
 import { copyText } from '../lib/clipboard';
 import { parseChannels, type DivergingStops, type RGB } from '../lib/columns';
-import { detectRateEvents } from '../lib/events';
+import { railMoments } from '../lib/moments';
 import { formatMonth, formatValue } from '../lib/format';
 import { monthEnds, monthIndex, YOY_LEAD } from '../lib/timeline';
 import { TICK_MS, timeStore, useTime } from '../state/timeStore';
@@ -187,6 +187,17 @@ function Explore({ index }: { index: IndexOutput }) {
   // ---------- area ----------
   const area = useMemo(() => (pin ? areaSearch(pin, radius, areaMetros(metros)) : null), [pin?.lat, pin?.lon, radius, metros]); // eslint-disable-line react-hooks/exhaustive-deps
   const ring = useMemo(() => (pin ? ringPolygon(pin, radius) : null), [pin?.lat, pin?.lon, radius]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Counties (§6.7): load, on demand, only the county files of metros that could reach the ring.
+  const nearSlugs = useMemo(() => {
+    if (!pin) return [];
+    const listed = new Set(index.areas.map((a) => a.slug));
+    return metrosNearRing(pin, radius, index.metros.filter((m) => listed.has(m.slug) && m.lat != null && m.lon != null) as Array<{ slug: string; lat: number; lon: number }>);
+  }, [pin?.lat, pin?.lon, radius, index]); // eslint-disable-line react-hooks/exhaustive-deps
+  const countyFiles = useResource(`areas:${nearSlugs.join(',')}`, async () => (await Promise.all(nearSlugs.map((s) => loadArea(s)))).filter((f) => f !== null));
+  const counties = useMemo(
+    () => (pin && index.areas.length && countyFiles.status === 'ready' ? countySearch(pin, radius, countyFiles.data) : null),
+    [pin?.lat, pin?.lon, radius, countyFiles, index.areas.length], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const pinLabel = useMemo(() => {
     if (!pin) return '';
     // Metros that share a centroid (Redfin divisions) tie on distance: prefer the city over a
@@ -270,16 +281,9 @@ function Explore({ index }: { index: IndexOutput }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [table, setQuery, clearAll, shortcuts]);
 
-  // ---------- rate moments on the rail ----------
-  const events = useMemo(() => {
-    const monthOf = (d: string) => dates.findIndex((x) => x.slice(0, 7) === d.slice(0, 7));
-    const found = detectRateEvents(index.national.rates.dates, index.national.rates.mortgage30, { minProminence: 0.3, window: 8 })
-      .map((e) => ({ ...e, month: monthOf(e.date) }))
-      .filter((e) => e.month >= 0);
-    const top = (kind: 'high' | 'low') => found.filter((e) => e.kind === kind).sort((a, b) => b.prominence - a.prominence)[0];
-    const featured = new Set([top('high'), top('low')]);
-    return found.map((e) => ({ index: e.month, kind: e.kind, label: `30-yr ${e.kind} ${e.value.toFixed(2)}% · ${formatMonth(e.date)}`, showLabel: featured.has(e) }));
-  }, [dates, index.national.rates]);
+  // ---------- national moments on the rail (§6.5 events.json, detected by the agent) ----------
+  const published = useEvents(Boolean(index.events));
+  const events = useMemo(() => (published.status === 'ready' && published.data ? railMoments(published.data.events, dates) : []), [published, dates]);
 
   // ---------- announcements ----------
   const focusMetro = selected.length === 1 ? bySlug.get(selected[0]!) : null;
@@ -342,6 +346,7 @@ function Explore({ index }: { index: IndexOutput }) {
   const context = area ? (
     <AreaPanel
       area={area}
+      counties={counties}
       label={pinLabel}
       dataThrough={index.data_through}
       onRadius={(r) => setQuery({ r: String(Math.round(r)) })}

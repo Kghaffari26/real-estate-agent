@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import gzip
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -548,3 +549,99 @@ def top_metros_by_homes_sold(gz_path: Path, n: int = 50, trailing_months: int = 
         return ranked
     finally:
         tsv_path.unlink(missing_ok=True)
+
+
+# ---- §6.5-6.7 dashboard extensions (optional; never fail the run) -----------------
+
+WEEKLY_METRO_URL = f"{DATA_CENTER_BASE}/housing_market/weekly/all_metros.csv"
+COUNTY_URL = f"{DATA_CENTER_BASE}/housing_market/monthly/all_counties.csv"
+DC_WEEKLY_CSV_PATH = CACHE_DIR / "redfin_dc_weekly_metro.csv"
+DC_WEEKLY_PARQUET_PATH = CACHE_DIR / "redfin_dc_weekly_metro.parquet"
+DC_COUNTY_CSV_PATH = CACHE_DIR / "redfin_dc_county.csv"
+DC_COUNTY_PARQUET_PATH = CACHE_DIR / "redfin_dc_county.parquet"
+DC_NATIONAL_HISTORY_PARQUET_PATH = CACHE_DIR / "redfin_dc_national_history.parquet"
+
+
+@dataclass
+class ExtensionFetch:
+    modified: bool
+    parquet_path: Path
+    url: str
+
+
+def _numeric(mapping: dict[str, str]) -> list[pl.Expr]:
+    return [pl.col(source).cast(pl.Float64, strict=False).alias(target) for target, source in mapping.items()]
+
+
+def _fetch_extension(
+    http: Http, url: str, csv_path: Path, out_path: Path, build: Callable[[pl.LazyFrame], pl.LazyFrame], force: bool
+) -> ExtensionFetch:
+    dl = http.download(url, csv_path, force=force)
+    if not dl.modified and out_path.exists():
+        return ExtensionFetch(False, out_path, url)
+    frame = build(pl.scan_csv(csv_path, infer_schema_length=0, null_values=["NA", ""])).collect()
+    if frame.is_empty():
+        raise RedfinColumnsMissing(f"{url} has no rows for the tracked metros")
+    _write_parquet(frame, out_path)
+    return ExtensionFetch(True, out_path, url)
+
+
+def fetch_weekly(
+    http: Http, *, tracked_regions: set[str], columns: dict[str, str], days_back: int = 420, force: bool = False
+) -> ExtensionFetch:
+    """§6.6: the tracked metros' rolling 4-week rows for the last `days_back` days
+    (enough for the year-ago window), from Redfin's weekly all-metros file."""
+    cutoff = date.today() - timedelta(days=days_back)
+
+    def build(lf: pl.LazyFrame) -> pl.LazyFrame:
+        names = lf.collect_schema().names()
+        missing = [c for c in ("PERIOD END", "REGION TYPE", "REGION NAME", *columns.values()) if c not in names]
+        if missing:
+            raise RedfinColumnsMissing(f"Redfin weekly file is missing expected columns: {missing}")
+        end = pl.col("PERIOD END").str.to_date("%Y-%m-%d", strict=False)
+        return lf.filter(
+            (pl.col("REGION TYPE").str.to_lowercase() == "metro")
+            & pl.col("REGION NAME").is_in(sorted(tracked_regions))
+            & (end >= cutoff)
+        ).select(end.alias("period_end"), pl.col("REGION NAME").alias("region"), *_numeric(columns))
+
+    return _fetch_extension(http, WEEKLY_METRO_URL, DC_WEEKLY_CSV_PATH, DC_WEEKLY_PARQUET_PATH, build, force)
+
+
+def fetch_counties(
+    http: Http, *, tracked_regions: set[str], columns: dict[str, str], days_back: int = 520, force: bool = False
+) -> ExtensionFetch:
+    """§6.7: monthly rows for every county whose Redfin `METRO` is tracked, for the
+    last `days_back` days (the latest month and the one a year earlier)."""
+    cutoff = date.today() - timedelta(days=days_back)
+
+    def build(lf: pl.LazyFrame) -> pl.LazyFrame:
+        names = lf.collect_schema().names()
+        missing = [c for c in ("PERIOD END", "REGION TYPE", "REGION NAME", "METRO", "FREQUENCY", *columns.values()) if c not in names]
+        if missing:
+            raise RedfinColumnsMissing(f"Redfin county file is missing expected columns: {missing}")
+        end = pl.col("PERIOD END").str.to_date("%Y-%m-%d", strict=False)
+        return lf.filter(
+            (pl.col("REGION TYPE").str.to_lowercase() == "county")
+            & (pl.col("FREQUENCY").str.to_lowercase() == "monthly")
+            & pl.col("METRO").is_in(sorted(tracked_regions))
+            & (end >= cutoff)
+        ).select(end.alias("period_end"), pl.col("METRO").alias("metro"), pl.col("REGION NAME").alias("region"), *_numeric(columns))
+
+    return _fetch_extension(http, COUNTY_URL, DC_COUNTY_CSV_PATH, DC_COUNTY_PARQUET_PATH, build, force)
+
+
+def national_history(
+    national_fetch: FetchResult, *, since: date, out_path: Path = DC_NATIONAL_HISTORY_PARQUET_PATH
+) -> Path | None:
+    """§6.5: the national monthly rows from `since`, re-read from the Data Center CSV
+    `fetch_national` already downloaded (legacy runs: None, never spliced)."""
+    if national_fetch.source != "data_center" or not DC_NATIONAL_CSV_PATH.exists():
+        return None
+    if not national_fetch.modified and out_path.exists():
+        return out_path
+    frame = dc_frame(DC_NATIONAL_CSV_PATH, None, region_type="country", history_months=0, tracked_regions=None, since=since)
+    if frame.is_empty():
+        return None
+    _write_parquet(frame, out_path)
+    return out_path

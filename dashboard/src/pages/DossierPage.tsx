@@ -10,8 +10,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { DossierChart } from '../dossier/DossierChart';
 import { Drivers, HouseStage, RegionPlate } from '../dossier/parts';
 import { fmtChange, fmtMetric, signOf, toneClass } from '../atlas/format';
-import { isValidSlug, loadTimeline } from '../data/api';
-import { useIndex, useMetro } from '../data/hooks';
+import { isValidSlug, loadArea, loadTimeline } from '../data/api';
+import { useIndex, useMetro, usePulse } from '../data/hooks';
 import type { IndexOutput, MetricRegistryEntry, MetroDetailOutput } from '../data/schema.gen';
 import { useResource } from '../data/useResource';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
@@ -19,15 +19,16 @@ import { useIsDark, usePrefersReducedMotion } from '../hooks/useMediaQuery';
 import { useSetQuery } from '../hooks/useQueryState';
 import { parseChannels } from '../lib/columns';
 import { houseScale, regionOf, statesOf, temperatureDrivers, temperatureLight } from '../lib/dossier';
-import { formatDate, formatMonth, formatValue } from '../lib/format';
+import { formatDate, formatDelta, formatMonth, formatValue } from '../lib/format';
 import { sentences } from '../lib/text';
 import { AtlasChrome } from '../ui/AtlasChrome';
 import { metroPath, useMediaPaused } from '../ui/atlasState';
 import { Chip, Segmented } from '../ui/controls';
-import { ThermalArc } from '../ui/dataviz';
+import { MiniSpark, ThermalArc } from '../ui/dataviz';
 import { GlassPanel } from '../ui/Glass';
 import { Instrument } from '../ui/Instrument';
 import { dossierChart, INSTRUMENT_KEYS, type ChartMode, type ChartRange } from '../viewmodels/dossier';
+import { metroPulse } from '../viewmodels/pulse';
 
 
 const RANGES: ChartRange[] = ['1Y', '3Y', 'All'];
@@ -330,6 +331,9 @@ function Dossier({ index, m }: { index: IndexOutput; m: MetroDetailOutput }) {
           </section>
         </div>
 
+        {/* ---------- the weekly pulse and the counties (§6.6, §6.7; shown only when published) ---------- */}
+        <WeeklyAndCounties index={index} m={m} />
+
         {/* ---------- drivers, Zillow, permits ---------- */}
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <Panel id="drivers" title="What drives the temperature" note="Each component against the other tracked metros (z-score). Right of center heats the market.">
@@ -430,6 +434,75 @@ function Empty({ icon, children }: { icon: ReactNode; children: ReactNode }) {
     <div className="flex items-start gap-3 rounded-panel border border-dashed border-mp-line p-4 text-sm text-mp-ink-2">
       <span className="mt-0.5 text-mp-ink-3">{icon}</span>
       <p>{children}</p>
+    </div>
+  );
+}
+
+function WeeklyAndCounties({ index, m }: { index: IndexOutput; m: MetroDetailOutput }) {
+  const pulse = usePulse(Boolean(index.pulse));
+  const listed = index.areas.some((a) => a.slug === m.slug);
+  const area = useResource(`area:${m.slug}:${listed}`, () => (listed ? loadArea(m.slug) : Promise.resolve(null)));
+  const weekly = pulse.status === 'ready' && pulse.data ? metroPulse(pulse.data, m.slug) : null;
+  const counties = area.status === 'ready' && area.data?.areas.length ? area.data : null;
+  if (!weekly && !counties) return null;
+  const through = weekly ? weekly.weeks[weekly.weeks.length - 1]! : null;
+  return (
+    <div className={`grid gap-8 ${weekly && counties ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : ''}`}>
+      {weekly && through && (
+        <Panel id="weekly" title="The last 12 weeks" note={`Redfin weekly data: each point is the ${weekly.windowWeeks} weeks ending that date; the latest ends ${formatDate(through)}. YoY vs the window a year earlier.`}>
+          <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2" data-testid="weekly-pulse">
+            {weekly.rows.map((r) => (
+              <div key={r.key}>
+                <dt className="mp-label">{r.label}</dt>
+                <dd className="mt-1 flex items-end justify-between gap-3">
+                  <span>
+                    <span className="mp-num-hero block text-[24px]">{formatValue(r.latest, r.format === 'currency' ? 'currency' : 'count')}</span>
+                    <span className={`mp-num text-xs ${toneClass(r.yoy)}`}>{formatDelta(r.yoy, 'percent_signed')} YoY</span>
+                  </span>
+                  <MiniSpark values={r.values} width={84} height={28} marks={false} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Panel>
+      )}
+      {counties && (
+        <Panel id="counties" title="County by county" note={`Redfin county data, ${formatMonth(counties.data_through, true)}. YoY computed by the agent from the same county a year earlier.`}>
+          <div className="relative max-h-[320px] overflow-auto" tabIndex={0} role="region" aria-label="Counties in this metro">
+            <table className="w-full border-collapse text-sm" data-testid="county-table">
+              <caption className="sr-only">Counties in {m.name}: median sale price, its change from a year earlier, and homes sold</caption>
+              <thead className="sticky top-0 bg-mp-bg">
+                <tr className="border-b border-mp-line text-left text-mp-ink-3">
+                  <th scope="col" className="py-2 pr-3 font-normal">
+                    County
+                  </th>
+                  <th scope="col" className="py-2 pr-3 text-right font-normal">
+                    Median price
+                  </th>
+                  <th scope="col" className="py-2 pr-3 text-right font-normal">
+                    YoY
+                  </th>
+                  <th scope="col" className="py-2 text-right font-normal">
+                    Homes sold
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {counties.areas.map((a) => (
+                  <tr key={a.name} className="border-b border-mp-line/60">
+                    <th scope="row" className="py-2 pr-3 text-left font-normal text-mp-ink">
+                      {a.name.replace(/,\s*[A-Z]{2}$/, '')}
+                    </th>
+                    <td className="mp-num py-2 pr-3 text-right text-mp-ink">{formatValue(a.median_sale_price, 'currency_compact')}</td>
+                    <td className={`mp-num py-2 pr-3 text-right ${toneClass(a.median_sale_price_yoy)}`}>{formatDelta(a.median_sale_price_yoy, 'percent_signed')}</td>
+                    <td className="mp-num py-2 text-right text-mp-ink-2">{formatValue(a.homes_sold, 'count')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }

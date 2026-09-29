@@ -179,6 +179,7 @@ uv run python scripts/build_investigator_fixtures.py  # re-snapshot the investig
 uv run python scripts/verify_re_sources.py     # which data-source URLs are reachable
 uv run python scripts/build_metro_config.py    # regenerate config/metros.toml (Redfin + Zillow + Gazetteer)
 uv run python scripts/export_re_schema.py      # after any schema.py change
+uv run python scripts/build_county_centroids.py  # regenerate config/county_centroids.csv (§6.7) after metros.toml changes
 cd dashboard && npm ci && npm run fetch-data && npm run dev   # dashboard (see dashboard/README.md)
 cd dashboard && npm run lint && npm run typecheck && npm test && npm run build && npm run check:bundle && npm run e2e
 ```

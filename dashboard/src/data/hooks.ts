@@ -1,10 +1,13 @@
-import { loadDataSource, loadIndex, loadManifest, loadMetro } from './api';
+import { loadDataSource, loadEvents, loadIndex, loadManifest, loadMetro, loadPulse } from './api';
 import { useResource } from './useResource';
 
 export const useIndex = () => useResource('index', () => loadIndex());
 export const useMetro = (slug: string) => useResource(`metro:${slug}`, () => loadMetro(slug));
 export const useManifest = () => useResource('manifest', () => loadManifest());
 export const useDataSource = () => useResource('source', () => loadDataSource());
+/** §6.5 / §6.6: fetched only when the index lists the file (`listed`); null otherwise. */
+export const useEvents = (listed: boolean) => useResource(`events:${listed}`, () => (listed ? loadEvents() : Promise.resolve(null)));
+export const usePulse = (listed: boolean) => useResource(`pulse:${listed}`, () => (listed ? loadPulse() : Promise.resolve(null)));
 
 export type Settled<T> = { slug: string; ok: true; data: T } | { slug: string; ok: false; error: Error };
 

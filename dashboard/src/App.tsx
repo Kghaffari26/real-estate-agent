@@ -19,6 +19,7 @@ const MetrosPage = lazy(() => import('./pages/MetrosPage').then((m) => ({ defaul
 const MetroPage = lazy(() => import('./pages/MetroPage').then((m) => ({ default: m.MetroPage })));
 const ComparePage = lazy(() => import('./pages/ComparePage').then((m) => ({ default: m.ComparePage })));
 const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const StyleguidePage = lazy(() => import('./pages/StyleguidePage').then((m) => ({ default: m.StyleguidePage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 
 function useCrumbs(names: ReadonlyMap<string, string>): Crumb[] {
@@ -86,12 +87,21 @@ export function App() {
     <ToastProvider>
       <EntityColorsProvider>
         <Routes>
+          <Route
+            path="styleguide"
+            element={
+              <Suspense fallback={null}>
+                <StyleguidePage />
+              </Suspense>
+            }
+          />
           <Route element={<Shell />}>
             <Route index element={<OverviewPage />} />
             <Route path="metros" element={<MetrosPage />} />
             <Route path="metro/:slug" element={<MetroRoute />} />
             <Route path="compare" element={<ComparePage />} />
             <Route path="about" element={<AboutPage />} />
+            <Route path="methodology" element={<AboutPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

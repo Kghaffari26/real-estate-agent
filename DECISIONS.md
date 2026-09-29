@@ -159,3 +159,14 @@ One line per consequential judgment call made while working unattended.
 - The dossier's rate strip shows the last weekly 30-yr on or before each month-end (6.66% at Aug 31), the same alignment as phase 1's overlay, so it differs from the headline 7.03% (Sep 24). The strip labels it as month-end.
 - The house scale is price ÷ U.S. median clamped to 0.6–1.6×. Austin is 1.04× now and 1.11× for the dashed year-ago ghost ($441,526).
 - Headline numbers use Geist Mono 300 in A (400 read as a code font at 52px). B uses JetBrains Mono, C uses Geist Mono 500.
+
+## Session 9, phase 2 (design system), in progress
+
+- Gate A: the owner chose **A · Night Atlas**. Dawn is its designed light mode.
+- The v2 system lives beside v1 until each screen is replaced. Tokens are `--mp-*` in `src/styles/atlas.css`, exposed as Tailwind `mp-*` utilities; primitives are in `src/ui/`; motion presets are in `src/motion/presets.ts`. `#/styleguide` renders all of it with sample-data figures. `#/methodology` aliases the About page until Phase 7.
+- Fonts are self-hosted through fontsource: Instrument Serif (latin 400 + italic), Inter Tight Variable and Geist Mono Variable. Big figures use Geist Mono 300.
+- Contrast was checked numerically before choosing tokens. Night passes 4.5:1 on the canvas, the panel, and glass over a bright column. Dawn's accent was darkened to `#0A737A` (4.34 → 4.8:1).
+- Sliders and the scrubber are styled native range inputs, so keyboard and screen-reader behavior comes for free. A log scale works in position space, and `aria-valuetext` always announces the real value.
+- The moments rail uses `lib/events.ts`: local extrema with topographic prominence (default 0.25 pp) over the weekly 30-yr series. It is tested and replaces the frames' simple max/min.
+- This Windows machine's Smart App Control blocks Rollup's native `.node` binary. Locally only, `node_modules/rollup/dist` was swapped for the identical-version `@rollup/wasm-node` build; `package.json`, the lockfile and CI are untouched. A fresh `npm ci` here needs the same swap.
+- The checkout has CRLF line endings (Git for Windows default), so the `schema.gen.ts` staleness test fails locally only. It passes on LF checkouts such as CI.

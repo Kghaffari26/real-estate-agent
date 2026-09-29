@@ -22,15 +22,20 @@
     "brand-assets": "node scripts/make-brand-assets.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/inter-tight": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
     "framer-motion": "^13.4.4",
+    "gsap": "^3.15.0",
     "lucide-react": "^1.48.0",
     "maplibre-gl": "^6.11.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.6",
     "recharts": "^2.15.4",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

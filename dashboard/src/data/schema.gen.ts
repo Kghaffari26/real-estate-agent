@@ -34,6 +34,37 @@ export const AlertOutSchema = z.object({
 });
 export type AlertOut = z.output<typeof AlertOutSchema>;
 
+/** §6.7 one county within a metro, with its latest month and YoY (computed here). */
+export const AreaOutSchema = z.object({
+  geoid: optionalField(z.string().nullable(), null, "AreaOut.geoid"),
+  homes_sold: optionalField(z.number().nullable(), null, "AreaOut.homes_sold"),
+  homes_sold_yoy: optionalField(z.number().nullable(), null, "AreaOut.homes_sold_yoy"),
+  inventory: optionalField(z.number().nullable(), null, "AreaOut.inventory"),
+  inventory_yoy: optionalField(z.number().nullable(), null, "AreaOut.inventory_yoy"),
+  lat: optionalField(z.number().nullable(), null, "AreaOut.lat"),
+  lon: optionalField(z.number().nullable(), null, "AreaOut.lon"),
+  median_sale_price: optionalField(z.number().nullable(), null, "AreaOut.median_sale_price"),
+  median_sale_price_yoy: optionalField(z.number().nullable(), null, "AreaOut.median_sale_price_yoy"),
+  name: z.string(),
+});
+export type AreaOut = z.output<typeof AreaOutSchema>;
+
+export const AreaRefSchema = z.object({
+  count: z.number(),
+  path: z.string(),
+  slug: z.string(),
+});
+export type AreaRef = z.output<typeof AreaRefSchema>;
+
+/** §6.7 `areas/<slug>.json`: the counties in one metro. */
+export const AreasOutputSchema = z.object({
+  areas: tolerantArray(AreaOutSchema, "AreasOutput.areas"),
+  data_through: z.string(),
+  level: optionalField(z.string(), "county", "AreasOutput.level"),
+  slug: z.string(),
+});
+export type AreasOutput = z.output<typeof AreasOutputSchema>;
+
 /** A source attribution on a brief or in `sources` (§6.1). Deliberately not agents-core's `Citation` (source/url/note): §6's shape is name/url/attribution. */
 export const CitationSchema = z.object({
   attribution: optionalField(z.string().nullable(), null, "Citation.attribution"),
@@ -67,6 +98,33 @@ export const ConstructionSeriesValueSchema = z.object({
   value: z.number().nullable(),
 });
 export type ConstructionSeriesValue = z.output<typeof ConstructionSeriesValueSchema>;
+
+/** §6.5 one national moment, detected in code (`events.py`, documented thresholds). */
+export const NationalEventSchema = z.object({
+  date: z.string(),
+  kind: z.enum(["rate_high", "rate_low", "price_yoy_turn_up", "price_yoy_turn_down", "price_yoy_high", "price_yoy_low", "inventory_yoy_high", "inventory_yoy_low"]),
+  metric: z.enum(["mortgage30", "median_sale_price", "inventory"]),
+  prominence: optionalField(z.number().nullable(), null, "NationalEvent.prominence"),
+  value: z.number(),
+});
+export type NationalEvent = z.output<typeof NationalEventSchema>;
+
+/** §6.5 `events.json`: the national event rail. */
+export const EventsOutputSchema = z.object({
+  events: tolerantArray(NationalEventSchema, "EventsOutput.events"),
+  rules: z.record(z.string(), z.number()),
+  since: z.string(),
+  through: z.string(),
+});
+export type EventsOutput = z.output<typeof EventsOutputSchema>;
+
+/** §6.5-6.7: a published extension file (the site fetches only what's listed). */
+export const ExtensionRefSchema = z.object({
+  count: z.number(),
+  path: z.string(),
+  through: z.string(),
+});
+export type ExtensionRef = z.output<typeof ExtensionRefSchema>;
 
 export const FlagOutSchema = z.object({
   facts: optionalField(z.record(z.string(), z.number()), {}, "FlagOut.facts"),
@@ -259,7 +317,9 @@ export type TimelineRef = z.output<typeof TimelineRefSchema>;
 
 export const IndexOutputSchema = z.object({
   alerts: tolerantArray(AlertOutSchema, "IndexOutput.alerts"),
+  areas: optionalField(tolerantArray(AreaRefSchema, "IndexOutput.areas"), [], "IndexOutput.areas"),
   data_through: z.string(),
+  events: optionalField(ExtensionRefSchema.nullable(), null, "IndexOutput.events"),
   headline: z.string(),
   investigations: optionalField(tolerantArray(InvestigationSummarySchema, "IndexOutput.investigations"), [], "IndexOutput.investigations"),
   key_stats: tolerantArray(KeyStatSchema, "IndexOutput.key_stats"),
@@ -268,6 +328,7 @@ export const IndexOutputSchema = z.object({
   metros: tolerantArray(MetroSummarySchema, "IndexOutput.metros"),
   movers: MoversSchema,
   national: NationalBlockSchema,
+  pulse: optionalField(ExtensionRefSchema.nullable(), null, "IndexOutput.pulse"),
   rates_as_of: z.string(),
   sources: tolerantArray(CitationSchema, "IndexOutput.sources"),
   timelines: optionalField(tolerantArray(TimelineRefSchema, "IndexOutput.timelines"), [], "IndexOutput.timelines"),
@@ -320,3 +381,12 @@ export const MetroDetailOutputSchema = z.object({
   temperature: TemperatureDetailSchema,
 });
 export type MetroDetailOutput = z.output<typeof MetroDetailOutputSchema>;
+
+/** §6.6 `pulse.json`: the last weeks of Redfin's rolling 4-week metro data. */
+export const PulseOutputSchema = z.object({
+  metros: tolerantRecord(z.record(z.string(), z.array(seriesNumber)), "PulseOutput.metros"),
+  weeks: z.array(z.string()),
+  window_weeks: z.number(),
+  yoy: tolerantRecord(z.record(z.string(), z.number().nullable()), "PulseOutput.yoy"),
+});
+export type PulseOutput = z.output<typeof PulseOutputSchema>;

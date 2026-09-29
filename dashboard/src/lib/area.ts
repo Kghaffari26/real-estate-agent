@@ -119,3 +119,82 @@ export function parseRadius(raw: string | null | undefined): number {
   const n = Number(raw);
   return Number.isFinite(n) && n >= RADIUS_MIN && n <= RADIUS_MAX ? n : RADIUS_DEFAULT;
 }
+
+// ---------- counties (agent §6.7 `areas/<slug>.json`) ----------
+
+/** How far a county centroid can sit from its metro's center; wider than any tracked metro. */
+export const COUNTY_REACH_MI = 90;
+
+export interface AreaCountyInput {
+  name: string;
+  lat: number | null;
+  lon: number | null;
+  median_sale_price: number | null;
+  median_sale_price_yoy: number | null;
+  inventory: number | null;
+  homes_sold: number | null;
+}
+
+export interface AreaCounty extends LatLon {
+  name: string;
+  metro: string;
+  miles: number;
+  price: number | null;
+  yoy: number | null;
+  inventory: number | null;
+  homesSold: number | null;
+}
+
+export interface CountyResult {
+  /** Counties whose centroid is inside the ring, most homes sold first. */
+  counties: AreaCounty[];
+  /** Homes-sold-weighted mean of county medians (the latest month's sales are the weights). */
+  price: number | null;
+  yoy: number | null;
+  inventory: number | null;
+  homesSold: number;
+}
+
+/** Metros whose county files could reach into the ring (load only these). */
+export function metrosNearRing(center: LatLon, radiusMi: number, metros: ReadonlyArray<LatLon & { slug: string }>): string[] {
+  return metros.filter((m) => milesBetween(center, m) <= radiusMi + COUNTY_REACH_MI).map((m) => m.slug);
+}
+
+/**
+ * Counties inside the ring, from the metros' published county files. A county is in
+ * when its Gazetteer centroid is; one without a centroid can't be placed and is left
+ * out. Aggregates are homes-sold-weighted like the metro figures (labelled weighted).
+ */
+export function countySearch(center: LatLon, radiusMi: number, files: ReadonlyArray<{ slug: string; areas: readonly AreaCountyInput[] }>): CountyResult {
+  const seen = new Set<string>();
+  const counties: AreaCounty[] = [];
+  for (const f of files) {
+    for (const a of f.areas) {
+      if (a.lat == null || a.lon == null || seen.has(a.name)) continue;
+      const miles = milesBetween(center, { lat: a.lat, lon: a.lon });
+      if (miles > radiusMi) continue;
+      seen.add(a.name);
+      counties.push({ name: a.name, metro: f.slug, lat: a.lat, lon: a.lon, miles, price: a.median_sale_price, yoy: a.median_sale_price_yoy, inventory: a.inventory, homesSold: a.homes_sold });
+    }
+  }
+  counties.sort((a, b) => (b.homesSold ?? -1) - (a.homesSold ?? -1) || a.name.localeCompare(b.name));
+  const weighted = (pick: (c: AreaCounty) => number | null) => {
+    let sum = 0;
+    let w = 0;
+    for (const c of counties) {
+      const v = pick(c);
+      if (v == null || !Number.isFinite(v) || c.homesSold == null || !(c.homesSold > 0)) continue;
+      sum += v * c.homesSold;
+      w += c.homesSold;
+    }
+    return w > 0 ? sum / w : null;
+  };
+  const inv = counties.filter((c) => c.inventory != null);
+  return {
+    counties,
+    price: weighted((c) => c.price),
+    yoy: weighted((c) => c.yoy),
+    inventory: inv.length ? inv.reduce((s, c) => s + (c.inventory as number), 0) : null,
+    homesSold: counties.reduce((s, c) => s + (c.homesSold != null && c.homesSold > 0 ? c.homesSold : 0), 0),
+  };
+}

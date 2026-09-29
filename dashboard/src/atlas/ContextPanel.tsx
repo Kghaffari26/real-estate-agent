@@ -2,7 +2,7 @@ import { ArrowRight, BarChart3, Crosshair, MousePointerClick, Share2, X } from '
 import { Link } from 'react-router-dom';
 import type { MetricRegistryEntry } from '../data/schema.gen';
 import { formatMonth, formatValue } from '../lib/format';
-import type { AreaResult } from '../lib/area';
+import type { AreaResult, CountyResult } from '../lib/area';
 import { RADIUS_MAX, RADIUS_MIN } from '../lib/area';
 import { Button, Chip, Slider } from '../ui/controls';
 import { MiniSpark } from '../ui/dataviz';
@@ -14,8 +14,51 @@ const REG_PRICE = { key: 'median_sale_price', format: 'currency', change_kind: '
 const REG_INV = { key: 'inventory', format: 'count', change_kind: 'ratio' } as MetricRegistryEntry;
 
 // ---------- area search ----------
+
+/** The counties inside the ring (agent §6.7): count, weighted median and the busiest few. */
+function CountyBlock({ counties, radiusMi }: { counties: CountyResult; radiusMi: number }) {
+  const n = counties.counties.length;
+  return (
+    <div className="mt-5 border-t border-mp-line pt-4" data-testid="area-counties">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="mp-label">Counties inside</div>
+        <div className="mp-num text-xs text-mp-ink-3" data-testid="area-county-count">
+          {n}
+        </div>
+      </div>
+      {n === 0 ? (
+        <p className="mt-2 text-sm text-mp-ink-2">No county centers within {Math.round(radiusMi)} miles.</p>
+      ) : (
+        <>
+          <p className="mt-1 text-sm text-mp-ink-2">
+            <span className="mp-num text-mp-ink" data-testid="area-county-price">
+              {formatValue(counties.price, 'currency_compact')}
+            </span>{' '}
+            weighted median ·{' '}
+            <span className={`mp-num ${toneClass(counties.yoy)}`}>{fmtChange(REG_PRICE, counties.yoy)}</span> YoY
+          </p>
+          <ul className="mt-2 space-y-1 text-[13px]">
+            {counties.counties.slice(0, 5).map((c) => (
+              <li key={c.name} className="flex items-baseline justify-between gap-3">
+                <span className="truncate text-mp-ink">{c.name}</span>
+                <span className="mp-num flex-none text-mp-ink-2">
+                  {formatValue(c.price, 'currency_compact')} <span className={toneClass(c.yoy)}>{fmtChange(REG_PRICE, c.yoy)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {n > 5 && <p className="mt-1 text-xs text-mp-ink-3">+{n - 5} more counties</p>}
+          <p className="mt-2 text-[11px] leading-4 text-mp-ink-3">
+            Redfin county data, weighted by the latest month's homes sold ({formatValue(counties.homesSold, 'count')}); a county counts when its center is inside the ring. ZIP codes aren't published.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
 export function AreaPanel({
   area,
+  counties = null,
   label,
   dataThrough,
   onRadius,
@@ -24,6 +67,8 @@ export function AreaPanel({
   onSelect,
 }: {
   area: AreaResult;
+  /** §6.7 counties inside the ring; null when the agent hasn't published county files. */
+  counties?: CountyResult | null;
   label: string;
   dataThrough: string;
   onRadius: (r: number) => void;
@@ -133,10 +178,11 @@ export function AreaPanel({
           </table>
           {n > 8 && <p className="mt-1 text-xs text-mp-ink-3">+{n - 8} more in the table view</p>}
           <p className="mt-3 text-[11px] leading-4 text-mp-ink-3">
-            Weighted by homes sold over 12 months ({formatValue(area.homesSold12m, 'count')} sales), as of {formatMonth(dataThrough, true)}. Counties and ZIPs join once finer geography is published.
+            Weighted by homes sold over 12 months ({formatValue(area.homesSold12m, 'count')} sales), as of {formatMonth(dataThrough, true)}.
           </p>
         </>
       )}
+      {counties && <CountyBlock counties={counties} radiusMi={area.radiusMi} />}
     </section>
   );
 }

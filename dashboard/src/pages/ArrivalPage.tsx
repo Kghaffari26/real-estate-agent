@@ -31,14 +31,16 @@ function useGlobeLayout() {
   return layout;
 }
 import { AlertCards, BriefStory, HeatField, Podium, RatesPrices, Section, WhyMoving, type HeatBar } from '../arrival/sections';
-import { useIndex, useManifest } from '../data/hooks';
+import { useEvents, useIndex, useManifest, usePulse } from '../data/hooks';
 import type { IndexOutput } from '../data/schema.gen';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useIsDark, usePrefersReducedMotion } from '../hooks/useMediaQuery';
 import { withAttribution } from '../lib/attribution';
 import { parseChannels } from '../lib/columns';
 import { hasWebGL } from '../lib/webgl';
-import { detectRateEvents } from '../lib/events';
+import { rateMarkers } from '../lib/moments';
+import { PulseTicker } from '../arrival/PulseTicker';
+import { tickerItems } from '../viewmodels/pulse';
 import { formatDate, formatDateTime, formatDelta, formatMonth, formatValue } from '../lib/format';
 import { buildRegistry } from '../lib/metrics';
 import { sentences } from '../lib/text';
@@ -114,6 +116,8 @@ function Arrival({ index }: { index: IndexOutput }) {
   const reduce = usePrefersReducedMotion();
   const [mediaPaused] = useMediaPaused();
   const manifest = useManifest();
+  const published = useEvents(Boolean(index.events));
+  const pulse = usePulse(Boolean(index.pulse));
   const globeRef = useRef<GlobeHandle>(null);
   const heroRef = useRef<HTMLElement>(null);
   const copyRef = useRef<HTMLDivElement>(null);
@@ -197,7 +201,7 @@ function Arrival({ index }: { index: IndexOutput }) {
   });
 
   const nat = index.national;
-  const rateEvents = detectRateEvents(nat.rates.dates, nat.rates.mortgage30, { minProminence: 0.3, window: 8 }).map((e) => ({ date: e.date, value: e.value, kind: e.kind, label: `${e.value.toFixed(2)}%` }));
+  const rateEvents = published.status === 'ready' && published.data ? rateMarkers(published.data.events, nat.rates.dates) : [];
   const brief = nat.brief;
   const sources = withAttribution(index.sources);
   const lastRun = manifest.status === 'ready' ? manifest.data.last_run_at : index.meta.finished_at;
@@ -266,6 +270,15 @@ function Arrival({ index }: { index: IndexOutput }) {
       </section>
 
       {/* ---------- sections ---------- */}
+      {pulse.status === 'ready' && pulse.data && (
+        <PulseTicker
+          items={tickerItems(pulse.data, new Map(index.metros.map((m) => [m.slug, m.name])))}
+          windowWeeks={pulse.data.window_weeks}
+          through={pulse.data.weeks[pulse.data.weeks.length - 1]!}
+          still={reduce || mediaPaused}
+        />
+      )}
+
       <Section id="brief" eyebrow="The national picture" title="What the numbers say" lede={`Data through ${formatMonth(index.data_through, true)}; 30-year rate as of ${formatDate(index.rates_as_of)}.`}>
         <BriefStory
           sentences={sentences(brief.text)}

@@ -100,3 +100,38 @@ def default_values(base_price: float) -> dict[str, object]:
         "MEDIAN NEW LISTING PRICE PER SQ.FT. ($)": 200.0,
         "MEDIAN SALE PRICE PER SQ.FT. ($)": 199.0,
     }
+
+
+WEEKLY_COLUMNS = ["HOMES SOLD NSA", "MEDIAN SALE PRICE NSA ($)", "NEW LISTINGS NSA", "ACTIVE LISTINGS NSA", "PENDING SALES NSA"]
+
+
+def weekly_csv(regions: list[tuple[str, dict[str, object]]], week_ends: list) -> bytes:
+    """Redfin's weekly metro file (rolling 4 weeks): `regions` are (metro name, values
+    keyed by column, constants or callables of the week index)."""
+    header = [*KEY, "REGION ID", "REGION TYPE", "REGION NAME", *WEEKLY_COLUMNS]
+    rows = []
+    for name, values in regions:
+        for i, end in enumerate(week_ends):
+            row: list[object] = ["2026-09-22", "Weekly", end.isoformat(), end.isoformat(), 1, "Metro", name]
+            for col in WEEKLY_COLUMNS:
+                v = values.get(col)
+                row.append(v(i) if callable(v) else v)
+            rows.append(row)
+    return _csv(header, rows)
+
+
+COUNTY_COLUMNS = ["HOMES SOLD", "MEDIAN SALE PRICE NSA ($)", "INVENTORY"]
+
+
+def county_csv(counties: list[tuple[str, str, dict[str, object]]], month_ends: list) -> bytes:
+    """Redfin's monthly county file: `counties` are (county name, parent METRO, values)."""
+    header = [*KEY, "REGION ID", "REGION TYPE", "REGION NAME", "METRO", *COUNTY_COLUMNS]
+    rows = []
+    for name, metro, values in counties:
+        for i, end in enumerate(month_ends):
+            row: list[object] = ["2026-09-03", "Monthly", end.replace(day=1).isoformat(), end.isoformat(), 7, "County", name, metro]
+            for col in COUNTY_COLUMNS:
+                v = values.get(col)
+                row.append(v(i) if callable(v) else v)
+            rows.append(row)
+    return _csv(header, rows)

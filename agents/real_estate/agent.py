@@ -45,8 +45,11 @@ from agents.real_estate import (
     templates,
     transform,
 )
+from agents.real_estate import areas as areas_mod
+from agents.real_estate import events as events_mod
 from agents.real_estate import metrics as metric_registry
 from agents.real_estate import movers as movers_mod
+from agents.real_estate import pulse as pulse_mod
 from agents.real_estate import state as state_mod
 from agents.real_estate import temperature as temperature_mod
 from agents.real_estate import timeline as timeline_mod
@@ -55,10 +58,12 @@ from agents.real_estate.flags import Flag, build_alerts, evaluate_flags
 from agents.real_estate.schema import (
     AffordabilityOut,
     AlertOut,
+    AreasOutput,
     Brief,
     CaseShiller,
     Citation,
     ConstructionSeriesValue,
+    EventsOutput,
     FlagOut,
     IndexOutput,
     Investigation,
@@ -75,6 +80,7 @@ from agents.real_estate.schema import (
     NationalConstruction,
     NationalRates,
     PermitsValue,
+    PulseOutput,
     RatesLatest,
     TemperatureDetail,
     TemperatureSummary,
@@ -263,6 +269,9 @@ class Fetched:
     sources: list[Source] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     timeline_path: Path | None = None  # §6.4 long monthly history (Data Center only)
+    national_history_path: Path | None = None  # §6.5 national monthly history for the event rail
+    weekly: fetch_redfin.ExtensionFetch | None = None  # §6.6 weekly pulse rows
+    counties: fetch_redfin.ExtensionFetch | None = None  # §6.7 county rows
 
 
 @dataclass
@@ -301,6 +310,9 @@ class Computed:
     world: investigate.World | None = None
     targets: list[investigate.Target] = field(default_factory=list)
     timelines: dict[str, TimelineOutput] = field(default_factory=dict)
+    events: EventsOutput | None = None
+    pulse: PulseOutput | None = None
+    areas: dict[str, AreasOutput] = field(default_factory=dict)
 
 
 # ---- the agent -------------------------------------------------------------
@@ -310,7 +322,7 @@ class RealEstateAgent(Agent):
     id = AGENT_NAME
     name = "Real Estate Market Agent"
     route = "/real-estate"
-    schema_version = "1.3.0"  # 1.1.0: §6.3 investigations, alert figures; 1.2.0: metros[].spark; 1.3.0: §6.4 timelines (additive)
+    schema_version = "1.4.0"  # 1.1.0: §6.3 investigations, alert figures; 1.2.0: metros[].spark; 1.3.0: §6.4 timelines; 1.4.0: §6.5-6.7 events, pulse, areas (additive)
     expected_interval_hours = 168
     next_run_hint = "Fridays 08:00 PT"
     history_keep = 52
@@ -369,6 +381,7 @@ class RealEstateAgent(Agent):
                 )
             except Exception as exc:  # noqa: BLE001 - optional (§6.4): the site works without timelines
                 ctx.warn(f"timeline extract failed: {exc}")
+        out.sources += self._fetch_extensions(ctx, out, now)
 
         region_ids = {m.zillow_region_id for m in metros if m.zillow_region_id is not None}
         if region_ids:
@@ -437,6 +450,42 @@ class RealEstateAgent(Agent):
         except Exception as exc:  # noqa: BLE001 - degrade rather than fail the whole run
             ctx.warn(f"FRED fetch failed: {exc}")
         return out
+
+    def _fetch_extensions(self, ctx: RunContext, out: Fetched, now: datetime) -> list[Source]:
+        """§6.5-6.7: each optional; a failure warns and that file isn't published."""
+        settings, tracked = out.settings, {m.redfin_region for m in out.metros}
+        sources: list[Source] = []
+        if settings.use_events and settings.timeline_since:
+            try:
+                since = _first_month(settings.timeline_since)
+                out.national_history_path = fetch_redfin.national_history(
+                    out.national_fetch, since=date(since.year - 1, since.month, 1)
+                )
+            except Exception as exc:  # noqa: BLE001 - optional (§6.5)
+                ctx.warn(f"national history extract failed; no event rail this run: {exc}")
+        if settings.use_pulse:
+            with tracing.span("custom", "fetch:redfin_weekly"):
+                try:
+                    out.weekly = fetch_redfin.fetch_weekly(
+                        ctx.http, tracked_regions=tracked, columns=pulse_mod.PULSE_COLUMNS
+                    )
+                    sources.append(
+                        Source(name="Redfin Data Center: housing market, weekly metros", url=out.weekly.url, retrieved_at=now)
+                    )
+                except Exception as exc:  # noqa: BLE001 - optional (§6.6)
+                    ctx.warn(f"Redfin weekly file unavailable; no pulse this run: {exc}")
+        if settings.use_areas:
+            with tracing.span("custom", "fetch:redfin_counties"):
+                try:
+                    out.counties = fetch_redfin.fetch_counties(
+                        ctx.http, tracked_regions=tracked, columns=areas_mod.AREA_COLUMNS
+                    )
+                    sources.append(
+                        Source(name="Redfin Data Center: housing market, counties", url=out.counties.url, retrieved_at=now)
+                    )
+                except Exception as exc:  # noqa: BLE001 - optional (§6.7)
+                    ctx.warn(f"Redfin county file unavailable; no areas this run: {exc}")
+        return sources
 
     # -- transform -------------------------------------------------------------
 
@@ -747,6 +796,8 @@ class RealEstateAgent(Agent):
                     ctx.warn(w)
                 sp.set(metrics=list(timelines), months=len(next(iter(timelines.values())).dates) if timelines else 0)
 
+        events, pulse, areas = self._extensions(ctx, raw, global_data_through, rates_as_of, fred_pairs("mortgage30"))
+
         return Computed(
             fetched=raw,
             metros=computed_metros,
@@ -768,7 +819,61 @@ class RealEstateAgent(Agent):
             world=world,
             targets=targets,
             timelines=timelines,
+            events=events,
+            pulse=pulse,
+            areas=areas,
         )
+
+    def _extensions(
+        self,
+        ctx: RunContext,
+        raw: Fetched,
+        data_through: date | None,
+        rates_as_of: date | None,
+        m30: list[tuple[date, float]],
+    ) -> tuple[EventsOutput | None, PulseOutput | None, dict[str, AreasOutput]]:
+        """§6.5-6.7, built from what `fetch` got; each optional and size-capped."""
+        settings = raw.settings
+        events: EventsOutput | None = None
+        pulse: PulseOutput | None = None
+        areas: dict[str, AreasOutput] = {}
+        if raw.national_history_path is not None and data_through is not None and m30:
+            with tracing.span("custom", "events") as sp:
+                built = events_mod.build_events(
+                    m30,
+                    pl.scan_parquet(raw.national_history_path).collect().to_dicts(),
+                    _first_month(settings.timeline_since),
+                    max(data_through, rates_as_of or data_through),
+                )
+                events, warnings = events_mod.fit(built, json_size, int(settings.max_events_kb * 1024))
+                for w in warnings:
+                    ctx.warn(w)
+                sp.set(events=len(events.events) if events else 0)
+        if raw.weekly is not None:
+            with tracing.span("custom", "pulse") as sp:
+                built_pulse = pulse_mod.build_pulse(
+                    pl.scan_parquet(raw.weekly.parquet_path).collect().to_dicts(), raw.metros, settings.pulse_weeks
+                )
+                if built_pulse is None:
+                    ctx.warn("Redfin weekly file had no rows for the tracked metros; no pulse this run")
+                else:
+                    pulse, warnings = pulse_mod.fit(built_pulse, json_size, int(settings.max_pulse_kb * 1024))
+                    for w in warnings:
+                        ctx.warn(w)
+                sp.set(metros=len(pulse.metros) if pulse else 0)
+        if raw.counties is not None and data_through is not None:
+            with tracing.span("custom", "areas") as sp:
+                built_areas = areas_mod.build_areas(
+                    pl.scan_parquet(raw.counties.parquet_path).collect().to_dicts(),
+                    raw.metros,
+                    areas_mod.load_centroids(),
+                    data_through,
+                )
+                areas, warnings = areas_mod.fit(built_areas, json_size, int(settings.max_area_kb * 1024))
+                for w in warnings:
+                    ctx.warn(w)
+                sp.set(metros=len(areas), counties=sum(len(a.areas) for a in areas.values()))
+        return events, pulse, areas
 
     def _build_world(
         self,
@@ -945,9 +1050,18 @@ class RealEstateAgent(Agent):
 
         for key, tl in data.timelines.items():
             files[f"timeline/{key}.json"] = tl
+        if data.events is not None:
+            files["events.json"] = data.events
+        if data.pulse is not None:
+            files["pulse.json"] = data.pulse
+        for slug, area in data.areas.items():
+            files[f"areas/{slug}.json"] = area
         body = self._index_body(data, national_brief, summaries)
         body["investigations"] = [self._investigation_summary(i) for i in investigations.values()]
         body["timelines"] = timeline_mod.refs(data.timelines)
+        body["events"] = events_mod.ref(data.events) if data.events else None
+        body["pulse"] = pulse_mod.ref(data.pulse) if data.pulse else None
+        body["areas"] = areas_mod.refs(data.areas)
         limit = int(settings.max_index_kb * 1024) - INDEX_SIZE_MARGIN_BYTES
         body, size_warnings = fit_index(body, lambda b: self._index_size(ctx, b, raw.sources), limit)
         for w in size_warnings:

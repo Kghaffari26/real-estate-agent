@@ -292,3 +292,24 @@
   background: radial-gradient(circle, rgb(var(--mp-bg-2) / 0.9) 0 39.6%, rgb(var(--mp-accent) / 0.42) 40.3%, rgb(var(--mp-accent) / 0.12) 42.5%, rgb(var(--mp-cool-2) / 0.08) 46%, transparent 54%);
   filter: blur(3px);
 }
+
+/* The weekly pulse ticker (Arrival): two copies of the list slide by half their width.
+   Paused on hover/focus and by the page's pause control; still under reduced motion. */
+@keyframes mp-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.mp-marquee {
+  animation: mp-marquee var(--mp-marquee-dur, 120s) linear infinite;
+}
+.mp-marquee-host:hover .mp-marquee,
+.mp-marquee-host:focus-within .mp-marquee,
+.mp-marquee[data-paused] {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mp-marquee {
+    animation: none;
+  }
+}

@@ -6,7 +6,18 @@
 import { z } from 'zod';
 import { timelineFromSeries, type Timeline } from '../lib/timeline';
 import { DataSourceSchema, ManifestEntrySchema, type DataSource, type ManifestEntry } from './manifest';
-import { IndexOutputSchema, MetroDetailOutputSchema, type IndexOutput, type MetroDetailOutput } from './schema.gen';
+import {
+  AreasOutputSchema,
+  EventsOutputSchema,
+  IndexOutputSchema,
+  MetroDetailOutputSchema,
+  PulseOutputSchema,
+  type AreasOutput,
+  type EventsOutput,
+  type IndexOutput,
+  type MetroDetailOutput,
+  type PulseOutput,
+} from './schema.gen';
 
 export class DataError extends Error {
   constructor(
@@ -132,4 +143,34 @@ export function loadTimeline(metric: string, slugs: readonly string[], options: 
     if (!ok.length) throw new DataError('No metro history could be loaded', 'network');
     return timelineFromSeries(ok, metric);
   });
+}
+
+// ---------- §6.5-6.7 extension files (optional: null when absent or malformed) ----------
+
+/** Loads an optional file the index lists; any failure is "not available", never an error state. */
+function optional<T>(path: string, parse: (raw: unknown) => T, fetcher: typeof fetch): Promise<T | null> {
+  return cached(`optional:${path}`, async () => {
+    try {
+      return parse(await fetchJson(path, fetcher));
+    } catch {
+      return null;
+    }
+  });
+}
+
+/** The national event rail (`events.json`), or null. Call only when the index lists it. */
+export function loadEvents(fetcher: typeof fetch = fetch): Promise<EventsOutput | null> {
+  return optional('events.json', (raw) => parseWith(EventsOutputSchema, raw, 'events.json'), fetcher);
+}
+
+/** The weekly pulse (`pulse.json`), or null. Call only when the index lists it. */
+export function loadPulse(fetcher: typeof fetch = fetch): Promise<PulseOutput | null> {
+  return optional('pulse.json', (raw) => parseWith(PulseOutputSchema, raw, 'pulse.json'), fetcher);
+}
+
+/** One metro's counties (`areas/<slug>.json`), or null. Call only for slugs the index lists. */
+export function loadArea(slug: string, fetcher: typeof fetch = fetch): Promise<AreasOutput | null> {
+  if (!isValidSlug(slug)) return Promise.resolve(null);
+  const path = `areas/${slug}.json`;
+  return optional(path, (raw) => parseWith(AreasOutputSchema, raw, path), fetcher);
 }

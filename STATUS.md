@@ -20,7 +20,9 @@ Spec: `docs/specs/SPEC_DASHBOARD_V2.md`. v1 pages still serve `/`, `/metros`, `/
 - **Swap (merged to main):** `/` = Arrival, `/metro/:slug` = dossier, `/explore` = atlas; old links redirect; v1 Overview/Metros/Metro retired (the CSV export and print one-pager went with them). Initial JS 98.6 KB gz.
 - **Phase 6 (affordability studio, `#/metro/:slug/afford`):** the house scaled by your price with the year-ago ghost, log-price/down/rate/term sliders in the URL, the payment vs a year ago, the 2.5D payment stack, the income ring ("needs income data" for now), Reset to published. All 50 published payments reproduce to the cent. On `dashboard-v2`; not yet on `main`.
 - **Phase 7 (compare arena + methodology):** `#/compare` is the three-house arena with entity-colored plots, linked-crosshair charts (up to 2 metrics, 1Y/3Y/All with timelines, indexed) and the leaders table; `#/methodology` is v2, with map, terrain and type credits and the procedural-visuals note; the v1 shell is retired. On `dashboard-v2`; not yet on `main`.
-- **Next:** Phase 8 E2-E4, Phase 9 (polish, perf, trailer, pruning v1 components).
+- **Phases 6-7 merged to `main`.**
+- **Phase 8 (E2-E4, schema 1.4.0):** `events.json` (the national event rail, detected in Python; the dashboard's own detector is gone), `pulse.json` (12 weekly windows for all 50 metros, with agent-computed YoY) and `areas/<slug>.json` (330 counties with Gazetteer centroids; ZIPs skipped, 364 MB). Wired into the time machine's rail, an Arrival ticker, the dossier and county-level area search. Each file is optional and size-capped; the site renders without them. On `dashboard-v2`; not yet on `main`.
+- **Next:** Phase 9 (polish, perf, trailer, pruning v1 components).
 
 ## Session 8 (2026-09-29): dashboard phase 3 polish + sparkline contract
 

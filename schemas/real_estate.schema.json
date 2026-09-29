@@ -1,6 +1,263 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "definitions": {
+    "AreasOutput": {
+      "$defs": {
+        "AreaOut": {
+          "description": "\u00a76.7 one county within a metro, with its latest month and YoY (computed here).",
+          "properties": {
+            "geoid": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Geoid"
+            },
+            "homes_sold": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Homes Sold"
+            },
+            "homes_sold_yoy": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Homes Sold Yoy"
+            },
+            "inventory": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Inventory"
+            },
+            "inventory_yoy": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Inventory Yoy"
+            },
+            "lat": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lat"
+            },
+            "lon": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lon"
+            },
+            "median_sale_price": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Median Sale Price"
+            },
+            "median_sale_price_yoy": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Median Sale Price Yoy"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "title": "AreaOut",
+          "type": "object"
+        }
+      },
+      "description": "\u00a76.7 `areas/<slug>.json`: the counties in one metro.",
+      "properties": {
+        "areas": {
+          "items": {
+            "$ref": "#/$defs/AreaOut"
+          },
+          "title": "Areas",
+          "type": "array"
+        },
+        "data_through": {
+          "format": "date",
+          "title": "Data Through",
+          "type": "string"
+        },
+        "level": {
+          "const": "county",
+          "default": "county",
+          "title": "Level",
+          "type": "string"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug",
+        "data_through",
+        "areas"
+      ],
+      "title": "AreasOutput",
+      "type": "object"
+    },
+    "EventsOutput": {
+      "$defs": {
+        "NationalEvent": {
+          "description": "\u00a76.5 one national moment, detected in code (`events.py`, documented thresholds).",
+          "properties": {
+            "date": {
+              "format": "date",
+              "title": "Date",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "rate_high",
+                "rate_low",
+                "price_yoy_turn_up",
+                "price_yoy_turn_down",
+                "price_yoy_high",
+                "price_yoy_low",
+                "inventory_yoy_high",
+                "inventory_yoy_low"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "metric": {
+              "enum": [
+                "mortgage30",
+                "median_sale_price",
+                "inventory"
+              ],
+              "title": "Metric",
+              "type": "string"
+            },
+            "prominence": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Rate turns: prominence in percentage points",
+              "title": "Prominence"
+            },
+            "value": {
+              "description": "mortgage30: the rate in percent; others: the YoY ratio that month",
+              "title": "Value",
+              "type": "number"
+            }
+          },
+          "required": [
+            "date",
+            "kind",
+            "metric",
+            "value"
+          ],
+          "title": "NationalEvent",
+          "type": "object"
+        }
+      },
+      "description": "\u00a76.5 `events.json`: the national event rail.",
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/NationalEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "rules": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "The thresholds this file was detected with",
+          "title": "Rules",
+          "type": "object"
+        },
+        "since": {
+          "format": "date",
+          "title": "Since",
+          "type": "string"
+        },
+        "through": {
+          "format": "date",
+          "title": "Through",
+          "type": "string"
+        }
+      },
+      "required": [
+        "since",
+        "through",
+        "rules",
+        "events"
+      ],
+      "title": "EventsOutput",
+      "type": "object"
+    },
     "IndexOutput": {
       "$defs": {
         "AlertMetro": {
@@ -94,6 +351,29 @@
             "slugs"
           ],
           "title": "AlertOut",
+          "type": "object"
+        },
+        "AreaRef": {
+          "properties": {
+            "count": {
+              "title": "Count",
+              "type": "integer"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "slug": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          "required": [
+            "slug",
+            "path",
+            "count"
+          ],
+          "title": "AreaRef",
           "type": "object"
         },
         "Brief": {
@@ -284,6 +564,32 @@
             "value"
           ],
           "title": "ConstructionSeriesValue",
+          "type": "object"
+        },
+        "ExtensionRef": {
+          "description": "\u00a76.5-6.7: a published extension file (the site fetches only what's listed).",
+          "properties": {
+            "count": {
+              "description": "events: events; pulse: metros; areas: counties",
+              "title": "Count",
+              "type": "integer"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "through": {
+              "format": "date",
+              "title": "Through",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "count",
+            "through"
+          ],
+          "title": "ExtensionRef",
           "type": "object"
         },
         "InvestigationSummary": {
@@ -1337,10 +1643,28 @@
           "title": "Alerts",
           "type": "array"
         },
+        "areas": {
+          "items": {
+            "$ref": "#/$defs/AreaRef"
+          },
+          "title": "Areas",
+          "type": "array"
+        },
         "data_through": {
           "format": "date",
           "title": "Data Through",
           "type": "string"
+        },
+        "events": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtensionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "headline": {
           "title": "Headline",
@@ -1382,6 +1706,17 @@
         },
         "national": {
           "$ref": "#/$defs/NationalBlock"
+        },
+        "pulse": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtensionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "rates_as_of": {
           "format": "date",
@@ -2118,6 +2453,72 @@
         "brief"
       ],
       "title": "MetroDetailOutput",
+      "type": "object"
+    },
+    "PulseOutput": {
+      "description": "\u00a76.6 `pulse.json`: the last weeks of Redfin's rolling 4-week metro data.",
+      "properties": {
+        "metros": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "description": "slug -> metric -> values aligned to `weeks`",
+          "title": "Metros",
+          "type": "object"
+        },
+        "weeks": {
+          "description": "Window end dates, oldest first, shared by every series",
+          "items": {
+            "format": "date",
+            "type": "string"
+          },
+          "title": "Weeks",
+          "type": "array"
+        },
+        "window_weeks": {
+          "description": "Each point is a rolling window of this many weeks, ending on its date",
+          "title": "Window Weeks",
+          "type": "integer"
+        },
+        "yoy": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "description": "slug -> metric -> latest window vs the window ending 52 weeks earlier (ratio)",
+          "title": "Yoy",
+          "type": "object"
+        }
+      },
+      "required": [
+        "window_weeks",
+        "weeks",
+        "metros",
+        "yoy"
+      ],
+      "title": "PulseOutput",
       "type": "object"
     }
   },

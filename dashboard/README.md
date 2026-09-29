@@ -66,6 +66,13 @@ sample-data/ ──► public/data/  +  source.json {source: data-branch | sampl
 - **Timelines (schema 1.3.0).** `timeline/<metric>.json` holds monthly history since
   2012 for five metrics; the index's `timelines` lists which exist, and the atlas's time
   machine loads one on first scrub (Jan 2013 onward, so every month has a YoY).
+- **Events, pulse, counties (schema 1.4.0).** `events.json` is the time machine's
+  moments rail and the Arrival rate chart's markers (detected by the agent; the
+  dashboard only places and labels them, `lib/moments.ts`); `pulse.json` feeds the
+  Arrival ticker and the dossier's "last 12 weeks"; `areas/<slug>.json` feeds the
+  dossier's county table and area search, which loads only the county files of metros
+  near the ring. Each is fetched only when the index lists it, and a missing or
+  unreadable file just hides its feature (`loadEvents` / `loadPulse` / `loadArea`).
 - **Sparklines.** The Metros table draws each row's trend from the index's
   `metros[].spark` (schema 1.2.0), so it fetches no metro files.
 - **Units.** Metric values and changes are ratios (0.968 → 96.8%, 0.009 → +0.9 pp).
@@ -122,7 +129,7 @@ Dossier are live; Compare, Methodology and the affordability studio follow in Ph
 - **Tokens**: `src/styles/atlas.css` (`--mp-*`, Tailwind `mp-*`), Night by default
   (`.dark`) and Dawn. **Motion**: `src/motion/presets.ts`. **Primitives**: `src/ui/`.
 - **Atlas** (`#/explore`): `src/atlas/` (MapLibre + deck.gl, lazy; 2D fallback),
-  `src/viewmodels/atlas.ts`, `src/lib/{area,columns,timeline,events}.ts`,
+  `src/viewmodels/atlas.ts`, `src/lib/{area,columns,timeline,moments}.ts`,
   `src/state/timeStore.ts`. Every figure is published or read from the published
   series. Heights are proportional: value from zero, YoY centered on zero. Area
   search is a homes-sold-weighted mean of metro medians. deck.gl and MapLibre are

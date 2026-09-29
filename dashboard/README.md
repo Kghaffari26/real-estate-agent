@@ -63,6 +63,9 @@ sample-data/ ──► public/data/  +  source.json {source: data-branch | sampl
   GitHub Pages lets browsers cache JSON for ~10 minutes, so a fixed URL could pair
   a freshly deployed app with the previous deploy's data. With the hash, each build
   fetches exactly its own data, and an unchanged dataset keeps its cache.
+- **Timelines (schema 1.3.0).** `timeline/<metric>.json` holds monthly history since
+  2012 for five metrics; the index's `timelines` lists which exist, and the atlas's time
+  machine loads one on first scrub (Jan 2013 onward, so every month has a YoY).
 - **Sparklines.** The Metros table draws each row's trend from the index's
   `metros[].spark` (schema 1.2.0), so it fetches no metro files.
 - **Units.** Metric values and changes are ratios (0.968 → 96.8%, 0.009 → +0.9 pp).
@@ -98,16 +101,39 @@ Every route is deep-linkable:
 
 | Route | Query parameters |
 |---|---|
-| `#/` | `?metric=&range=&rates=&map=` |
-| `#/metros` | `?q=&type=&temp=&flag=&sort=&dir=&metric=&view=&cols=` |
-| `#/metro/:slug` | `?metric=&range=&rates=0&vs=1` |
-| `#/compare` | `?m=a,b,c&metrics=&range=&indexed=1` |
-| `#/about` | none |
+| `#/` (Arrival: globe, brief, heat field, rates vs prices, movers, investigations) | none |
+| `#/explore` (the atlas) | `?m=&t=YYYY-MM&style=&h=value|yoy&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low` |
+| `#/metro/:slug` (dossier) | `?m=&range=1Y|3Y|All&mode=yoy&vs=1&section=affordability&tier=low` (v1's `?metric=` still works) |
+| `#/compare` (v1 look until Phase 7) | `?m=a,b,c&metrics=&range=&indexed=1` |
+| `#/about` (alias `#/methodology`; v1 look until Phase 7) | none |
+| `#/metros`, `#/arrival`, `#/dossier/:slug` | redirects to `#/explore?view=table`, `#/`, `#/metro/:slug` |
+| `#/styleguide` (v2 design system) | none |
 
 Any view also takes `?section=<id>` to scroll to a section. "Copy link" buttons
 produce these URLs.
 
-## Design system
+## Metro Pulse v2 ("Night Atlas")
+
+`docs/specs/SPEC_DASHBOARD_V2.md` replaced the presentation layer (Arrival, Atlas and
+Dossier are live; Compare, Methodology and the affordability studio follow in Phases
+6-7); `data/`, `lib/` and `viewmodels/` stay the contract.
+
+- **Tokens**: `src/styles/atlas.css` (`--mp-*`, Tailwind `mp-*`), Night by default
+  (`.dark`) and Dawn. **Motion**: `src/motion/presets.ts`. **Primitives**: `src/ui/`.
+- **Atlas** (`#/explore`): `src/atlas/` (MapLibre + deck.gl, lazy; 2D fallback),
+  `src/viewmodels/atlas.ts`, `src/lib/{area,columns,timeline,events}.ts`,
+  `src/state/timeStore.ts`. Every figure is published or read from the published
+  series. Heights are proportional: value from zero, YoY centered on zero. Area
+  search is a homes-sold-weighted mean of metro medians. deck.gl and MapLibre are
+  pinned exactly; `src/atlas/maplibreCompat.ts` carries the MapLibre 6 patch and its
+  tests.
+- **Arrival** (`#/arrival`): `src/arrival/` (GlobeView globe, sections), land dots from
+  `scripts/make-land-dots.mjs`, posters from `design/arrival/poster.mjs`.
+- **Design captures**: `design/gate-a/` (art-direction frames), `design/gate-b/` and
+  `design/arrival/` (`shots.mjs`, `record.mjs`, `poster.mjs` against `vite preview`).
+- **Local e2e** can point at any Chromium with `PW_CHROMIUM=...`.
+
+## Design system (v1)
 
 - **Type.** Inter Variable, self-hosted, with the `cv11` and `ss01` features.
   Figures use tabular numerals (`.num`). The scale is 11/12/13/14/16/20/24/32/40 on

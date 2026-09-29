@@ -1290,6 +1290,42 @@
           },
           "title": "TierUsage",
           "type": "object"
+        },
+        "TimelineRef": {
+          "description": "\u00a76.4: which timeline files this run published (the site fetches only these).",
+          "properties": {
+            "end": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "metric": {
+              "title": "Metric",
+              "type": "string"
+            },
+            "months": {
+              "title": "Months",
+              "type": "integer"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "metric",
+            "path",
+            "start",
+            "end",
+            "months"
+          ],
+          "title": "TimelineRef",
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -1357,6 +1393,13 @@
             "$ref": "#/$defs/Citation"
           },
           "title": "Sources",
+          "type": "array"
+        },
+        "timelines": {
+          "items": {
+            "$ref": "#/$defs/TimelineRef"
+          },
+          "title": "Timelines",
           "type": "array"
         }
       },

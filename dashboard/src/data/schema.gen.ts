@@ -247,6 +247,16 @@ export const RunMetaSchema = z.object({
 });
 export type RunMeta = z.output<typeof RunMetaSchema>;
 
+/** §6.4: which timeline files this run published (the site fetches only these). */
+export const TimelineRefSchema = z.object({
+  end: z.string(),
+  metric: z.string(),
+  months: z.number(),
+  path: z.string(),
+  start: z.string(),
+});
+export type TimelineRef = z.output<typeof TimelineRefSchema>;
+
 export const IndexOutputSchema = z.object({
   alerts: tolerantArray(AlertOutSchema, "IndexOutput.alerts"),
   data_through: z.string(),
@@ -260,6 +270,7 @@ export const IndexOutputSchema = z.object({
   national: NationalBlockSchema,
   rates_as_of: z.string(),
   sources: tolerantArray(CitationSchema, "IndexOutput.sources"),
+  timelines: optionalField(tolerantArray(TimelineRefSchema, "IndexOutput.timelines"), [], "IndexOutput.timelines"),
 });
 export type IndexOutput = z.output<typeof IndexOutputSchema>;
 

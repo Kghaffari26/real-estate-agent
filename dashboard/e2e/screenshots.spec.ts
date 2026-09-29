@@ -11,9 +11,9 @@ import { expect, gotoView, revealAll, test } from './fixtures';
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/screenshots');
 
 const VIEWS: Array<{ name: string; path: string; heading: RegExp }> = [
-  { name: 'overview', path: '/', heading: /./ },
-  { name: 'metros', path: '/metros', heading: /^Metros$/ },
-  { name: 'metro-detail', path: '/metro/west-palm-beach-fl', heading: /West Palm Beach, FL/ },
+  { name: 'overview', path: '/', heading: /Metro Pulse/ },
+  { name: 'metros', path: '/explore', heading: /^Atlas/ },
+  { name: 'metro-detail', path: '/metro/west-palm-beach-fl', heading: /West Palm Beach/ },
   { name: 'compare', path: '/compare?m=pittsburgh-pa,houston-tx,boston-ma&metrics=median_sale_price,inventory&indexed=1', heading: /Compare metros/ },
   { name: 'about', path: '/about', heading: /Methodology/ },
 ];
@@ -37,7 +37,7 @@ test.describe('screenshots', () => {
         await page.setViewportSize({ width: mode.width, height: 900 });
         await page.emulateMedia({ reducedMotion: 'reduce' });
         await gotoView(page, view.path);
-        await expect(page.getByRole('heading', { level: 1, name: view.heading }).first()).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1, name: view.heading }).first()).toBeAttached(); // v2 pages keep a visually hidden h1
         await revealAll(page);
         await expect(page.locator('.skeleton')).toHaveCount(0, { timeout: 15_000 });
         await page.waitForLoadState('networkidle');

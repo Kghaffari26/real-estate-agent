@@ -1,3 +1,9 @@
+/**
+ * Cross-app smoke checks. The v2 screens (Arrival, Atlas, Dossier, Styleguide) have
+ * their own specs (arrival, explore, dossier, v2) with axe in both themes; this file
+ * covers the v1-shell pages that remain (Compare, Methodology), the flows that span
+ * screens (⌘K, redirects of old links, data versioning) and the phone layout.
+ */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,17 +23,15 @@ const dataSource = (() => {
 const latest = JSON.parse(readFileSync(resolve(here, '../public/data/latest.json'), 'utf8')) as { investigations: { slug: string }[] };
 const investigated = latest.investigations[0]?.slug ?? 'pittsburgh-pa';
 
+// v1-shell pages (full WCAG 2.1 AA axe, as before the v2 swap).
 const ROUTES: Array<{ name: string; path: string; ready: RegExp }> = [
-  { name: 'overview', path: '/', ready: /./ },
-  { name: 'metros', path: '/metros', ready: /^Metros$/ },
-  { name: 'metro detail', path: `/metro/${investigated}`, ready: /, [A-Z]{2}/ },
   { name: 'compare', path: '/compare?m=pittsburgh-pa,houston-tx,austin-tx', ready: /Compare metros/ },
   { name: 'about', path: '/about', ready: /Methodology/ },
 ];
 
 async function ready(page: Page, heading: RegExp) {
   await expect(page.getByRole('heading', { level: 1, name: heading }).first()).toBeVisible();
-  await revealAll(page); // charts and the map load as they near the viewport
+  await revealAll(page); // charts load as they near the viewport
   await expect(page.locator('.skeleton')).toHaveCount(0, { timeout: 15_000 });
   await page.waitForLoadState('networkidle');
 }
@@ -51,28 +55,31 @@ for (const route of ROUTES) {
   }
 }
 
-test('freshness chip and national data', async ({ page }) => {
+test('freshness and the national brief on the landing page', async ({ page }, info) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await gotoView(page, '/');
-  const chip = page.getByRole('link', { name: /20\d\d/ }).first();
-  await expect(chip).toBeVisible();
-  await expect(chip.getByText('Sample', { exact: true })).toHaveCount(dataSource === 'sample' ? 1 : 0);
-  await expect(page.getByRole('img', { name: /Market temperature \d+ out of 100/ }).first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'The national picture' })).toBeVisible();
+  // The freshness chip lives in the command bar from the lg breakpoint up.
+  if (info.project.name !== 'mobile-360') {
+    const chip = page.getByRole('link', { name: /Redfin through .*20\d\d/ });
+    await expect(chip).toBeVisible();
+    await expect(chip.getByText('Sample', { exact: true })).toHaveCount(dataSource === 'sample' ? 1 : 0);
+  }
+  await expect(page.getByRole('heading', { name: 'What the numbers say' })).toBeAttached();
+  await expect(page.getByText('The national picture', { exact: true })).toBeAttached();
 });
 
-test('overview chart controls are deep-linked', async ({ page }) => {
-  await gotoView(page, '/?metric=inventory&range=1Y');
-  const card = page.locator('#national-trends');
-  await expect(card.getByRole('combobox', { name: 'Metric' })).toHaveValue('inventory');
-  await expect(card.getByRole('button', { name: '1Y' })).toHaveAttribute('aria-pressed', 'true');
-  await card.getByRole('button', { name: 'All' }).click();
+test('dossier chart controls are deep-linked (and v1 ?metric= links still work)', async ({ page }) => {
+  await gotoView(page, '/metro/austin-tx?metric=inventory&range=1Y');
+  await expect(page.getByRole('combobox', { name: 'Metric' })).toHaveValue('inventory');
+  await expect(page.getByRole('radio', { name: '1Y' })).toBeChecked();
+  await page.getByText('All', { exact: true }).click();
   await expect(page).toHaveURL(/range=All/);
 });
 
 test('command palette (Ctrl+K) navigates to a metro', async ({ page }, info) => {
   test.skip(info.project.name === 'mobile-360', 'desktop interaction');
   await gotoView(page, '/');
-  await ready(page, /./);
+  await expect(page.getByLabel('Key national figures')).toBeVisible();
   await page.keyboard.press('Control+k');
   const dialog = page.getByRole('dialog', { name: 'Command palette' });
   await expect(dialog).toBeVisible();
@@ -81,46 +88,34 @@ test('command palette (Ctrl+K) navigates to a metro', async ({ page }, info) => 
   await expect(dialog.getByRole('option', { name: /Pittsburgh, PA/ }).first()).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/#\/metro\/pittsburgh-pa/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Pittsburgh, PA' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /Pittsburgh/ })).toBeVisible();
 });
 
-test('metros: map bubbles, table sort/filter/columns, CSV export', async ({ page }) => {
+test('old links land on their v2 homes: /metros → the atlas table, /dossier → /metro', async ({ page }) => {
   await gotoView(page, '/metros');
-  await ready(page, /^Metros$/);
-  await expect(page.getByText(/Map unavailable/)).toHaveCount(0);
-  await expect(page.locator('#map .maplibregl-canvas')).toHaveCount(1, { timeout: 15_000 });
-  const table = page.getByRole('table', { name: /Metros with their latest values/ });
-  await expect(table.getByRole('row')).toHaveCount(51);
-  await page.getByRole('searchbox', { name: 'Search' }).fill('san');
-  await expect(page).toHaveURL(/q=san/);
-  expect(await table.getByRole('row').count()).toBeLessThan(51);
-  await page.getByRole('searchbox', { name: 'Search' }).fill('');
+  await expect(page).toHaveURL(/#\/explore\?view=table/);
+  const table = page.getByTestId('atlas-table');
+  await expect(table.locator('tbody tr')).toHaveCount(50);
+  // Sortable, and a metro opens from the table.
   await table.getByRole('button', { name: /^Metro/ }).click();
-  await expect(table.getByRole('columnheader', { name: /Metro/ }).first()).toHaveAttribute('aria-sort', 'ascending');
-  await page.getByRole('button', { name: /^Columns/ }).click();
-  await page.getByRole('group', { name: 'Visible columns' }).getByRole('checkbox').first().click();
-  await expect(page).toHaveURL(/cols=/);
-  await page.keyboard.press('Escape');
-  const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export CSV' }).click();
-  expect((await download).suggestedFilename()).toMatch(/^metro-pulse-metros-.*\.csv$/);
-  await page.getByRole('button', { name: 'View as table' }).click();
-  await expect(page).toHaveURL(/view=table/);
-  await expect(page.locator('.maplibregl-canvas')).toHaveCount(0);
-  await table.getByRole('link', { name: 'Anaheim, CA' }).click();
-  await expect(page).toHaveURL(/#\/metro\/anaheim-ca/);
+  await expect(table.getByRole('columnheader', { name: /Metro/ })).toHaveAttribute('aria-sort', 'ascending');
+  await table.getByRole('button', { name: 'Anaheim, CA' }).click();
+  await expect(page).toHaveURL(/sel=anaheim-ca/);
+  await gotoView(page, '/dossier/denver-co?range=1Y');
+  await expect(page).toHaveURL(/#\/metro\/denver-co\?range=1Y/);
+  await gotoView(page, '/arrival');
+  await expect(page).toHaveURL(/#\/$/);
 });
 
-test('metro detail: rate strip, U.S. comparison, calculator, cited metrics', async ({ page }) => {
+test('metro dossier: rate strip, U.S. comparison, calculator', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await gotoView(page, `/metro/${investigated}`);
-  await ready(page, /, [A-Z]{2}/);
-  await expect(page.getByText('30-yr fixed mortgage rate (U.S.)', { exact: true }).last()).toBeVisible();
-  await page.getByText('Compare with U.S. (index to 100)').click();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByText('30-yr rate', { exact: true }).first()).toBeVisible();
+  await page.getByText('Index to U.S.').click();
   await expect(page).toHaveURL(/vs=1/);
-  await expect(page.getByText('Indexed: first month in range = 100')).toBeVisible();
-  // On phones the long page is collapsed into sections.
-  const section = page.getByRole('button', { name: 'Affordability', exact: true });
-  if (await section.isVisible()) await section.click();
+  await expect(page.getByText(/rebased to 100/)).toBeVisible();
+  await page.getByRole('button', { name: 'Try your own numbers' }).click();
   const calc = page.getByRole('form', { name: 'Mortgage payment calculator' });
   await calc.scrollIntoViewIfNeeded();
   const before = await calc.getByRole('status').textContent();
@@ -128,13 +123,6 @@ test('metro detail: rate strip, U.S. comparison, calculator, cited metrics', asy
   await expect(calc.getByRole('status')).not.toHaveText(before ?? '');
   await calc.getByRole('button', { name: 'Reset to defaults' }).click();
   await expect(calc.getByRole('status')).toHaveText(before ?? '');
-  const analysis = page.getByRole('button', { name: 'Analysis', exact: true });
-  if ((await analysis.isVisible()) && (await analysis.getAttribute('aria-expanded')) === 'false') await analysis.click();
-  const chip = page.locator('#investigation').getByRole('link').first();
-  if (await chip.count()) {
-    await chip.hover();
-    await expect(page.locator('[data-metric].ring-2')).toHaveCount(1);
-  }
 });
 
 test('compare: add, remove, indexed toggle, leaders', async ({ page }, info) => {
@@ -153,41 +141,34 @@ test('compare: add, remove, indexed toggle, leaders', async ({ page }, info) => 
 test('copy link shows a toast; sidebar collapse is remembered', async ({ page, context }, info) => {
   test.skip(info.project.name === 'mobile-360', 'desktop interaction');
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await gotoView(page, '/?range=1Y');
-  await ready(page, /./);
+  await gotoView(page, '/compare?m=pittsburgh-pa,houston-tx');
+  await ready(page, /Compare metros/);
   await page.getByRole('button', { name: 'Copy link' }).first().click();
   await expect(page.getByRole('status').filter({ hasText: 'Link copied' })).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/#\/\?range=1Y$/);
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/#\/compare\?/);
   await page.getByRole('button', { name: 'Collapse sidebar' }).click();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
 });
 
-test('print: the metro page drops the app chrome and adds a report header', async ({ page }) => {
-  await gotoView(page, `/metro/${investigated}`);
-  await ready(page, /, [A-Z]{2}/);
-  await page.emulateMedia({ media: 'print' });
-  await expect(page.getByRole('banner')).toBeHidden();
-  await expect(page.getByText('Metro report', { exact: false })).toBeVisible();
-});
-
 test('unknown metro shows not found', async ({ page }) => {
   await gotoView(page, '/metro/nowhere-zz');
-  await expect(page.getByRole('heading', { level: 1, name: 'Metro not found' })).toBeVisible();
+  await expect(page.getByText('We don’t track a metro at that address.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Browse the atlas' })).toBeVisible();
 });
 
-test('data URLs carry this build\'s data version; Metros fetches no metro files', async ({ page }) => {
+test("data URLs carry this build's data version; the atlas fetches no metro files up front", async ({ page }) => {
   const dataRequests: string[] = [];
   page.on('request', (r) => r.url().includes('/data/') && dataRequests.push(r.url()));
-  await gotoView(page, '/metros');
-  await ready(page, /^Metros$/);
+  await gotoView(page, '/explore');
+  await expect(page.locator('[data-atlas-mode]')).toBeAttached({ timeout: 20_000 });
+  await page.waitForLoadState('networkidle');
   expect(dataRequests.length).toBeGreaterThan(0);
   const versions = new Set(dataRequests.map((u) => new URL(u).searchParams.get('v')));
   expect(versions.size).toBe(1);
   expect([...versions][0]).toMatch(/^[0-9a-f]{12}$/);
-  // Table sparklines come from metros[].spark in the index (schema 1.2.0).
-  expect(dataRequests.filter((u) => u.includes('/data/metros/'))).toEqual([]);
-  await expect(page.locator('#table svg').first()).toBeVisible();
+  // Hover cards draw from metros[].spark; history loads only on the first scrub.
+  expect(dataRequests.filter((u) => u.includes('/data/metros/') || u.includes('/data/timeline/'))).toEqual([]);
 });
 
 test.describe('mobile (360px)', () => {
@@ -198,8 +179,9 @@ test.describe('mobile (360px)', () => {
 
   test('the search button opens the command palette by tap', async ({ page }) => {
     await gotoView(page, '/');
-    await ready(page, /./);
-    await page.getByRole('button', { name: 'Search metros and pages' }).tap().catch(async () => page.getByRole('button', { name: 'Search metros and pages' }).click());
+    await expect(page.getByLabel('Key national figures')).toBeVisible();
+    const search = page.getByRole('button', { name: 'Search', exact: true });
+    await search.tap().catch(async () => search.click());
     const dialog = page.getByRole('dialog', { name: 'Command palette' });
     await expect(dialog).toBeVisible();
     await page.keyboard.type('boston');
@@ -207,23 +189,13 @@ test.describe('mobile (360px)', () => {
     await expect(page).toHaveURL(/#\/metro\/boston-ma/);
   });
 
-  test('the bottom nav never covers the calculator or the end of the page', async ({ page }) => {
-    await gotoView(page, `/metro/${investigated}`);
-    await ready(page, /, [A-Z]{2}/);
-    await page.getByRole('button', { name: 'Affordability', exact: true }).click();
-    const nav = page.getByRole('navigation', { name: 'Main' }).last();
-    const navTop = (await nav.boundingBox())!.y;
-    // Scrolled all the way down, the last calculator control and the footer sit above the nav.
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  test('the dossier calculator fits and works at 360px', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await gotoView(page, `/metro/${investigated}?section=affordability`);
     const reset = page.getByRole('button', { name: 'Reset to defaults' });
     await reset.scrollIntoViewIfNeeded();
-    const box = (await reset.boundingBox())!;
-    expect(box.y + box.height).toBeLessThanOrEqual(navTop);
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    const footerText = page.getByText(/Every number is computed in code/);
-    const f = (await footerText.boundingBox())!;
-    expect(f.y + f.height).toBeLessThanOrEqual(navTop);
-    // And the reset button is actually clickable (not intercepted by the nav).
+    await expect(reset).toBeVisible();
     await reset.click();
+    await expectNoHorizontalScroll(page);
   });
 });

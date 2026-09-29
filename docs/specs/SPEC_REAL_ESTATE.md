@@ -581,6 +581,36 @@ agent's `fetch:redfin`/`metro_briefs`/`national_brief`/`investigations` steps, e
 LLM call, tool call and guard check, and `manifest-entry.json` carries a
 `trace_summary`.
 
+### 6.4 Additive (schema 1.3.0): `timeline/<metric>.json` and `timelines`
+
+Added 2026-09-29 for the dashboard's time machine (dashboard v2 spec §8.2 E1).
+Additive with defaults: a 1.2.0 index still validates, and the site works without
+any timeline file (it falls back to the metro files' 36 months).
+
+- **Files:** `timeline/<metric>.json` for `median_sale_price`, `inventory`,
+  `median_dom`, `price_drops` and `months_of_supply`. Body (`TimelineOutput`):
+  `{metric, dates: [month-end, ...], metros: {slug: [value | null, ...]}}`, with every
+  series aligned to the shared `dates`, oldest first, from `timeline_since`
+  (config, default `2012-01`) through the latest month.
+- **Values** are Redfin Data Center levels, the same columns and ratio conversion as
+  §3.1, only rounded: prices, counts and days to whole numbers; `price_drops` to 3
+  decimals; `months_of_supply` to 1 decimal. A month a metro doesn't report is
+  `null`. No changes are published here: the site derives YoY for past months from
+  these levels with §5.1's rule (ratio metrics: value / value 12 months earlier − 1;
+  others: the difference). The latest month's published YoY stays the source for
+  the latest month.
+- **Source:** the same downloaded `all_metros.csv` / price-drops CSVs, re-read with
+  a `since` window (`fetch_redfin.fetch_metro_timeline` → a separate parquet; the
+  36-month computations are unchanged). Only Data Center runs publish timelines: the
+  legacy export is never spliced in.
+- **Budget:** each file ≤ `max_timeline_kb` (120 KB). An oversized file is not
+  published that run (a `meta.warnings` line); history is never trimmed silently.
+  50 metros × 176 months measures ~60 KB for prices.
+- **Index:** `timelines: [{metric, path, start, end, months}]` lists exactly the files
+  this run published, so the site requests only those.
+- **Optional:** a failed extract warns and publishes no timelines; it never fails
+  the run.
+
 ---
 
 ## 7. LLM usage

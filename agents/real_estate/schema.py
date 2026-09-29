@@ -246,6 +246,26 @@ class InvestigationSummary(BaseModel):
     stop_reason: str
 
 
+class TimelineOutput(BaseModel):
+    """§6.4 `timeline/<metric>.json`: one metric, every tracked metro, monthly."""
+
+    metric: str
+    dates: list[date] = Field(description="Month ends, oldest first, shared by every metro's series")
+    metros: dict[str, list[int | float | None]] = Field(
+        description="slug -> values aligned to `dates` (rounded Redfin levels; null where not reported)"
+    )
+
+
+class TimelineRef(BaseModel):
+    """§6.4: which timeline files this run published (the site fetches only these)."""
+
+    metric: str
+    path: str
+    start: date
+    end: date
+    months: int
+
+
 class IndexOutput(AgentOutput):
     headline: str
     key_stats: list[KeyStat]
@@ -258,6 +278,7 @@ class IndexOutput(AgentOutput):
     alerts: list[AlertOut]
     sources: list[Citation]
     investigations: list[InvestigationSummary] = Field(default_factory=list)  # §6.3, additive
+    timelines: list[TimelineRef] = Field(default_factory=list)  # §6.4, additive (1.3.0)
 
 
 class MetroDetailOutput(BaseModel):

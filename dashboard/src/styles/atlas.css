@@ -1,0 +1,294 @@
+/*
+ * Metro Pulse v2 "Night Atlas" design tokens (spec: docs/specs/SPEC_DASHBOARD_V2.md §5).
+ *
+ * Dark-first: `.dark` is Night (the designed default), `:root` is Dawn, its light
+ * sibling. Both are designed, not inverted. Tokens are prefixed `--mp-` so they
+ * live beside the v1 tokens (tokens.css) while screens move over one by one.
+ *
+ * Colors are sRGB channel triplets so Tailwind opacity modifiers work
+ * (`bg-mp-panel/70`). Every text token passes 4.5:1 on its page and panel
+ * surfaces (checked in src/ui/atlasTokens.test.ts).
+ */
+@import '@fontsource/instrument-serif/latin-400.css';
+@import '@fontsource/instrument-serif/latin-400-italic.css';
+@import '@fontsource-variable/inter-tight/wght.css';
+@import '@fontsource-variable/geist-mono/wght.css';
+
+:root {
+  /* Dawn */
+  --mp-bg: 242 244 248;
+  --mp-bg-2: 229 234 243;
+  --mp-panel: 255 255 255;
+  --mp-panel-alpha: 0.78;
+  --mp-ink: 11 16 32;
+  --mp-ink-2: 58 68 88;
+  --mp-ink-3: 90 100 121;
+  --mp-rule: 11 16 32;
+  --mp-rule-alpha: 0.1;
+  --mp-highlight: 255 255 255;
+  --mp-highlight-alpha: 0.9;
+  --mp-accent: 10 115 122;
+  --mp-accent-ink: 255 255 255;
+  --mp-accent-soft: 10 115 122;
+  --mp-focus: 10 115 122;
+
+  /* Data: diverging YoY (cool = declines, hot = gains), one scale everywhere */
+  --mp-cool-2: 31 91 204;
+  --mp-cool-1: 110 155 232;
+  --mp-mid: 163 169 182;
+  --mp-hot-1: 240 138 60;
+  --mp-hot-2: 194 54 26;
+
+  /* Temperature light (cold rim / warm key) */
+  --mp-cold-light: 70 140 230;
+  --mp-warm-light: 236 146 60;
+
+  /* Status: reserved, always with an icon and a label */
+  --mp-good: 21 127 59;
+  --mp-warn: 138 97 0;
+  --mp-bad: 180 35 24;
+
+  /* Entity colors (Compare, charts, 3D): fixed order */
+  --mp-e1: 42 120 214;
+  --mp-e2: 214 92 36;
+  --mp-e3: 20 150 104;
+
+  --mp-shadow: 0 18px 50px -20px rgb(11 16 32 / 0.25), 0 2px 8px -2px rgb(11 16 32 / 0.08);
+  --mp-glow: 0 0 0 0 transparent;
+  --mp-grain-opacity: 0.05;
+}
+
+.dark {
+  /* Night */
+  --mp-bg: 5 7 13;
+  --mp-bg-2: 11 16 32;
+  --mp-panel: 14 19 34;
+  --mp-panel-alpha: 0.72;
+  --mp-ink: 238 242 250;
+  --mp-ink-2: 180 189 207;
+  --mp-ink-3: 143 154 177;
+  --mp-rule: 255 255 255;
+  --mp-rule-alpha: 0.09;
+  --mp-highlight: 255 255 255;
+  --mp-highlight-alpha: 0.07;
+  --mp-accent: 92 225 230;
+  --mp-accent-ink: 2 20 23;
+  --mp-accent-soft: 92 225 230;
+  --mp-focus: 92 225 230;
+
+  --mp-cool-2: 91 143 255;
+  --mp-cool-1: 143 188 255;
+  --mp-mid: 137 144 163;
+  --mp-hot-1: 255 184 107;
+  --mp-hot-2: 255 107 74;
+
+  --mp-cold-light: 98 182 255;
+  --mp-warm-light: 255 176 87;
+
+  --mp-good: 74 222 128;
+  --mp-warn: 250 204 21;
+  --mp-bad: 255 122 122;
+
+  --mp-e1: 92 157 255;
+  --mp-e2: 255 138 76;
+  --mp-e3: 64 214 160;
+
+  --mp-shadow: 0 24px 60px -24px rgb(0 0 0 / 0.8);
+  --mp-glow: 0 0 24px 0 rgb(92 225 230 / 0.35);
+  --mp-grain-opacity: 0.08;
+}
+
+:root {
+  --mp-font-display: 'Instrument Serif', 'Times New Roman', serif;
+  --mp-font-ui: 'Inter Tight Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --mp-font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  /* Shape: panels, controls and chips each have their own radius (anti-slop #2) */
+  --mp-r-panel: 18px;
+  --mp-r-control: 10px;
+  --mp-r-chip: 999px;
+  --mp-blur: 20px;
+
+  /* Motion (§5.4) */
+  --mp-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --mp-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --mp-dur-micro: 150ms;
+  --mp-dur-panel: 320ms;
+
+  /* Film grain, generated (no asset) */
+  --mp-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mp-dur-micro: 0ms;
+    --mp-dur-panel: 0ms;
+  }
+}
+
+/* Plain classes (not a Tailwind layer): utilities are emitted later and still win. */
+  .mp-page {
+    background: rgb(var(--mp-bg));
+    color: rgb(var(--mp-ink));
+    font-family: var(--mp-font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .mp-display {
+    font-family: var(--mp-font-display);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    line-height: 1.02;
+  }
+  .mp-num {
+    font-family: var(--mp-font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .mp-num-hero {
+    font-family: var(--mp-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 300;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+  }
+  .mp-label {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgb(var(--mp-ink-3));
+  }
+  .mp-glass {
+    background: rgb(var(--mp-panel) / var(--mp-panel-alpha));
+    border: 1px solid rgb(var(--mp-rule) / calc(var(--mp-rule-alpha) + 0.02));
+    border-radius: var(--mp-r-panel);
+    box-shadow: inset 0 1px 0 rgb(var(--mp-highlight) / var(--mp-highlight-alpha)), var(--mp-shadow);
+    backdrop-filter: blur(var(--mp-blur)) saturate(1.2);
+    -webkit-backdrop-filter: blur(var(--mp-blur)) saturate(1.2);
+  }
+  .mp-rule {
+    border-color: rgb(var(--mp-rule) / var(--mp-rule-alpha));
+  }
+  .mp-grain {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--mp-grain);
+    opacity: var(--mp-grain-opacity);
+    mix-blend-mode: overlay;
+  }
+  .mp-focus:focus-visible,
+  .mp-page :focus-visible {
+    outline: 2px solid rgb(var(--mp-focus));
+    outline-offset: 2px;
+    border-radius: var(--mp-r-control);
+  }
+
+/* No transparency for people who ask for none (§10): solid panels, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+  .mp-glass {
+    background: rgb(var(--mp-panel));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .mp-grain {
+    display: none;
+  }
+}
+
+/* Range inputs (Slider, Scrubber): a thin track, an accent fill up to the thumb. */
+.mp-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+  --mp-track: linear-gradient(90deg, rgb(var(--mp-accent)) var(--mp-pos, 0%), rgb(var(--mp-ink) / 0.14) var(--mp-pos, 0%));
+}
+.mp-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--mp-track);
+}
+.mp-range::-moz-range-track {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--mp-track);
+}
+.mp-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgb(var(--mp-accent));
+  box-shadow: 0 0 0 6px rgb(var(--mp-accent) / 0.16), 0 2px 8px rgb(0 0 0 / 0.3);
+  transition: box-shadow var(--mp-dur-micro) var(--mp-ease), transform var(--mp-dur-micro) var(--mp-ease);
+}
+.mp-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgb(var(--mp-accent));
+  box-shadow: 0 0 0 6px rgb(var(--mp-accent) / 0.16);
+}
+.mp-range:hover::-webkit-slider-thumb,
+.mp-range:active::-webkit-slider-thumb {
+  box-shadow: 0 0 0 9px rgb(var(--mp-accent) / 0.2), 0 2px 8px rgb(0 0 0 / 0.3);
+}
+.mp-range:focus-visible {
+  outline: none;
+}
+.mp-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid rgb(var(--mp-focus));
+  outline-offset: 3px;
+}
+.mp-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid rgb(var(--mp-focus));
+  outline-offset: 3px;
+}
+/* The scrubber's thumb is a squared handle, not a knob. */
+.mp-range-scrub::-webkit-slider-thumb {
+  width: 14px;
+  height: 22px;
+  border-radius: 4px;
+  background: rgb(var(--mp-accent));
+  border: none;
+}
+.mp-range-scrub::-moz-range-thumb {
+  width: 14px;
+  height: 22px;
+  border-radius: 4px;
+  background: rgb(var(--mp-accent));
+  border: none;
+}
+
+/* Arrival: a procedural starfield (no media) and the globe's atmosphere glow. */
+.mp-stars {
+  background-color: rgb(var(--mp-bg));
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgb(var(--mp-ink) / 0.55), transparent 60%),
+    radial-gradient(1px 1px at 27% 72%, rgb(var(--mp-ink) / 0.35), transparent 60%),
+    radial-gradient(1.2px 1.2px at 43% 34%, rgb(var(--mp-ink) / 0.5), transparent 60%),
+    radial-gradient(1px 1px at 61% 12%, rgb(var(--mp-ink) / 0.4), transparent 60%),
+    radial-gradient(1px 1px at 78% 58%, rgb(var(--mp-ink) / 0.3), transparent 60%),
+    radial-gradient(1.4px 1.4px at 88% 26%, rgb(var(--mp-ink) / 0.55), transparent 60%),
+    radial-gradient(1px 1px at 6% 88%, rgb(var(--mp-ink) / 0.35), transparent 60%),
+    radial-gradient(1px 1px at 52% 92%, rgb(var(--mp-ink) / 0.3), transparent 60%),
+    radial-gradient(ellipse at 70% 60%, rgb(var(--mp-bg-2)), rgb(var(--mp-bg)) 70%);
+  background-size: 310px 290px, 370px 330px, 430px 410px, 290px 270px, 350px 390px, 470px 450px, 330px 310px, 390px 350px, 100% 100%;
+}
+:root:not(.dark) .mp-stars {
+  background-image: radial-gradient(ellipse at 70% 55%, rgb(var(--mp-bg-2)), rgb(var(--mp-bg)) 72%);
+  background-size: 100% 100%;
+}
+.mp-atmosphere {
+  /* Sized at 2.5 × the globe radius: the limb sits at 40%, the glow just outside it. */
+  background: radial-gradient(circle, rgb(var(--mp-bg-2) / 0.9) 0 39.6%, rgb(var(--mp-accent) / 0.42) 40.3%, rgb(var(--mp-accent) / 0.12) 42.5%, rgb(var(--mp-cool-2) / 0.08) 46%, transparent 54%);
+  filter: blur(3px);
+}

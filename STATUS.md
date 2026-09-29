@@ -3,6 +3,23 @@
 Last updated 2026-09-28 by an unattended Claude Code session. Judgment calls
 are logged one per line in `DECISIONS.md` ("Session 4", "Session 6", "Session 7").
 
+## Session 9 (2026-09-28): dashboard v2 "Night Atlas", phases 0-3 (branch `dashboard-v2`)
+
+Spec: `docs/specs/SPEC_DASHBOARD_V2.md`. v1 pages still serve `/`, `/metros`, `/metro/:slug`, `/compare` and `/about` until each v2 screen replaces them.
+
+- **Gate A:** the owner picked A, Night Atlas (frames in `docs/screenshots/v2/gate-a/`, built from the sample data by `dashboard/design/gate-a/`).
+- **Phase 2:** Night/Dawn tokens (`src/styles/atlas.css`), motion presets, primitives in `src/ui/`, `#/styleguide`.
+- **Phase 3:** `#/explore`: 3D columns/bubbles/heat/flat on a restyled OpenFreeMap basemap, 3D buildings and terrain toggles, hover card, select and fly, area search with a log radius slider, lasso to Compare, the time machine (36 months, rate moments detected in code, 1x/4x playback), table view, keyboard map, phone bottom sheet, and a designed 2D fallback (`?tier=low`). Gate B recording: `docs/screenshots/v2/gate-b-explore.webm`.
+- **Checks (Phase 3):** 133/135 unit tests, 58 e2e including 13 new atlas checks (area numbers = the pure function, scrub = published history, table, low tier, reduced motion, axe in both themes), lint clean, initial JS 110.6 KB gz. Python unchanged in Phase 3.
+- **Local-only issue on this Windows machine:** Smart App Control blocks Rollup's native binary, so `node_modules/rollup/dist` was swapped for `@rollup/wasm-node` 4.63.5 (not committed; a fresh `npm ci` here needs the same swap). The CRLF and flaky-test issues are fixed (see Gate B changes).
+- **Not generated:** Runway (no API key) and Everygen (inactive subscription), so all imagery is procedural. Figma, Canva and Adobe need the owner to sign in.
+- **Gate B approved with changes (applied):** proportional heights (value from zero; YoY centered on zero around a floating zero plane), `.gitattributes` + LF normalization, deterministic pages test, exact deck.gl/MapLibre/luma pins with patch guards. 139/139 unit tests, 60 e2e. `dashboard-v2` is pushed as a backup; no merge until after Phase 5.
+- **Phase 4 (Arrival, `#/arrival`):** a GlobeView globe with dotted land and proportional light columns, three counters, and the "Enter the market" dive into the atlas. Sections: the brief, the heat field, rates vs prices, movers and alerts, the investigations, sources. Poster-first LCP 1.8-1.9 s on a throttled phone profile; 60 fps rotation on the laptop GPU. 11 new e2e checks. Stills: `docs/screenshots/v2/p4-arrival-*`.
+- **Phase 8 E1 (timeline since 2012):** the agent publishes `timeline/<metric>.json` x 5 (schema 1.3.0, spec section 6.4), and the time machine runs Jan 2013 to Aug 2026 with a real YoY in every month. The sample snapshot gained the timelines from the real Redfin files, verified month-for-month against its metro files. Python 250 tests (was 242), dashboard 142 unit / 72 e2e.
+- **Phase 5 (dossier, `#/dossier/:slug`):** the R3F house sized by price / U.S. median and lit by the temperature, region plates, the instrument cluster, chips that drive the chart (1Y/3Y/All to 2012, Level/YoY, index to U.S., rate strip), temperature drivers, Zillow/permits states, affordability. Gate C sheet: `docs/screenshots/v2/gate-c/sheet.png`. 150 unit / 89 e2e / 250 Python.
+- **Swap (merged to main):** `/` = Arrival, `/metro/:slug` = dossier, `/explore` = atlas; old links redirect; v1 Overview/Metros/Metro retired (the CSV export and print one-pager went with them). Initial JS 98.6 KB gz.
+- **Next:** Phase 6 (affordability studio), Phase 7 (compare arena, methodology restyle), Phase 8 E2-E4, Phase 9 (polish, perf, trailer, pruning v1 components).
+
 ## Session 8 (2026-09-29): dashboard phase 3 polish + sparkline contract
 
 - **Contract (schema 1.2.0, additive).** `metros[].spark` holds the last 24 month-end

@@ -3,7 +3,8 @@
  * `npm run fetch-data` fills from the data branch (or the committed sample snapshot).
  * Every file goes through its zod schema; results are cached per path for the session.
  */
-import type { z } from 'zod';
+import { z } from 'zod';
+import { timelineFromSeries, type Timeline } from '../lib/timeline';
 import { DataSourceSchema, ManifestEntrySchema, type DataSource, type ManifestEntry } from './manifest';
 import { IndexOutputSchema, MetroDetailOutputSchema, type IndexOutput, type MetroDetailOutput } from './schema.gen';
 
@@ -101,5 +102,34 @@ export function loadDataSource(fetcher: typeof fetch = fetch): Promise<DataSourc
     } catch {
       return null;
     }
+  });
+}
+
+const TimelineFileSchema = z.object({
+  dates: z.array(z.string()),
+  metros: z.record(z.string(), z.array(z.number().nullable())),
+});
+
+/**
+ * One metric's history for every metro (the time machine). Prefers the compact
+ * `timeline/<metric>.json` (spec §8.2 E1); until the agent publishes it, falls back
+ * to the metro files' 36-month series (fetched once, cached for the session).
+ */
+export function loadTimeline(metric: string, slugs: readonly string[], options: { compact?: boolean; fetcher?: typeof fetch } = {}): Promise<Timeline> {
+  const { compact = false, fetcher = fetch } = options;
+  const path = `timeline/${metric}.json`;
+  return cached(`${path}|${slugs.length}|${compact}`, async () => {
+    // Only ask for the compact file when the index says it exists (no 404 noise otherwise).
+    if (compact) {
+      try {
+        return parseWith(TimelineFileSchema, await fetchJson(path, fetcher), path);
+      } catch {
+        // Unreachable or malformed: the metro files carry the same history.
+      }
+    }
+    const files = await Promise.allSettled(slugs.map((s) => loadMetro(s, fetcher)));
+    const ok = files.flatMap((r, i) => (r.status === 'fulfilled' ? [{ slug: slugs[i]!, series: r.value.series as Record<string, ReadonlyArray<string | number | null>> }] : []));
+    if (!ok.length) throw new DataError('No metro history could be loaded', 'network');
+    return timelineFromSeries(ok, metric);
   });
 }

@@ -22,7 +22,7 @@ from agents_core.http import Http
 
 from agents.real_estate import fetch_redfin
 from agents.real_estate.agent import AGENT
-from agents.real_estate.schema import IndexOutput, MetroDetailOutput
+from agents.real_estate.schema import IndexOutput, MetroDetailOutput, TimelineOutput
 from tests import redfin_dc_fixtures as dc
 
 COLUMNS = [
@@ -223,7 +223,17 @@ def test_real_run_publishes_the_data_branch_contract_then_reuses_briefs(workdir)
     assert index.national.brief.narrative_source == "llm"
     assert index.national.brief.model == "claude-sonnet-5"
     assert [m.slug for m in index.metros] == ["alpha-tx", "beta-tx"]
-    assert index.meta.schema_version == "1.2.0"
+    assert index.meta.schema_version == "1.3.0"
+    # §6.4 timelines: five metrics, monthly from 2012-01 to the latest month; the
+    # fixture's 26 months are filled, earlier months are null.
+    assert [t.metric for t in index.timelines] == ["median_sale_price", "inventory", "median_dom", "price_drops", "months_of_supply"]
+    ref = index.timelines[0]
+    assert (ref.path, ref.start, ref.end) == ("timeline/median_sale_price.json", date(2012, 1, 31), index.data_through)
+    timeline = TimelineOutput.model_validate_json((pub / ref.path).read_text())
+    assert len(timeline.dates) == ref.months and timeline.dates[-1] == index.data_through
+    assert set(timeline.metros) == {"alpha-tx", "beta-tx"}
+    alpha_tl = timeline.metros["alpha-tx"]
+    assert alpha_tl[0] is None and sum(v is not None for v in alpha_tl) == 26
     # §6.3 metros[].spark: 24 month-end median prices, whole dollars, latest last
     alpha = index.metros[0]
     assert len(alpha.spark) == 24 and alpha.spark[-1] == round(alpha.latest["median_sale_price"].value)
@@ -237,6 +247,9 @@ def test_real_run_publishes_the_data_branch_contract_then_reuses_briefs(workdir)
         assert detail.brief.model == "claude-haiku-4-5-20251001"
         assert detail.brief.reused is False
         assert len(detail.series["dates"]) == 36
+        # The timeline's recent months are the metro file's levels (rounded to whole dollars).
+        tl_prices = timeline.metros[slug]
+        assert [None if v is None else round(v) for v in detail.series["median_sale_price"][-24:]] == tl_prices[-24:]
         assert detail.latest["median_dom"].delta_format == "count_signed"
         assert detail.latest["months_of_supply"].delta_format == "decimal1"
     inv = MetroDetailOutput.model_validate_json((pub / "metros" / f"{summary.slug}.json").read_text()).investigation

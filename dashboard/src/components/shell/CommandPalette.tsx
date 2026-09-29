@@ -113,7 +113,7 @@ export function CommandPalette({ open, onClose, metros, onNavigate }: CommandPal
                   }}
                   className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm ${i === active ? 'bg-accent-soft text-text' : 'text-text-2'}`}
                 >
-                  {item.group === 'Metros' ? <MapPin aria-hidden="true" className="h-4 w-4 text-text-3" /> : <CornerDownLeft aria-hidden="true" className="h-4 w-4 text-text-3" />}
+                  {item.group !== 'Go to' ? <MapPin aria-hidden="true" className="h-4 w-4 text-text-3" /> : <CornerDownLeft aria-hidden="true" className="h-4 w-4 text-text-3" />}
                   <span className="flex-1 truncate">{item.label}</span>
                   {i === active && <CornerDownLeft aria-hidden="true" className="h-3.5 w-3.5 text-text-3" />}
                 </div>

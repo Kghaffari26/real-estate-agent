@@ -44,8 +44,8 @@ name = "Dallas, TX"
 redfin_region = "Dallas, TX metro area"
 # REVIEW: Redfin code 19124 != CBSA 19100 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Dallas-Fort Worth-Arlington, TX Metro Area"
 cbsa = "19100"
-lat = 32.849171
-lon = -96.970489
+lat = 32.969479
+lon = -96.747089
 zillow_region_id = 394514
 
 [[metro]]
@@ -54,8 +54,8 @@ name = "New York, NY"
 redfin_region = "New York, NY metro area"
 # REVIEW: Redfin code 35614 != CBSA 35620 (a metro division or a pre-2023 code); cbsa/lat/lon are for "New York-Newark-Jersey City, NY-NJ Metro Area"
 cbsa = "35620"
-lat = 40.735425
-lon = -73.80773
+lat = 40.839781
+lon = -73.962791
 zillow_region_id = 394913
 
 [[metro]]
@@ -83,8 +83,8 @@ name = "Los Angeles, CA"
 redfin_region = "Los Angeles, CA metro area"
 # REVIEW: Redfin code 31084 != CBSA 31080 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Los Angeles-Long Beach-Anaheim, CA Metro Area"
 cbsa = "31080"
-lat = 34.108703
-lon = -118.182753
+lat = 34.1964
+lon = -118.26186
 zillow_region_id = 753899
 
 [[metro]]
@@ -212,8 +212,8 @@ name = "Warren, MI"
 redfin_region = "Warren, MI metro area"
 # REVIEW: Redfin code 47664 != CBSA 19820 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Detroit-Warren-Dearborn, MI Metro Area"
 cbsa = "19820"
-lat = 42.721848
-lon = -83.200846
+lat = 42.688942
+lon = -83.216603
 # zillow_region_id = 0  # REVIEW: fill from the Zillow ZHVI CSV's RegionID column
 
 [[metro]]
@@ -249,8 +249,8 @@ name = "Fort Worth, TX"
 redfin_region = "Fort Worth, TX metro area"
 # REVIEW: Redfin code 23104 != CBSA 19100 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Dallas-Fort Worth-Arlington, TX Metro Area"
 cbsa = "19100"
-lat = 32.849171
-lon = -96.970489
+lat = 32.750511
+lon = -97.366761
 # zillow_region_id = 0  # REVIEW: fill from the Zillow ZHVI CSV's RegionID column
 
 [[metro]]
@@ -277,8 +277,8 @@ name = "New Brunswick, NJ"
 redfin_region = "New Brunswick, NJ metro area"
 # REVIEW: Redfin code 35154 != CBSA 35620 (a metro division or a pre-2023 code); cbsa/lat/lon are for "New York-Newark-Jersey City, NY-NJ Metro Area"
 cbsa = "35620"
-lat = 40.735425
-lon = -73.80773
+lat = 40.208542
+lon = -74.310891
 # zillow_region_id = 0  # REVIEW: fill from the Zillow ZHVI CSV's RegionID column
 
 [[metro]]
@@ -305,8 +305,8 @@ name = "West Palm Beach, FL"
 redfin_region = "West Palm Beach, FL metro area"
 # REVIEW: Redfin code 48424 != CBSA 33100 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Miami-Fort Lauderdale-West Palm Beach, FL Metro Area"
 cbsa = "33100"
-lat = 26.101828
-lon = -80.478755
+lat = 26.64913
+lon = -80.44835
 # zillow_region_id = 0  # REVIEW: fill from the Zillow ZHVI CSV's RegionID column
 
 [[metro]]
@@ -315,8 +315,8 @@ name = "Miami, FL"
 redfin_region = "Miami, FL metro area"
 # REVIEW: Redfin code 33124 != CBSA 33100 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Miami-Fort Lauderdale-West Palm Beach, FL Metro Area"
 cbsa = "33100"
-lat = 26.101828
-lon = -80.478755
+lat = 25.61601
+lon = -80.50375
 zillow_region_id = 394856
 
 [[metro]]
@@ -353,8 +353,8 @@ name = "Nassau County, NY"
 redfin_region = "Nassau County, NY metro area"
 # REVIEW: Redfin code 35004 != CBSA 35620 (a metro division or a pre-2023 code); cbsa/lat/lon are for "New York-Newark-Jersey City, NY-NJ Metro Area"
 cbsa = "35620"
-lat = 40.735425
-lon = -73.80773
+lat = 40.849899
+lon = -73.084959
 # zillow_region_id = 0  # REVIEW: fill from the Zillow ZHVI CSV's RegionID column
 
 [[metro]]
@@ -399,8 +399,8 @@ name = "Anaheim, CA"
 redfin_region = "Anaheim, CA metro area"
 # REVIEW: Redfin code 11244 != CBSA 31080 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Los Angeles-Long Beach-Anaheim, CA Metro Area"
 cbsa = "31080"
-lat = 34.108703
-lon = -118.182753
+lat = 33.67569
+lon = -117.77721
 # zillow_region_id = 0  # REVIEW: fill from the Zillow ZHVI CSV's RegionID column
 
 [[metro]]
@@ -427,8 +427,8 @@ name = "Montgomery County, PA"
 redfin_region = "Montgomery County, PA metro area"
 # REVIEW: Redfin code 33874 != CBSA 37980 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Philadelphia-Camden-Wilmington, PA-NJ-DE-MD Metro Area"
 cbsa = "37980"
-lat = 39.894958
-lon = -75.311982
+lat = 40.183526
+lon = -75.394732
 # zillow_region_id = 0  # REVIEW: fill from the Zillow ZHVI CSV's RegionID column
 
 [[metro]]
@@ -447,8 +447,8 @@ name = "Philadelphia, PA"
 redfin_region = "Philadelphia, PA metro area"
 # REVIEW: Redfin code 37964 != CBSA 37980 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Philadelphia-Camden-Wilmington, PA-NJ-DE-MD Metro Area"
 cbsa = "37980"
-lat = 39.894958
-lon = -75.311982
+lat = 39.982057
+lon = -75.211606
 zillow_region_id = 394974
 
 [[metro]]
@@ -457,8 +457,8 @@ name = "Fort Lauderdale, FL"
 redfin_region = "Fort Lauderdale, FL metro area"
 # REVIEW: Redfin code 22744 != CBSA 33100 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Miami-Fort Lauderdale-West Palm Beach, FL Metro Area"
 cbsa = "33100"
-lat = 26.101828
-lon = -80.478755
+lat = 26.19354
+lon = -80.47668
 # zillow_region_id = 0  # REVIEW: fill from the Zillow ZHVI CSV's RegionID column
 
 [[metro]]
@@ -467,6 +467,6 @@ name = "Detroit, MI"
 redfin_region = "Detroit, MI metro area"
 # REVIEW: Redfin code 19804 != CBSA 19820 (a metro division or a pre-2023 code); cbsa/lat/lon are for "Detroit-Warren-Dearborn, MI Metro Area"
 cbsa = "19820"
-lat = 42.721848
-lon = -83.200846
+lat = 42.28466
+lon = -83.26195
 zillow_region_id = 394532

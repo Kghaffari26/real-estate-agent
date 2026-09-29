@@ -46,7 +46,8 @@ function HouseMesh({ dark, ghost = false, windowGlow }: { dark: boolean; ghost?:
   const roof = useMemo(roofGeometry, []);
   const m = useMemo(() => {
     if (ghost) {
-      const line = new THREE.MeshBasicMaterial({ color: dark ? '#9FD0FF' : '#3A4458', wireframe: true, transparent: true, opacity: 0.28 });
+      // Drawn over the house (no depth test) so the year-ago outline shows whether it's smaller or larger.
+      const line = new THREE.MeshBasicMaterial({ color: dark ? '#9FD0FF' : '#3A4458', wireframe: true, transparent: true, opacity: 0.32, depthTest: false });
       return { walls: line, roof: line, trim: line, window: line, door: line };
     }
     return dark

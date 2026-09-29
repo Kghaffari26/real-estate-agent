@@ -107,7 +107,7 @@ test('old links land on their v2 homes: /metros â†’ the atlas table, /dossier â†
   await expect(page).toHaveURL(/#\/$/);
 });
 
-test('metro dossier: rate strip, U.S. comparison, calculator', async ({ page }) => {
+test('metro dossier: rate strip, U.S. comparison, the way into the studio', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await gotoView(page, `/metro/${investigated}`);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -115,14 +115,16 @@ test('metro dossier: rate strip, U.S. comparison, calculator', async ({ page }) 
   await page.getByText('Index to U.S.').click();
   await expect(page).toHaveURL(/vs=1/);
   await expect(page.getByText(/rebased to 100/)).toBeVisible();
-  await page.getByRole('button', { name: 'Try your own numbers' }).click();
-  const calc = page.getByRole('form', { name: 'Mortgage payment calculator' });
-  await calc.scrollIntoViewIfNeeded();
-  const before = await calc.getByRole('status').textContent();
-  await calc.getByRole('spinbutton', { name: /Down payment/ }).fill('50');
-  await expect(calc.getByRole('status')).not.toHaveText(before ?? '');
-  await calc.getByRole('button', { name: 'Reset to defaults' }).click();
-  await expect(calc.getByRole('status')).toHaveText(before ?? '');
+  // The calculator lives in the affordability studio (studio.spec covers its numbers).
+  await page.getByTestId('open-studio').click();
+  await expect(page).toHaveURL(new RegExp(`#/metro/${investigated}/afford`));
+  const rate = page.getByRole('slider', { name: '30-yr rate' });
+  const before = await page.getByTestId('studio-payment').textContent();
+  await rate.focus();
+  await page.keyboard.press('End');
+  await expect(page.getByTestId('studio-payment')).not.toHaveText(before ?? '');
+  await page.getByRole('button', { name: 'Reset to published' }).click();
+  await expect(page.getByTestId('studio-payment')).toHaveText(before ?? '');
 });
 
 test('compare: add, remove, indexed toggle, leaders', async ({ page }, info) => {
@@ -189,13 +191,15 @@ test.describe('mobile (360px)', () => {
     await expect(page).toHaveURL(/#\/metro\/boston-ma/);
   });
 
-  test('the dossier calculator fits and works at 360px', async ({ page }) => {
+  test('the affordability studio fits and works at 360px', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await gotoView(page, `/metro/${investigated}?section=affordability`);
-    const reset = page.getByRole('button', { name: 'Reset to defaults' });
+    await gotoView(page, `/metro/${investigated}/afford`);
+    const reset = page.getByRole('button', { name: 'Reset to published' });
+    await page.getByText('15 yr', { exact: true }).click();
     await reset.scrollIntoViewIfNeeded();
-    await expect(reset).toBeVisible();
+    await expect(reset).toBeEnabled();
     await reset.click();
+    await expect(reset).toBeDisabled();
     await expectNoHorizontalScroll(page);
   });
 });

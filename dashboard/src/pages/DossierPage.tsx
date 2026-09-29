@@ -5,7 +5,7 @@
  * affordability. Every number is the metro file's or the index's.
  */
 import { AlertTriangle, ArrowRight, BarChart3, Building2, CheckCircle2, Info, OctagonAlert, Plane } from 'lucide-react';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { DossierChart } from '../dossier/DossierChart';
 import { Drivers, HouseStage, RegionPlate } from '../dossier/parts';
@@ -22,15 +22,13 @@ import { houseScale, regionOf, statesOf, temperatureDrivers, temperatureLight } 
 import { formatDate, formatMonth, formatValue } from '../lib/format';
 import { sentences } from '../lib/text';
 import { AtlasChrome } from '../ui/AtlasChrome';
-import { useMediaPaused } from '../ui/atlasState';
+import { metroPath, useMediaPaused } from '../ui/atlasState';
 import { Chip, Segmented } from '../ui/controls';
 import { ThermalArc } from '../ui/dataviz';
 import { GlassPanel } from '../ui/Glass';
 import { Instrument } from '../ui/Instrument';
 import { dossierChart, INSTRUMENT_KEYS, type ChartMode, type ChartRange } from '../viewmodels/dossier';
-import { calculatorDefaults } from '../viewmodels/metro';
 
-const Calculator = lazy(() => import('../components/data/AffordabilityCalculator').then((x) => ({ default: x.AffordabilityCalculator })));
 
 const RANGES: ChartRange[] = ['1Y', '3Y', 'All'];
 
@@ -80,8 +78,6 @@ function Dossier({ index, m }: { index: IndexOutput; m: MetroDetailOutput }) {
   // `?m=` (v2) or v1's `?metric=`, so old shared links keep their chart.
   const wanted = params.get('m') ?? params.get('metric');
   const metricKey = chartKeys.includes(wanted as (typeof chartKeys)[number]) ? (wanted as string) : 'median_sale_price';
-  const calcDefaults = calculatorDefaults(m);
-  const [calcOpen, setCalcOpen] = useState(params.get('section') === 'affordability');
   const metric = reg(metricKey);
   const range = (RANGES as string[]).includes(params.get('range') ?? '') ? (params.get('range') as ChartRange) : '3Y';
   const mode: ChartMode = params.get('mode') === 'yoy' ? 'yoy' : 'level';
@@ -400,24 +396,10 @@ function Dossier({ index, m }: { index: IndexOutput; m: MetroDetailOutput }) {
                 <Empty icon={<Info size={18} strokeWidth={1.5} aria-hidden="true" />}>No affordability figures for this metro this run.</Empty>
               )}
             </div>
-            {calcDefaults && (
-              <button
-                type="button"
-                onClick={() => setCalcOpen((o) => !o)}
-                aria-expanded={calcOpen}
-                aria-controls="calculator"
-                className="inline-flex h-11 items-center gap-2 rounded-control bg-mp-accent px-4 text-sm font-medium text-mp-accent-ink"
-              >
-                {calcOpen ? 'Hide the calculator' : 'Try your own numbers'} <ArrowRight size={15} strokeWidth={1.5} className={calcOpen ? 'rotate-90' : ''} aria-hidden="true" />
-              </button>
-            )}
-            {calcDefaults && calcOpen && (
-              // The tested calculator (same formula and vectors as the agent) until the Phase 6 studio.
-              <div id="calculator" className="md:col-span-2">
-                <Suspense fallback={<p className="text-sm text-mp-ink-3">Loading the calculator…</p>}>
-                  <Calculator key={m.slug} defaults={calcDefaults} />
-                </Suspense>
-              </div>
+            {aff && (
+              <Link to={`${metroPath(m.slug)}/afford`} className="inline-flex h-11 items-center gap-2 rounded-control bg-mp-accent px-4 text-sm font-medium text-mp-accent-ink no-underline" data-testid="open-studio">
+                Open the affordability studio <ArrowRight size={15} strokeWidth={1.5} aria-hidden="true" />
+              </Link>
             )}
           </GlassPanel>
         </section>

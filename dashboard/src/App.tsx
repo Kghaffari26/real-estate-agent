@@ -17,6 +17,7 @@ import { formatDateTime, formatMonth, MISSING } from './lib/format';
 const ArrivalPage = lazy(() => import('./pages/ArrivalPage').then((m) => ({ default: m.ArrivalPage })));
 const ExplorePage = lazy(() => import('./pages/ExplorePage').then((m) => ({ default: m.ExplorePage })));
 const DossierPage = lazy(() => import('./pages/DossierPage').then((m) => ({ default: m.DossierPage })));
+const StudioPage = lazy(() => import('./pages/StudioPage').then((m) => ({ default: m.StudioPage })));
 const StyleguidePage = lazy(() => import('./pages/StyleguidePage').then((m) => ({ default: m.StyleguidePage })));
 const ComparePage = lazy(() => import('./pages/ComparePage').then((m) => ({ default: m.ComparePage })));
 const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
@@ -92,6 +93,7 @@ export function App() {
           <Route index element={v2(<ArrivalPage />)} />
           <Route path="explore" element={v2(<ExplorePage />)} />
           <Route path="metro/:slug" element={<MetroRoute />} />
+          <Route path="metro/:slug/afford" element={v2(<StudioPage />)} />
           <Route path="styleguide" element={v2(<StyleguidePage />)} />
           {/* v1 → v2 redirects */}
           <Route path="arrival" element={<Redirect to={() => '/'} />} />

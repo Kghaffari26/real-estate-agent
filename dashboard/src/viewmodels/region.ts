@@ -6,7 +6,7 @@
  * 36-month series with the same rule the atlas uses for metros (`changeAt`).
  */
 import type { MetricRegistryEntry, RegionGeometry, RegionOutput } from '../data/schema.gen';
-import { divergingBound, divergingColor, sequentialColor, type DivergingStops, type RGB } from '../lib/columns';
+import { divergingColor, robustBound, sequentialColor, type DivergingStops, type RGB } from '../lib/columns';
 import { changeAt } from '../lib/timeline';
 
 export type RegionArea = RegionOutput['zips'][number];
@@ -39,7 +39,7 @@ export interface ZipLayer {
   labels: Array<{ zip: string; lat: number; lon: number; text: string }>;
   /** The month shown ("latest" or a month inside the 36-month series), or null when the metric has no ZIP history for the scrubbed month. */
   month: string | null;
-  scale: { kind: 'yoy'; bound: number } | { kind: 'value'; low: number; high: number };
+  scale: { kind: 'yoy'; bound: number; clamped: boolean } | { kind: 'value'; low: number; high: number };
 }
 
 type Geometry = { type: string; coordinates: unknown } | null;
@@ -78,7 +78,8 @@ export function zipLayer(region: RegionOutput, geometry: RegionGeometry, metric:
   // Scales come from well-sampled ZIPs only, so one or two odd sales can't stretch them.
   const sampled = [...byZip.values()].filter((v) => !v.low);
   const values = sampled.map((v) => v.value).filter((v): v is number => v != null).sort((a, b) => a - b);
-  const bound = divergingBound(sampled.map((v) => v.change));
+  // The 90th percentile of |YoY|: one ZIP's +100% luxury mix shift mustn't gray out the rest (beyond it: the end colors).
+  const bound = robustBound(sampled.map((v) => v.change), 0.9, 0);
   const low = values.length ? quantile(values, 0.05) : 0;
   const high = values.length ? quantile(values, 0.95) : 1;
   const features: ZipFeature[] = [];
@@ -97,7 +98,7 @@ export function zipLayer(region: RegionOutput, geometry: RegionGeometry, metric:
       cities.push({ id: String(p.id), name: String(p.name), paths: polygons(f.geometry).flat(), lat: (p.lat as number) ?? null, lon: (p.lon as number) ?? null });
     }
   }
-  return { features, cities, labels, month: shown ?? region.data_through, scale: colorBy === 'yoy' ? { kind: 'yoy', bound } : { kind: 'value', low, high } };
+  return { features, cities, labels, month: shown ?? region.data_through, scale: colorBy === 'yoy' ? { kind: 'yoy', bound, clamped: sampled.some((v) => v.change != null && Math.abs(v.change) > bound) } : { kind: 'value', low, high } };
 }
 
 // ---------- the panel ----------

@@ -186,7 +186,7 @@ function RegionLegend({ layer, metric }: { layer: ZipLayer; metric: MetricRegist
         {s.kind === 'yoy' && <span>0</span>}
         <span>{s.kind === 'yoy' ? fmtChange(metric, s.bound) : fmtMetric(metric, s.high)}</span>
       </div>
-      <div className="text-[10px] text-mp-ink-3">{s.kind === 'value' ? "5th to 95th percentile of the region's ZIPs. " : ''}Faded: fewer than 10 sales.</div>
+      <div className="text-[10px] text-mp-ink-3">{s.kind === 'value' ? "5th to 95th percentile of the region's ZIPs. " : s.clamped ? 'Larger changes take the end colors. ' : ''}Faded: fewer than 10 sales.</div>
     </div>
   );
 }

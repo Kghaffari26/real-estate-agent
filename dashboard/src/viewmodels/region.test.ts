@@ -37,6 +37,9 @@ describe('region view model (v3 R2)', () => {
     expect(layer.features.find((f) => f.zip === top.id)!.color).toEqual([250, 250, 250]);
     const yoy = zipLayer(region, geometry, PRICE, 'yoy', null, colors as never);
     expect(yoy.scale.kind).toBe('yoy');
+    // The YoY bound is the 90th percentile of well-sampled |YoY|, so an outlier clamps instead of graying the rest.
+    const changes = region.zips.filter((z) => !z.low_sample).map((z) => Math.abs(z.latest.median_sale_price!.yoy ?? 0));
+    if (yoy.scale.kind === 'yoy') expect(yoy.scale.bound).toBeLessThan(Math.max(...changes));
     // A month without ZIP history for the metric falls back to the latest month.
     expect(zipLayer(region, geometry, metric('sold_above_list', 'pp'), 'value', region.dates[5]!, colors as never).month).toBe(region.data_through);
   });

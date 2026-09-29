@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 4173;
 // Cloud dev containers ship Chromium at a fixed path; CI uses `npx playwright install`.
-const localChromium = '/opt/pw-browsers/chromium';
+// PW_CHROMIUM points at any local Chromium build (e.g. a newer one on a dev machine).
+const localChromium = process.env.PW_CHROMIUM ?? '/opt/pw-browsers/chromium';
 
 export default defineConfig({
   testDir: './e2e',

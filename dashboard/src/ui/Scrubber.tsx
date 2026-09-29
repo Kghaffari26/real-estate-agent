@@ -6,6 +6,8 @@ export interface ScrubberEvent {
   index: number;
   kind: 'high' | 'low';
   label: string;
+  /** Show the label on the rail (others show it on hover/focus). Keep to two or three so they never collide. */
+  showLabel?: boolean;
 }
 
 interface ScrubberProps {
@@ -69,9 +71,10 @@ export function Scrubber({ dates, index, onChange, playing, onPlayToggle, speed,
                 className={`absolute top-0 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap text-xs text-mp-ink-2 hover:text-mp-ink ${right ? 'flex-row-reverse' : ''}`}
                 style={{ left: pct(e.index) }}
                 aria-label={`Jump to ${e.label}`}
+                title={e.label}
               >
                 <span className={`h-2.5 w-2.5 flex-none rounded-full border-[1.5px] ${e.kind === 'high' ? 'border-mp-hot-2' : 'border-mp-cool-2'}`} aria-hidden="true" />
-                <span className={right ? 'translate-x-[-4px]' : ''}>{e.label}</span>
+                {e.showLabel !== false && <span className="hidden sm:inline">{e.label}</span>}
               </button>
             );
           })}

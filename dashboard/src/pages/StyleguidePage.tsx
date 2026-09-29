@@ -72,7 +72,7 @@ function Tokens({ index }: { index: IndexOutput }) {
         </div>
         <div>
           <div className="mp-label mb-2">Market temperature → light</div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <Swatch name="Cold rim" token="cold-light" />
             <Swatch name="Neutral" token="mid" />
             <Swatch name="Warm key" token="warm-light" />
@@ -88,7 +88,7 @@ function Tokens({ index }: { index: IndexOutput }) {
         </div>
         <div>
           <div className="mp-label mb-2">Entity colors · a metro keeps its color everywhere</div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <Swatch name="First" token="e1" />
             <Swatch name="Second" token="e2" />
             <Swatch name="Third" token="e3" />
@@ -209,7 +209,7 @@ function Instruments({ index }: { index: IndexOutput }) {
   const [hl, setHl] = useState<string>('inventory');
   return (
     <div className="space-y-4">
-      <GlassPanel className="flex overflow-x-auto">
+      <GlassPanel className="flex overflow-x-auto" tabIndex={0} role="region" aria-label="National instruments (scrolls sideways)">
         {keys.map((k, i) => {
           const v = nat.latest[k];
           const r = reg.get(k);
@@ -254,10 +254,12 @@ function TimeMachine({ index }: { index: IndexOutput }) {
   const [speed, setSpeed] = useState<'1' | '4'>('1');
   const events = useMemo(() => {
     const monthOf = (d: string) => dates.findIndex((x) => x.slice(0, 7) === d.slice(0, 7));
-    return detectRateEvents(nat.rates.dates, nat.rates.mortgage30, { minProminence: 0.3, window: 8 })
+    const found = detectRateEvents(nat.rates.dates, nat.rates.mortgage30, { minProminence: 0.3, window: 8 })
       .map((e) => ({ ...e, month: monthOf(e.date) }))
-      .filter((e) => e.month >= 0)
-      .map((e) => ({ index: e.month, kind: e.kind, label: `30-yr ${e.kind} ${e.value.toFixed(2)}% · ${formatMonth(e.date)}` }));
+      .filter((e) => e.month >= 0);
+    const top = (k: 'high' | 'low') => found.filter((e) => e.kind === k).sort((a, b) => b.prominence - a.prominence)[0];
+    const featured = new Set([top('high'), top('low')]);
+    return found.map((e) => ({ index: e.month, kind: e.kind, label: `30-yr ${e.kind} ${e.value.toFixed(2)}% · ${formatMonth(e.date)}`, showLabel: featured.has(e) }));
   }, [dates, nat.rates]);
   useEffect(() => {
     if (!playing) return;
@@ -353,7 +355,7 @@ function Panels({ index }: { index: IndexOutput }) {
           </GlassPanel>
         </m.div>
       </m.div>
-      <div className="relative mt-6">
+      <div className="relative mt-6 inline-block rounded-control bg-mp-bg/80">
         <Button variant="quiet" onClick={() => setRun((r) => r + 1)} icon={<RotateCcw size={15} strokeWidth={1.5} aria-hidden="true" />}>
           Replay the panel entrance
         </Button>
@@ -363,6 +365,7 @@ function Panels({ index }: { index: IndexOutput }) {
 }
 
 function Motion() {
+  const reduce = usePrefersReducedMotion();
   const rows: Array<[string, string]> = [
     ['Micro (hover, press)', `${DUR.micro * 1000} ms · cubic-bezier(.2,.8,.2,1)`],
     ['Panels', `spring · stiffness ${(SPRING_PANEL as { stiffness: number }).stiffness}, damping ${(SPRING_PANEL as { damping: number }).damping}`],
@@ -373,7 +376,7 @@ function Motion() {
     ['Reduced motion', 'no flights, no count-ups, no autoplay; panels appear instantly'],
   ];
   return (
-    <m.dl className="grid max-w-3xl gap-px overflow-hidden rounded-panel border border-mp-line bg-mp-ink/[.08] text-sm" variants={staggerVariants} initial="hidden" whileInView="shown" viewport={{ once: true }}>
+    <m.dl className="grid max-w-3xl gap-px overflow-hidden rounded-panel border border-mp-line bg-mp-ink/[.08] text-sm" variants={staggerVariants} initial={reduce ? false : 'hidden'} whileInView="shown" viewport={{ once: true }}>
       {rows.map(([k, v]) => (
         <m.div key={k} variants={riseVariants} className="grid grid-cols-[180px_1fr] gap-4 bg-mp-bg px-4 py-3">
           <dt className="text-mp-ink">{k}</dt>

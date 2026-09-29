@@ -160,7 +160,7 @@ One line per consequential judgment call made while working unattended.
 - The house scale is price ÷ U.S. median clamped to 0.6–1.6×. Austin is 1.04× now and 1.11× for the dashed year-ago ghost ($441,526).
 - Headline numbers use Geist Mono 300 in A (400 read as a code font at 52px). B uses JetBrains Mono, C uses Geist Mono 500.
 
-## Session 9, phase 2 (design system), in progress
+## Session 9, phase 2 (design system)
 
 - Gate A: the owner chose **A · Night Atlas**. Dawn is its designed light mode.
 - The v2 system lives beside v1 until each screen is replaced. Tokens are `--mp-*` in `src/styles/atlas.css`, exposed as Tailwind `mp-*` utilities; primitives are in `src/ui/`; motion presets are in `src/motion/presets.ts`. `#/styleguide` renders all of it with sample-data figures. `#/methodology` aliases the About page until Phase 7.
@@ -170,3 +170,8 @@ One line per consequential judgment call made while working unattended.
 - The moments rail uses `lib/events.ts`: local extrema with topographic prominence (default 0.25 pp) over the weekly 30-yr series. It is tested and replaces the frames' simple max/min.
 - This Windows machine's Smart App Control blocks Rollup's native `.node` binary. Locally only, `node_modules/rollup/dist` was swapped for the identical-version `@rollup/wasm-node` build; `package.json`, the lockfile and CI are untouched. A fresh `npm ci` here needs the same swap.
 - The checkout has CRLF line endings (Git for Windows default), so the `schema.gen.ts` staleness test fails locally only. It passes on LF checkouts such as CI.
+- Fixed a Windows-only bug in `vite.config.ts`: the data-version path used `URL.pathname` (`/C:/…`), so local Windows builds got version `dev` and failed the cache-busting e2e check. It now uses `fileURLToPath`, with no change on Linux/CI.
+- The styleguide's instrument strip scrolls sideways on phones, so it is a focusable, labelled region (axe `scrollable-region-focusable`).
+- Scrubber moments: only the most prominent high and low are labelled on the rail. The rest are dots with a tooltip and an accessible "Jump to …" name, because five labels collided. Below 640 px, all moments are dots.
+- Local e2e on this machine: `PW_CHROMIUM=<local chromium-1234>` (new optional override in `playwright.config.ts`). The full suite passes. A few smoke tests time out at 8 workers on this laptop and pass at 2, so this is a local load issue, not a regression.
+- Phase 2 checks: lint clean; 115/117 unit tests, where the 2 failures are local-only (the CRLF schema check, and a pages test that times out only under parallel load); e2e 42 passed plus the 2 load-flaky smoke tests passing on rerun. Initial JS is still 110 KB gz, and the styleguide is a 12.8 KB lazy chunk.

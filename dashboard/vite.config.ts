@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
 import { BRAND } from './src/config/brand';
 // @ts-expect-error: plain .mjs build script without types
 import { dataVersion } from './scripts/data-version.mjs';
@@ -27,7 +28,7 @@ export default defineConfig({
   base: process.env.DASHBOARD_BASE ?? '/real-estate-agent/',
   // Cache-busts every data URL per dataset (see scripts/data-version.mjs); prebuild's
   // fetch-data has already filled public/data when this runs.
-  define: { __DATA_VERSION__: JSON.stringify(dataVersion(new URL('./public/data', import.meta.url).pathname)) },
+  define: { __DATA_VERSION__: JSON.stringify(dataVersion(fileURLToPath(new URL('./public/data', import.meta.url)))) },
   plugins: [react(), brandHtml()],
   worker: { format: 'es' },
   build: {

@@ -43,6 +43,10 @@ class Settings:
     max_pulse_kb: float = 80
     use_areas: bool = True
     max_area_kb: float = 60
+    # v3 §4.2 regions: ZIP/city detail for config/regions.toml's regions.
+    use_regions: bool = True
+    max_region_kb: float = 250
+    max_region_geo_kb: float = 450
     flags: dict[str, float] = field(default_factory=dict)
     temperature_min_components: int = 4
     temperature_bands: tuple[int, int, int, int] = (80, 60, 40, 20)
@@ -89,7 +93,29 @@ def load_settings(path: Path | str = DEFAULT_SETTINGS_PATH) -> Settings:
         max_pulse_kb=settings.get("max_pulse_kb", 80),
         use_areas=settings.get("use_areas", True),
         max_area_kb=settings.get("max_area_kb", 60),
+        use_regions=settings.get("use_regions", True),
+        max_region_kb=settings.get("max_region_kb", 250),
+        max_region_geo_kb=settings.get("max_region_geo_kb", 450),
         flags=dict(flags),
         temperature_min_components=temperature.get("min_components", 4),
         temperature_bands=tuple(bands),
     )
+
+
+DEFAULT_REGIONS_PATH = Path("config/regions.toml")
+
+
+@dataclass(frozen=True)
+class RegionConfig:
+    slug: str
+    name: str
+    metros: tuple[str, ...]
+    geometry: str
+
+
+def load_regions(path: Path | str = DEFAULT_REGIONS_PATH) -> list[RegionConfig]:
+    p = Path(path)
+    if not p.exists():
+        return []
+    data = tomllib.loads(p.read_text(encoding="utf8"))
+    return [RegionConfig(slug=r["slug"], name=r["name"], metros=tuple(r["metros"]), geometry=r["geometry"]) for r in data.get("region", [])]

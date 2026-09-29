@@ -20,7 +20,7 @@ import { z } from 'zod';
 import { bestUnion, optionalField, seriesNumber, tolerantArray, tolerantRecord } from './tolerant';
 `;
 
-const ROOTS = ['IndexOutput', 'MetroDetailOutput', 'EventsOutput', 'PulseOutput', 'AreasOutput'];
+const ROOTS = ['IndexOutput', 'MetroDetailOutput', 'EventsOutput', 'PulseOutput', 'AreasOutput', 'RegionOutput', 'RegionGeometry'];
 
 function refName(ref) {
   const match = /^#\/\$defs\/(\w+)$/.exec(ref);

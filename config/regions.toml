@@ -1,0 +1,9 @@
+# Regions with a deep local view (v3 spec §4.2). `metros` are tracked metro slugs
+# whose Redfin ZIPs make up the region; `geometry` is built once by
+# scripts/build_region_geometry.py (Census TIGERweb) and committed.
+
+[[region]]
+slug = "orange-county"
+name = "Orange County, CA"
+metros = ["anaheim-ca"]
+geometry = "config/regions/orange-county.geo.json"

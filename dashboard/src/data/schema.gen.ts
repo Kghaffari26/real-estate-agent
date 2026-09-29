@@ -268,6 +268,17 @@ export const NationalBlockSchema = z.object({
 });
 export type NationalBlock = z.output<typeof NationalBlockSchema>;
 
+export const RegionRefSchema = z.object({
+  cities: z.number(),
+  geometry: optionalField(z.string().nullable(), null, "RegionRef.geometry"),
+  name: z.string(),
+  path: z.string(),
+  slug: z.string(),
+  through: z.string(),
+  zips: z.number(),
+});
+export type RegionRef = z.output<typeof RegionRefSchema>;
+
 export const TierUsageSchema = z.object({
   input_tokens: optionalField(z.number(), 0, "TierUsage.input_tokens"),
   output_tokens: optionalField(z.number(), 0, "TierUsage.output_tokens"),
@@ -330,6 +341,7 @@ export const IndexOutputSchema = z.object({
   national: NationalBlockSchema,
   pulse: optionalField(ExtensionRefSchema.nullable(), null, "IndexOutput.pulse"),
   rates_as_of: z.string(),
+  regions: optionalField(tolerantArray(RegionRefSchema, "IndexOutput.regions"), [], "IndexOutput.regions"),
   sources: tolerantArray(CitationSchema, "IndexOutput.sources"),
   timelines: optionalField(tolerantArray(TimelineRefSchema, "IndexOutput.timelines"), [], "IndexOutput.timelines"),
 });
@@ -390,3 +402,45 @@ export const PulseOutputSchema = z.object({
   yoy: tolerantRecord(z.record(z.string(), z.number().nullable()), "PulseOutput.yoy"),
 });
 export type PulseOutput = z.output<typeof PulseOutputSchema>;
+
+export const RegionMetricSchema = z.object({
+  value: optionalField(z.number().nullable(), null, "RegionMetric.value"),
+  yoy: optionalField(z.number().nullable(), null, "RegionMetric.yoy"),
+});
+export type RegionMetric = z.output<typeof RegionMetricSchema>;
+
+/** v3 §4.2: one ZIP, one city (aggregated from its ZIPs) or the region summary. */
+export const RegionAreaSchema = z.object({
+  city: optionalField(z.string().nullable(), null, "RegionArea.city"),
+  id: z.string(),
+  kind: z.enum(["zip", "city", "region"]),
+  lat: optionalField(z.number().nullable(), null, "RegionArea.lat"),
+  latest: tolerantRecord(RegionMetricSchema, "RegionArea.latest"),
+  lon: optionalField(z.number().nullable(), null, "RegionArea.lon"),
+  name: z.string(),
+  ranks: optionalField(z.record(z.string(), z.number()), {}, "RegionArea.ranks"),
+  series: z.record(z.string(), z.array(seriesNumber)),
+  zips: optionalField(z.array(z.string()), [], "RegionArea.zips"),
+});
+export type RegionArea = z.output<typeof RegionAreaSchema>;
+
+/** v3 §4.2 `regions/<slug>.geo.json`: simplified ZIP (ZCTA) and city boundaries (GeoJSON). */
+export const RegionGeometrySchema = z.object({
+  features: tolerantArray(z.record(z.string(), z.unknown()), "RegionGeometry.features"),
+  type: optionalField(z.string(), "FeatureCollection", "RegionGeometry.type"),
+});
+export type RegionGeometry = z.output<typeof RegionGeometrySchema>;
+
+/** v3 §4.2 `regions/<slug>.json`: a county-scale market down to ZIP and city. */
+export const RegionOutputSchema = z.object({
+  cities: tolerantArray(RegionAreaSchema, "RegionOutput.cities"),
+  data_through: z.string(),
+  dates: z.array(z.string()),
+  metros: z.array(z.string()),
+  name: z.string(),
+  slug: z.string(),
+  summary: RegionAreaSchema,
+  window: optionalField(z.string(), "rolling_3_months", "RegionOutput.window"),
+  zips: tolerantArray(RegionAreaSchema, "RegionOutput.zips"),
+});
+export type RegionOutput = z.output<typeof RegionOutputSchema>;

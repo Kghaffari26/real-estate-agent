@@ -1423,6 +1423,57 @@
           "title": "RatesLatest",
           "type": "object"
         },
+        "RegionRef": {
+          "properties": {
+            "cities": {
+              "title": "Cities",
+              "type": "integer"
+            },
+            "geometry": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Geometry"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "slug": {
+              "title": "Slug",
+              "type": "string"
+            },
+            "through": {
+              "format": "date",
+              "title": "Through",
+              "type": "string"
+            },
+            "zips": {
+              "title": "Zips",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "slug",
+            "name",
+            "path",
+            "zips",
+            "cities",
+            "through"
+          ],
+          "title": "RegionRef",
+          "type": "object"
+        },
         "RunMeta": {
           "additionalProperties": false,
           "description": "The `meta` block at the top of every agent's `latest.json`.\n\nAgent-specific meta fields: subclass `RunMeta` (fields need defaults), declare\n`meta: MyMeta` on your `AgentOutput` subclass, and return the values in\n`AgentResult.meta_fields`. The runner merges them into `meta` before validating,\nso they're published in latest.json and appear in schema.json.",
@@ -1722,6 +1773,13 @@
           "format": "date",
           "title": "Rates As Of",
           "type": "string"
+        },
+        "regions": {
+          "items": {
+            "$ref": "#/$defs/RegionRef"
+          },
+          "title": "Regions",
+          "type": "array"
         },
         "sources": {
           "items": {
@@ -2519,6 +2577,248 @@
         "yoy"
       ],
       "title": "PulseOutput",
+      "type": "object"
+    },
+    "RegionGeometry": {
+      "description": "v3 \u00a74.2 `regions/<slug>.geo.json`: simplified ZIP (ZCTA) and city boundaries (GeoJSON).",
+      "properties": {
+        "features": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Features",
+          "type": "array"
+        },
+        "type": {
+          "const": "FeatureCollection",
+          "default": "FeatureCollection",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "features"
+      ],
+      "title": "RegionGeometry",
+      "type": "object"
+    },
+    "RegionOutput": {
+      "$defs": {
+        "RegionArea": {
+          "description": "v3 \u00a74.2: one ZIP, one city (aggregated from its ZIPs) or the region summary.",
+          "properties": {
+            "city": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "ZIPs: the city with the most land overlap",
+              "title": "City"
+            },
+            "id": {
+              "description": "ZIP code, Census place GEOID, or the region slug",
+              "title": "Id",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "zip",
+                "city",
+                "region"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "lat": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lat"
+            },
+            "latest": {
+              "additionalProperties": {
+                "$ref": "#/$defs/RegionMetric"
+              },
+              "title": "Latest",
+              "type": "object"
+            },
+            "lon": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Lon"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "ranks": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "description": "Within the region: 1 = highest price / fastest growth / fewest days",
+              "title": "Ranks",
+              "type": "object"
+            },
+            "series": {
+              "additionalProperties": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "description": "metric -> values aligned to the region's `dates`",
+              "title": "Series",
+              "type": "object"
+            },
+            "zips": {
+              "description": "Cities and the region: member ZIPs",
+              "items": {
+                "type": "string"
+              },
+              "title": "Zips",
+              "type": "array"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "kind",
+            "latest",
+            "series"
+          ],
+          "title": "RegionArea",
+          "type": "object"
+        },
+        "RegionMetric": {
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value"
+            },
+            "yoy": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Same change rule as the metro pipeline (registry change_kind)",
+              "title": "Yoy"
+            }
+          },
+          "title": "RegionMetric",
+          "type": "object"
+        }
+      },
+      "description": "v3 \u00a74.2 `regions/<slug>.json`: a county-scale market down to ZIP and city.",
+      "properties": {
+        "cities": {
+          "items": {
+            "$ref": "#/$defs/RegionArea"
+          },
+          "title": "Cities",
+          "type": "array"
+        },
+        "data_through": {
+          "format": "date",
+          "title": "Data Through",
+          "type": "string"
+        },
+        "dates": {
+          "description": "Month ends of the 36-month series, oldest first",
+          "items": {
+            "format": "date",
+            "type": "string"
+          },
+          "title": "Dates",
+          "type": "array"
+        },
+        "metros": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Metros",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        },
+        "summary": {
+          "$ref": "#/$defs/RegionArea"
+        },
+        "window": {
+          "const": "rolling_3_months",
+          "default": "rolling_3_months",
+          "title": "Window",
+          "type": "string"
+        },
+        "zips": {
+          "items": {
+            "$ref": "#/$defs/RegionArea"
+          },
+          "title": "Zips",
+          "type": "array"
+        }
+      },
+      "required": [
+        "slug",
+        "name",
+        "metros",
+        "data_through",
+        "dates",
+        "summary",
+        "cities",
+        "zips"
+      ],
+      "title": "RegionOutput",
       "type": "object"
     }
   },

@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from agents_core.schema import AgentOutput, KeyStat, NarrativeSource, StatFormat
 from pydantic import BaseModel, Field
@@ -346,6 +346,57 @@ class AreaRef(BaseModel):
     count: int
 
 
+class RegionMetric(BaseModel):
+    value: float | int | None = None
+    yoy: float | None = Field(default=None, description="Same change rule as the metro pipeline (registry change_kind)")
+
+
+class RegionArea(BaseModel):
+    """v3 §4.2: one ZIP, one city (aggregated from its ZIPs) or the region summary."""
+
+    id: str = Field(description="ZIP code, Census place GEOID, or the region slug")
+    name: str
+    kind: Literal["zip", "city", "region"]
+    city: str | None = Field(default=None, description="ZIPs: the city with the most land overlap")
+    zips: list[str] = Field(default_factory=list, description="Cities and the region: member ZIPs")
+    lat: float | None = None
+    lon: float | None = None
+    latest: dict[str, RegionMetric]
+    series: dict[str, list[float | int | None]] = Field(description="metric -> values aligned to the region's `dates`")
+    ranks: dict[str, int] = Field(default_factory=dict, description="Within the region: 1 = highest price / fastest growth / fewest days")
+
+
+class RegionOutput(BaseModel):
+    """v3 §4.2 `regions/<slug>.json`: a county-scale market down to ZIP and city."""
+
+    slug: str
+    name: str
+    metros: list[str]
+    data_through: date
+    window: Literal["rolling_3_months"] = "rolling_3_months"
+    dates: list[date] = Field(description="Month ends of the 36-month series, oldest first")
+    summary: RegionArea
+    cities: list[RegionArea]
+    zips: list[RegionArea]
+
+
+class RegionGeometry(BaseModel):
+    """v3 §4.2 `regions/<slug>.geo.json`: simplified ZIP (ZCTA) and city boundaries (GeoJSON)."""
+
+    type: Literal["FeatureCollection"] = "FeatureCollection"
+    features: list[dict[str, Any]]
+
+
+class RegionRef(BaseModel):
+    slug: str
+    name: str
+    path: str
+    geometry: str | None = None
+    zips: int
+    cities: int
+    through: date
+
+
 class IndexOutput(AgentOutput):
     headline: str
     key_stats: list[KeyStat]
@@ -362,6 +413,7 @@ class IndexOutput(AgentOutput):
     events: ExtensionRef | None = None  # §6.5, additive (1.4.0)
     pulse: ExtensionRef | None = None  # §6.6, additive (1.4.0)
     areas: list[AreaRef] = Field(default_factory=list)  # §6.7, additive (1.4.0)
+    regions: list[RegionRef] = Field(default_factory=list)  # v3 §4.2, additive (1.5.0)
 
 
 class MetroDetailOutput(BaseModel):
@@ -395,6 +447,9 @@ def export_json_schema(path: Path | str = Path("schemas/real_estate.schema.json"
             "EventsOutput": EventsOutput.model_json_schema(),
             "PulseOutput": PulseOutput.model_json_schema(),
             "AreasOutput": AreasOutput.model_json_schema(),
+            # v3 §4.2 regions (1.5.0)
+            "RegionOutput": RegionOutput.model_json_schema(),
+            "RegionGeometry": RegionGeometry.model_json_schema(),
         },
     }
     path = Path(path)

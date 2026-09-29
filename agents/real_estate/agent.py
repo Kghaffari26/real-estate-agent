@@ -50,10 +50,18 @@ from agents.real_estate import events as events_mod
 from agents.real_estate import metrics as metric_registry
 from agents.real_estate import movers as movers_mod
 from agents.real_estate import pulse as pulse_mod
+from agents.real_estate import region as region_mod
 from agents.real_estate import state as state_mod
 from agents.real_estate import temperature as temperature_mod
 from agents.real_estate import timeline as timeline_mod
-from agents.real_estate.config import Metro, Settings, load_metros, load_settings
+from agents.real_estate.config import (
+    Metro,
+    RegionConfig,
+    Settings,
+    load_metros,
+    load_regions,
+    load_settings,
+)
 from agents.real_estate.flags import Flag, build_alerts, evaluate_flags
 from agents.real_estate.schema import (
     AffordabilityOut,
@@ -82,6 +90,8 @@ from agents.real_estate.schema import (
     PermitsValue,
     PulseOutput,
     RatesLatest,
+    RegionGeometry,
+    RegionOutput,
     TemperatureDetail,
     TemperatureSummary,
     TimelineOutput,
@@ -272,6 +282,8 @@ class Fetched:
     national_history_path: Path | None = None  # §6.5 national monthly history for the event rail
     weekly: fetch_redfin.ExtensionFetch | None = None  # §6.6 weekly pulse rows
     counties: fetch_redfin.ExtensionFetch | None = None  # §6.7 county rows
+    zips: fetch_redfin.ExtensionFetch | None = None  # v3 §4.2 region ZIP rows
+    regions: list[RegionConfig] = field(default_factory=list)
 
 
 @dataclass
@@ -313,6 +325,7 @@ class Computed:
     events: EventsOutput | None = None
     pulse: PulseOutput | None = None
     areas: dict[str, AreasOutput] = field(default_factory=dict)
+    regions: dict[str, tuple[RegionOutput, RegionGeometry | None]] = field(default_factory=dict)
 
 
 # ---- the agent -------------------------------------------------------------
@@ -322,7 +335,7 @@ class RealEstateAgent(Agent):
     id = AGENT_NAME
     name = "Real Estate Market Agent"
     route = "/real-estate"
-    schema_version = "1.4.0"  # 1.1.0: §6.3 investigations, alert figures; 1.2.0: metros[].spark; 1.3.0: §6.4 timelines; 1.4.0: §6.5-6.7 events, pulse, areas (additive)
+    schema_version = "1.5.0"  # 1.1.0: §6.3 investigations, alert figures; 1.2.0: metros[].spark; 1.3.0: §6.4 timelines; 1.4.0: §6.5-6.7 events, pulse, areas; 1.5.0: v3 §4.2 regions (additive)
     expected_interval_hours = 168
     next_run_hint = "Fridays 08:00 PT"
     history_keep = 52
@@ -485,6 +498,17 @@ class RealEstateAgent(Agent):
                     )
                 except Exception as exc:  # noqa: BLE001 - optional (§6.7)
                     ctx.warn(f"Redfin county file unavailable; no areas this run: {exc}")
+        if settings.use_regions:
+            out.regions = load_regions()
+            by_slug = {m.slug: m for m in out.metros}
+            wanted = {by_slug[s].redfin_region for r in out.regions for s in r.metros if s in by_slug}
+            if wanted:
+                with tracing.span("custom", "fetch:redfin_zips"):
+                    try:
+                        out.zips = fetch_redfin.fetch_zips(ctx.http, tracked_regions=wanted, columns=region_mod.FETCH_COLUMNS)
+                        sources.append(Source(name="Redfin Data Center: housing market, ZIP codes", url=out.zips.url, retrieved_at=now))
+                    except Exception as exc:  # noqa: BLE001 - optional (v3 §4.2)
+                        ctx.warn(f"Redfin ZIP file unavailable; no regions this run: {exc}")
         return sources
 
     # -- transform -------------------------------------------------------------
@@ -797,6 +821,7 @@ class RealEstateAgent(Agent):
                 sp.set(metrics=list(timelines), months=len(next(iter(timelines.values())).dates) if timelines else 0)
 
         events, pulse, areas = self._extensions(ctx, raw, global_data_through, rates_as_of, fred_pairs("mortgage30"))
+        regions = self._regions(ctx, raw, global_data_through)
 
         return Computed(
             fetched=raw,
@@ -822,6 +847,7 @@ class RealEstateAgent(Agent):
             events=events,
             pulse=pulse,
             areas=areas,
+            regions=regions,
         )
 
     def _extensions(
@@ -874,6 +900,36 @@ class RealEstateAgent(Agent):
                     ctx.warn(w)
                 sp.set(metros=len(areas), counties=sum(len(a.areas) for a in areas.values()))
         return events, pulse, areas
+
+    def _regions(self, ctx: RunContext, raw: Fetched, data_through: date | None) -> dict[str, tuple[RegionOutput, RegionGeometry | None]]:
+        """v3 §4.2: each configured region's ZIP/city file and its committed geometry (optional)."""
+        out: dict[str, tuple[RegionOutput, RegionGeometry | None]] = {}
+        if raw.zips is None or data_through is None:
+            return out
+        settings = raw.settings
+        by_slug = {m.slug: m for m in raw.metros}
+        rows = pl.scan_parquet(raw.zips.parquet_path).collect().to_dicts()
+        for region in raw.regions:
+            with tracing.span("custom", f"region:{region.slug}") as sp:
+                geometry = region_mod.load_geometry(region.geometry)
+                if geometry is None:
+                    ctx.warn(f"region {region.slug}: no geometry at {region.geometry}; publishing the data without shapes")
+                names = {by_slug[s].redfin_region for s in region.metros if s in by_slug}
+                built = region_mod.build_region(rows, region, names, region_mod.geo_info(geometry), data_through)
+                if built is None:
+                    ctx.warn(f"region {region.slug}: no ZIP rows for {data_through}; not published this run")
+                    continue
+                fitted, warnings = region_mod.fit(built, json_size, int(settings.max_region_kb * 1024))
+                for w in warnings:
+                    ctx.warn(w)
+                if fitted is None:
+                    continue
+                if geometry is not None and region_mod.geometry_size(geometry) > settings.max_region_geo_kb * 1024:
+                    ctx.warn(f"regions/{region.slug}.geo.json is over {settings.max_region_geo_kb} KB; shapes not published this run")
+                    geometry = None
+                out[region.slug] = (fitted, geometry)
+                sp.set(zips=len(fitted.zips), cities=len(fitted.cities))
+        return out
 
     def _build_world(
         self,
@@ -1056,12 +1112,17 @@ class RealEstateAgent(Agent):
             files["pulse.json"] = data.pulse
         for slug, area in data.areas.items():
             files[f"areas/{slug}.json"] = area
+        for slug, (reg, geometry) in data.regions.items():
+            files[f"regions/{slug}.json"] = reg
+            if geometry is not None:
+                files[f"regions/{slug}.geo.json"] = geometry
         body = self._index_body(data, national_brief, summaries)
         body["investigations"] = [self._investigation_summary(i) for i in investigations.values()]
         body["timelines"] = timeline_mod.refs(data.timelines)
         body["events"] = events_mod.ref(data.events) if data.events else None
         body["pulse"] = pulse_mod.ref(data.pulse) if data.pulse else None
         body["areas"] = areas_mod.refs(data.areas)
+        body["regions"] = [region_mod.ref(reg, geometry is not None) for reg, geometry in data.regions.values()]
         limit = int(settings.max_index_kb * 1024) - INDEX_SIZE_MARGIN_BYTES
         body, size_warnings = fit_index(body, lambda b: self._index_size(ctx, b, raw.sources), limit)
         for w in size_warnings:

@@ -12,11 +12,15 @@ import {
   IndexOutputSchema,
   MetroDetailOutputSchema,
   PulseOutputSchema,
+  RegionGeometrySchema,
+  RegionOutputSchema,
   type AreasOutput,
   type EventsOutput,
   type IndexOutput,
   type MetroDetailOutput,
   type PulseOutput,
+  type RegionGeometry,
+  type RegionOutput,
 } from './schema.gen';
 
 export class DataError extends Error {
@@ -173,4 +177,18 @@ export function loadArea(slug: string, fetcher: typeof fetch = fetch): Promise<A
   if (!isValidSlug(slug)) return Promise.resolve(null);
   const path = `areas/${slug}.json`;
   return optional(path, (raw) => parseWith(AreasOutputSchema, raw, path), fetcher);
+}
+
+/** A region's ZIP/city market (`regions/<slug>.json`, v3 §4.2), or null. Call only for regions the index lists. */
+export function loadRegion(slug: string, fetcher: typeof fetch = fetch): Promise<RegionOutput | null> {
+  if (!isValidSlug(slug)) return Promise.resolve(null);
+  const path = `regions/${slug}.json`;
+  return optional(path, (raw) => parseWith(RegionOutputSchema, raw, path), fetcher);
+}
+
+/** A region's ZIP and city shapes (`regions/<slug>.geo.json`), or null. */
+export function loadRegionGeometry(slug: string, fetcher: typeof fetch = fetch): Promise<RegionGeometry | null> {
+  if (!isValidSlug(slug)) return Promise.resolve(null);
+  const path = `regions/${slug}.geo.json`;
+  return optional(path, (raw) => parseWith(RegionGeometrySchema, raw, path), fetcher);
 }

@@ -19,6 +19,10 @@ pulse_weeks = 12
 max_pulse_kb = 80
 use_areas = true
 max_area_kb = 60
+# v3 regions (config/regions.toml): ZIP and city detail, e.g. Orange County
+use_regions = true
+max_region_kb = 250
+max_region_geo_kb = 450
 
 [flags]
 inventory_surge_yoy = 0.25

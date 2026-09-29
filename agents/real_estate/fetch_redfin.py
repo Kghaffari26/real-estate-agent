@@ -645,3 +645,31 @@ def national_history(
         return None
     _write_parquet(frame, out_path)
     return out_path
+
+
+ZIP_URL = f"{DATA_CENTER_BASE}/housing_market/monthly/zips_in_top_50_metros.csv"
+DC_ZIP_CSV_PATH = CACHE_DIR / "redfin_dc_zips.csv"
+DC_ZIP_PARQUET_PATH = CACHE_DIR / "redfin_dc_zips.parquet"
+
+
+def fetch_zips(
+    http: Http, *, tracked_regions: set[str], columns: dict[str, str], days_back: int = 1500, force: bool = False
+) -> ExtensionFetch:
+    """v3 §4.2: rolling-3-month rows for every ZIP whose Redfin `METRO` is in a region,
+    for the last `days_back` days (36 months of history plus a year for YoY), from
+    Redfin's ZIP file (~360 MB, streamed and filtered lazily)."""
+    cutoff = date.today() - timedelta(days=days_back)
+
+    def build(lf: pl.LazyFrame) -> pl.LazyFrame:
+        names = lf.collect_schema().names()
+        missing = [c for c in ("PERIOD END", "REGION TYPE", "REGION NAME", "METRO", *columns.values()) if c not in names]
+        if missing:
+            raise RedfinColumnsMissing(f"Redfin ZIP file is missing expected columns: {missing}")
+        end = pl.col("PERIOD END").str.to_date("%Y-%m-%d", strict=False)
+        return lf.filter(
+            (pl.col("REGION TYPE").str.to_lowercase() == "zip")
+            & pl.col("METRO").is_in(sorted(tracked_regions))
+            & (end >= cutoff)
+        ).select(end.alias("period_end"), pl.col("METRO").alias("metro"), pl.col("REGION NAME").alias("zip"), *_numeric(columns))
+
+    return _fetch_extension(http, ZIP_URL, DC_ZIP_CSV_PATH, DC_ZIP_PARQUET_PATH, build, force)

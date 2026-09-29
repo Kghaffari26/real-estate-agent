@@ -27,6 +27,8 @@ from agents.real_estate.schema import (
     IndexOutput,
     MetroDetailOutput,
     PulseOutput,
+    RegionGeometry,
+    RegionOutput,
     TimelineOutput,
 )
 from tests import redfin_dc_fixtures as dc
@@ -80,6 +82,23 @@ cbsa = "10002"
 lat = 31.0
 lon = -96.0
 """
+
+REGIONS_TOML = """
+[[region]]
+slug = "alpha-county"
+name = "Alpha County, TX"
+metros = ["alpha-tx"]
+geometry = "config/regions/alpha-county.geo.json"
+"""
+
+REGION_GEOMETRY = {
+    "type": "FeatureCollection",
+    "features": [
+        {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[-97.1, 30.0], [-97.0, 30.0], [-97.0, 30.1], [-97.1, 30.0]]]}, "properties": {"kind": "zip", "id": "78701", "city": "Alpha", "city_id": "4800001", "lat": 30.05, "lon": -97.05}},
+        {"type": "Feature", "geometry": None, "properties": {"kind": "zip", "id": "78702", "city": "Alpha", "city_id": "4800001", "lat": None, "lon": None}},
+        {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[-97.2, 29.9], [-96.9, 29.9], [-96.9, 30.2], [-97.2, 29.9]]]}, "properties": {"kind": "city", "id": "4800001", "name": "Alpha", "lat": 30.0, "lon": -97.0}},
+    ],
+}
 
 CENTROIDS_CSV = """name,geoid,lat,lon
 "Alpha County, TX",48001,30.1,-97.1
@@ -173,6 +192,9 @@ def workdir(tmp_path, monkeypatch):
     (tmp_path / "config" / "metros.toml").write_text(METROS_TOML)
     (tmp_path / "config" / "real_estate.toml").write_text(SETTINGS_TOML)
     (tmp_path / "config" / "county_centroids.csv").write_text(CENTROIDS_CSV)
+    (tmp_path / "config" / "regions.toml").write_text(REGIONS_TOML)
+    (tmp_path / "config" / "regions").mkdir()
+    (tmp_path / "config" / "regions" / "alpha-county.geo.json").write_text(json.dumps(REGION_GEOMETRY))
     return tmp_path
 
 
@@ -198,6 +220,15 @@ def _dc_files() -> dict[str, bytes]:
                 ("Beta, TX metro area", {"MEDIAN SALE PRICE NSA ($)": 300000, "NEW LISTINGS NSA": 200, "ACTIVE LISTINGS NSA": None, "PENDING SALES NSA": 150}),
             ],
             _week_ends(60),
+        ),
+        # v3 §4.2: two ZIPs of Alpha (one busier), one of another metro, 26 months.
+        fetch_redfin.ZIP_URL: dc.zip_csv(
+            [
+                ("78701", "Alpha, TX metro area", {"HOMES SOLD": 30, "MEDIAN SALE PRICE NSA ($)": lambda i: 500000 + 1000 * i, "INVENTORY": 40, "MEDIAN DAYS ON MARKET (DAYS)": lambda i: 20 + i, "AVERAGE SALE TO LIST RATIO (%)": 99.0, "MONTHS OF SUPPLY": 2.0}),
+                ("78702", "Alpha, TX metro area", {"HOMES SOLD": 10, "MEDIAN SALE PRICE NSA ($)": 300000, "INVENTORY": None, "MEDIAN DAYS ON MARKET (DAYS)": 40, "AVERAGE SALE TO LIST RATIO (%)": 97.0, "MONTHS OF SUPPLY": 4.0}),
+                ("99999", "Gamma, OK metro area", {"HOMES SOLD": 1, "MEDIAN SALE PRICE NSA ($)": 1}),
+            ],
+            months,
         ),
         fetch_redfin.COUNTY_URL: dc.county_csv(
             [
@@ -255,7 +286,26 @@ def test_real_run_publishes_the_data_branch_contract_then_reuses_briefs(workdir)
     assert index.national.brief.narrative_source == "llm"
     assert index.national.brief.model == "claude-sonnet-5"
     assert [m.slug for m in index.metros] == ["alpha-tx", "beta-tx"]
-    assert index.meta.schema_version == "1.4.0"
+    assert index.meta.schema_version == "1.5.0"
+    # v3 §4.2 regions: ZIPs from the metro's rows, cities rolled up from them, the geometry copied.
+    [region_ref] = index.regions
+    assert (region_ref.slug, region_ref.zips, region_ref.cities, region_ref.through) == ("alpha-county", 2, 1, index.data_through)
+    assert region_ref.geometry == "regions/alpha-county.geo.json"
+    region = RegionOutput.model_validate_json((pub / region_ref.path).read_text())
+    assert [z.id for z in region.zips] == ["78701", "78702"] and len(region.dates) == 36
+    z1 = region.zips[0]
+    assert (z1.city, z1.lat, z1.latest["median_sale_price"].value) == ("Alpha", 30.05, 525000)
+    assert z1.latest["median_sale_price"].yoy == round(525000 / 513000 - 1, 4)
+    assert z1.latest["median_dom"].yoy == 12  # days: a difference
+    assert z1.latest["avg_sale_to_list"].value == 0.99  # percent -> ratio
+    assert z1.ranks == {"median_sale_price": 1, "median_sale_price_yoy": 1, "median_dom": 2}  # 45 days vs 40
+    [city] = region.cities
+    assert (city.name, city.id, city.zips) == ("Alpha", "4800001", ["78701", "78702"])
+    assert city.latest["homes_sold"].value == 40  # summed
+    assert city.latest["inventory"].value == 40  # the ZIP without inventory doesn't count
+    assert city.latest["median_sale_price"].value == round((525000 * 30 + 300000 * 10) / 40)  # homes-sold-weighted
+    assert region.summary.latest["homes_sold"].value == 40
+    assert RegionGeometry.model_validate_json((pub / "regions" / "alpha-county.geo.json").read_text()).features[0]["properties"]["id"] == "78701"
     # §6.5 no event rail without FRED rates; §6.6 the weekly pulse; §6.7 county areas.
     assert index.events is None and not (pub / "events.json").exists()
     assert index.pulse is not None and index.pulse.count == 2

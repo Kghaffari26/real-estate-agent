@@ -42,6 +42,8 @@ export const test = base.extend<{ consoleErrors: string[] }>({
       route.fulfill({ status: 200, contentType: 'application/json', body: /dark/.test(route.request().url()) ? styles.dark : styles.light }),
     );
     await page.route(/tiles\.openfreemap\.org\/(?!styles)/, (route) => route.fulfill({ status: 204, body: '' }));
+    // Terrain DEM tiles (the atlas's optional terrain) are external too.
+    await page.route(/elevation-tiles-prod/, (route) => route.fulfill({ status: 204, body: '' }));
     await use(errors);
   }, { auto: true }],
 });

@@ -1,9 +1,10 @@
 /**
  * The time machine's "moments" rail: national mortgage-rate highs and lows found in
  * code, not picked by hand. A point is a high (low) when it is the extreme of its
- * neighborhood and its topographic prominence is at least `minProminence`:
- * how far it stands above (below) the higher of the two lowest (highest) points
- * separating it from a more extreme point on either side, or from the ends.
+ * neighborhood and its prominence is at least `minProminence`: how far it stands
+ * above (below) the higher (lower) of the lowest (highest) points on either side
+ * before more extreme ground or the series end. The first and last points are never
+ * local turns, but the window's overall high and low are always included.
  */
 export interface RateEvent {
   kind: 'high' | 'low';
@@ -22,22 +23,20 @@ export interface EventOptions {
 
 function prominence(values: readonly number[], i: number): number {
   const v = values[i]!;
-  let leftBase = v;
-  for (let j = i - 1; j >= 0; j--) {
-    if (values[j]! > v) break;
-    leftBase = Math.min(leftBase, values[j]!);
-  }
-  let rightBase = v;
-  for (let j = i + 1; j < values.length; j++) {
-    if (values[j]! > v) break;
-    rightBase = Math.min(rightBase, values[j]!);
-  }
-  return v - Math.max(leftBase, rightBase);
+  // Walk each way until higher ground (or the end), tracking the lowest point passed.
+  // The peak's prominence is its height above the higher of those two lows.
+  const low = (step: -1 | 1): number => {
+    let min = v;
+    for (let j = i + step; j >= 0 && j < values.length && values[j]! <= v; j += step) min = Math.min(min, values[j]!);
+    return min;
+  };
+  return v - Math.max(low(-1), low(1));
 }
 
 function peaks(values: readonly number[], window: number, minProminence: number): Array<{ index: number; prominence: number }> {
   const out: Array<{ index: number; prominence: number }> = [];
-  for (let i = 0; i < values.length; i++) {
+  // The first and last points can't be confirmed turns: the series may keep going that way.
+  for (let i = 1; i < values.length - 1; i++) {
     const v = values[i]!;
     let isMax = true;
     for (let j = Math.max(0, i - window); j <= Math.min(values.length - 1, i + window); j++) {
@@ -68,6 +67,15 @@ export function detectRateEvents(dates: readonly string[], values: readonly (num
   if (vals.length < 3) return [];
   const highs = peaks(vals, window, minProminence).map((p) => ({ ...p, kind: 'high' as const }));
   const lows = peaks(vals.map((v) => -v), window, minProminence).map((p) => ({ ...p, kind: 'low' as const }));
+  // The window's overall high and low are moments even near its edges (when the range is meaningful).
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const iHi = vals.indexOf(hi);
+  const iLo = vals.indexOf(lo);
+  if (hi - lo >= minProminence) {
+    if (!highs.some((h) => h.index === iHi)) highs.push({ index: iHi, prominence: hi - lo, kind: 'high' });
+    if (!lows.some((l) => l.index === iLo)) lows.push({ index: iLo, prominence: hi - lo, kind: 'low' });
+  }
   return [...highs, ...lows]
     .map(({ index, prominence: prom, kind }) => ({ kind, index: idx[index]!, date: dates[idx[index]!]!, value: vals[index]!, prominence: Number(prom.toFixed(4)) }))
     .sort((a, b) => a.index - b.index);

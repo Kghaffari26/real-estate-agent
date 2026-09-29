@@ -3,6 +3,17 @@
 Last updated 2026-09-28 by an unattended Claude Code session. Judgment calls
 are logged one per line in `DECISIONS.md` ("Session 4", "Session 6", "Session 7").
 
+## Session 9 (2026-09-28): dashboard v2 "Night Atlas", phases 0-3 (branch `dashboard-v2`)
+
+Spec: `docs/specs/SPEC_DASHBOARD_V2.md`. v1 pages still serve `/`, `/metros`, `/metro/:slug`, `/compare` and `/about` until each v2 screen replaces them.
+
+- **Gate A:** the owner picked A, Night Atlas (frames in `docs/screenshots/v2/gate-a/`, built from the sample data by `dashboard/design/gate-a/`).
+- **Phase 2:** Night/Dawn tokens (`src/styles/atlas.css`), motion presets, primitives in `src/ui/`, `#/styleguide`.
+- **Phase 3:** `#/explore`: 3D columns/bubbles/heat/flat on a restyled OpenFreeMap basemap, 3D buildings and terrain toggles, hover card, select and fly, area search with a log radius slider, lasso to Compare, the time machine (36 months, rate moments detected in code, 1x/4x playback), table view, keyboard map, phone bottom sheet, and a designed 2D fallback (`?tier=low`). Gate B recording: `docs/screenshots/v2/gate-b-explore.webm`.
+- **Checks:** 133/135 unit tests (the 2 local-only failures are below), 58 e2e including 13 new atlas checks (area numbers = the pure function, scrub = published history, table, low tier, reduced motion, axe in both themes), lint clean, initial JS 110.6 KB gz. Python untouched (no `uv` on this machine, so the 242 Python tests were not re-run here).
+- **Local-only issues on this Windows machine:** (1) Smart App Control blocks Rollup's native binary, so `node_modules/rollup/dist` was swapped for `@rollup/wasm-node` 4.63.5 (not committed); (2) the CRLF checkout fails the schema-staleness test locally; (3) one pages test times out only under parallel load. None of these affect CI (Linux).
+- **Not generated:** Runway (no API key) and Everygen (inactive subscription), so all imagery is procedural. Figma, Canva and Adobe need the owner to sign in.
+
 ## Session 8 (2026-09-29): dashboard phase 3 polish + sparkline contract
 
 - **Contract (schema 1.2.0, additive).** `metros[].spark` holds the last 24 month-end

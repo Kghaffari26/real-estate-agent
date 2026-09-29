@@ -19,6 +19,7 @@ const MetrosPage = lazy(() => import('./pages/MetrosPage').then((m) => ({ defaul
 const MetroPage = lazy(() => import('./pages/MetroPage').then((m) => ({ default: m.MetroPage })));
 const ComparePage = lazy(() => import('./pages/ComparePage').then((m) => ({ default: m.ComparePage })));
 const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const ExplorePage = lazy(() => import('./pages/ExplorePage').then((m) => ({ default: m.ExplorePage })));
 const StyleguidePage = lazy(() => import('./pages/StyleguidePage').then((m) => ({ default: m.StyleguidePage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 
@@ -87,6 +88,14 @@ export function App() {
     <ToastProvider>
       <EntityColorsProvider>
         <Routes>
+          <Route
+            path="explore"
+            element={
+              <Suspense fallback={null}>
+                <ExplorePage />
+              </Suspense>
+            }
+          />
           <Route
             path="styleguide"
             element={

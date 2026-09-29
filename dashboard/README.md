@@ -102,12 +102,29 @@ Every route is deep-linkable:
 | `#/metros` | `?q=&type=&temp=&flag=&sort=&dir=&metric=&view=&cols=` |
 | `#/metro/:slug` | `?metric=&range=&rates=0&vs=1` |
 | `#/compare` | `?m=a,b,c&metrics=&range=&indexed=1` |
-| `#/about` | none |
+| `#/about` (alias `#/methodology`) | none |
+| `#/explore` (v2 atlas) | `?m=&t=YYYY-MM&style=&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low` |
+| `#/styleguide` (v2 design system) | none |
 
 Any view also takes `?section=<id>` to scroll to a section. "Copy link" buttons
 produce these URLs.
 
-## Design system
+## Metro Pulse v2 ("Night Atlas", in progress)
+
+`docs/specs/SPEC_DASHBOARD_V2.md` is replacing the presentation layer screen by
+screen; `data/`, `lib/` and `viewmodels/` stay the contract.
+
+- **Tokens**: `src/styles/atlas.css` (`--mp-*`, Tailwind `mp-*`), Night by default
+  (`.dark`) and Dawn. **Motion**: `src/motion/presets.ts`. **Primitives**: `src/ui/`.
+- **Atlas** (`#/explore`): `src/atlas/` (MapLibre + deck.gl, lazy; 2D fallback),
+  `src/viewmodels/atlas.ts`, `src/lib/{area,columns,timeline,events}.ts`,
+  `src/state/timeStore.ts`. Every figure is published or read from the published
+  series. Area search is a homes-sold-weighted mean of metro medians.
+- **Design captures**: `design/gate-a/` (art-direction frames), `design/gate-b/`
+  (`shots.mjs`, `record.mjs` against `vite preview`).
+- **Local e2e** can point at any Chromium with `PW_CHROMIUM=...`.
+
+## Design system (v1)
 
 - **Type.** Inter Variable, self-hosted, with the `cv11` and `ss01` features.
   Figures use tabular numerals (`.num`). The scale is 11/12/13/14/16/20/24/32/40 on

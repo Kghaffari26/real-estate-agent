@@ -16,7 +16,7 @@ type GlassProps = HTMLAttributes<HTMLElement> & {
 export function GlassPanel({ as: Tag = 'div', solid = false, grain = false, className = '', style, children, ...rest }: GlassProps) {
   return (
     <Tag
-      className={`mp-glass relative ${className}`}
+      className={`mp-glass ${/\b(absolute|fixed|sticky)\b/.test(className) ? '' : 'relative'} ${className}`}
       style={solid ? { ...style, background: 'rgb(var(--mp-panel))', backdropFilter: 'none' } : style}
       {...rest}
     >

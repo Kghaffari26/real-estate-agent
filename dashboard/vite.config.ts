@@ -37,6 +37,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules/maplibre-gl')) return 'map';
+          // d3-geo serves the atlas (rings, the 2D fallback), not the charts: keep Recharts out of /explore.
+          if (/node_modules[\\/]d3-(geo|array)[\\/]/.test(id)) return 'geo';
           if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-') || id.includes('node_modules/victory-vendor')) return 'charts';
           if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler|zod)\//.test(id)) return 'vendor';
           return undefined;

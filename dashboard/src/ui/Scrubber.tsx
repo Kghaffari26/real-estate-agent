@@ -68,13 +68,15 @@ export function Scrubber({ dates, index, onChange, playing, onPlayToggle, speed,
                 key={`${e.kind}-${e.index}`}
                 type="button"
                 onClick={() => onChange(e.index)}
-                className={`absolute top-0 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap text-xs text-mp-ink-2 hover:text-mp-ink ${right ? 'flex-row-reverse' : ''}`}
+                // The dot sits on its month; a label hangs off it toward the middle of the rail.
+                className={`absolute top-0 flex items-center gap-1.5 whitespace-nowrap text-xs text-mp-ink-2 hover:text-mp-ink ${e.showLabel !== false ? 'z-10' : ''} ${right ? 'flex-row-reverse -translate-x-[calc(100%-5px)]' : '-translate-x-[5px]'}`}
                 style={{ left: pct(e.index) }}
                 aria-label={`Jump to ${e.label}`}
                 title={e.label}
               >
                 <span className={`h-2.5 w-2.5 flex-none rounded-full border-[1.5px] ${e.kind === 'high' ? 'border-mp-hot-2' : 'border-mp-cool-2'}`} aria-hidden="true" />
-                {e.showLabel !== false && <span className="hidden sm:inline">{e.label}</span>}
+                {/* Featured labels sit on a panel-colored backing, above neighboring dots. */}
+                {e.showLabel !== false && <span className="hidden rounded bg-mp-panel px-1 sm:inline">{e.label}</span>}
               </button>
             );
           })}

@@ -42,8 +42,19 @@ describe('rate events', () => {
       ['low', '2024-07', 6.0],
       ['high', '2024-10', 7.1],
     ]);
-    // the Oct high stands 0.4 above the col (6.7) that separates it from the series end
+    // the Oct high stands 0.4 above the lowest point (6.7) between it and the series end
     expect(events[2]!.prominence).toBeCloseTo(0.4, 6);
+  });
+
+  it('keeps a peak at the start of the series (no higher ground before it)', () => {
+    const values = [7.6, 7.79, 7.5, 7.2, 6.9, 6.6, 6.8, 7.0, 7.04, 6.9, 6.5, 6.2, 6.0];
+    const highs = detectRateEvents(dates, values, { window: 2, minProminence: 0.25 }).filter((e) => e.kind === 'high');
+    expect(highs.map((e) => [e.date, e.value])).toEqual([
+      ['2024-02', 7.79],
+      ['2024-09', 7.04],
+    ]);
+    // the Jun dip (then +0.44 pp) is a trough; the window's low is a moment even as the last point
+    expect(detectRateEvents(dates, values, { window: 2 }).filter((e) => e.kind === 'low').map((e) => e.date)).toEqual(['2024-06', '2024-13']);
   });
 
   it('ignores wiggles below the prominence threshold', () => {

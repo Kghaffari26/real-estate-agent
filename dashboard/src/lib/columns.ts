@@ -41,6 +41,19 @@ export function changeHeight(change: number | null | undefined, bound: number): 
   return Math.max(-1, Math.min(1, change / bound));
 }
 
+/**
+ * A robust symmetric bound for long histories: the `q` quantile of |change| (default
+ * the 98th percentile), so one extreme month in 14 years of 50 metros can't wash the
+ * scale out; changes beyond it clamp to the end colors. Small sets use the exact max.
+ */
+export function robustBound(changes: Iterable<number | null | undefined>, q = 0.98, minCount = 200): number {
+  const abs: number[] = [];
+  for (const c of changes) if (c != null && Number.isFinite(c)) abs.push(Math.abs(c));
+  if (abs.length < minCount) return divergingBound(abs);
+  abs.sort((a, b) => a - b);
+  return abs[Math.min(abs.length - 1, Math.floor(q * (abs.length - 1)))] || divergingBound(abs);
+}
+
 /** Symmetric bound for the diverging scale: the largest |change|, never zero. */
 export function divergingBound(changes: Iterable<number | null | undefined>): number {
   let m = 0;

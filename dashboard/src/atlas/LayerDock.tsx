@@ -106,7 +106,7 @@ export function LayerDockBody(p: LayerDockProps) {
       <p className="text-xs text-mp-ink-3" data-testid="height-legend">
         {p.heightBy === 'yoy' ? (
           <>
-            Height: YoY from zero. Up = rising, down = falling; full height = {p.legend.max.replace('+', '±')}.
+            Height: YoY from zero. Up = rising, down = falling; full height = {p.legend.max.replace(/^≥ /, '').replace('+', '±')}.
           </>
         ) : (
           <>Height: from zero to {p.legend.valueMax}, proportional.</>

@@ -13,7 +13,8 @@
  * --if-missing skips everything when public/data/latest.json already exists (the
  * predev/prebuild hooks use it, so an explicit fetch isn't overwritten).
  *
- * Copies latest.json, manifest-entry.json, metros/*.json and history/*.json, and
+ * Copies latest.json, manifest-entry.json, metros/*.json, history/*.json and (§6.4)
+ * timeline/*.json, and
  * writes public/data/source.json. Set RE_DATA_BRANCH / RE_DATA_REMOTE to override
  * the branch (default "data") and remote (default "origin").
  */
@@ -29,7 +30,7 @@ const repoRoot = resolve(dashboard, '..');
 const out = resolve(dashboard, 'public/data');
 const sampleDir = resolve(dashboard, 'sample-data');
 const FILES = ['latest.json', 'manifest-entry.json'];
-const DIRS = ['metros', 'history'];
+const DIRS = ['metros', 'history', 'timeline'];
 
 function log(message) {
   console.log(`[fetch-data] ${message}`);

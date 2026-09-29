@@ -75,6 +75,8 @@ DC_PRICE_DROPS_METRO_CSV_PATH = CACHE_DIR / "redfin_dc_price_drops_metro.csv"
 DC_PRICE_DROPS_NATIONAL_CSV_PATH = CACHE_DIR / "redfin_dc_price_drops_national.csv"
 DC_METRO_PARQUET_PATH = CACHE_DIR / "redfin_dc_metro.parquet"
 DC_NATIONAL_PARQUET_PATH = CACHE_DIR / "redfin_dc_national.parquet"
+# Long monthly history (§6.4 timelines): the same metro CSVs, from TIMELINE_SINCE on.
+DC_METRO_TIMELINE_PARQUET_PATH = CACHE_DIR / "redfin_dc_metro_timeline.parquet"
 METRO_GZ_PATH = CACHE_DIR / "redfin_metro_market_tracker.tsv.gz"
 NATIONAL_GZ_PATH = CACHE_DIR / "us_national_market_tracker.tsv.gz"
 METRO_PARQUET_PATH = CACHE_DIR / "redfin_metro.parquet"
@@ -336,10 +338,12 @@ def dc_frame(
     history_months: int,
     tracked_regions: set[str] | None,
     today: date | None = None,
+    since: date | None = None,
 ) -> pl.DataFrame:
     """Normalize Data Center CSVs to the parquet schema: monthly rows of one region
-    type, percents → ratios, the price-drop share joined on (region name, period end)."""
-    cutoff = (today or date.today()) - timedelta(days=int(history_months * 30.44) + 31)
+    type, percents → ratios, the price-drop share joined on (region name, period end).
+    `since` (a first period end) replaces the `history_months` window when given."""
+    cutoff = since or (today or date.today()) - timedelta(days=int(history_months * 30.44) + 31)
 
     def base_filter(lf: pl.LazyFrame) -> pl.LazyFrame:
         lf = lf.with_columns(pl.col("PERIOD END").str.to_date("%Y-%m-%d", strict=False).alias("_end"))
@@ -445,6 +449,29 @@ def fetch_national(http: Http, *, history_months: int = 36, force: bool = False)
         tracked_regions=None,
         force=force,
     )
+
+
+def fetch_metro_timeline(
+    metro_fetch: FetchResult,
+    *,
+    tracked_regions: set[str] | None,
+    since: date,
+    out_path: Path = DC_METRO_TIMELINE_PARQUET_PATH,
+) -> Path | None:
+    """The tracked metros' full monthly history from `since` (§6.4), read from the
+    Data Center CSVs `fetch_metro` already downloaded. Legacy-source runs return None:
+    the two sources define metrics differently and are never spliced. Rebuilt only
+    when the metro files changed (or the extract is missing)."""
+    if metro_fetch.source != "data_center" or not DC_METRO_CSV_PATH.exists():
+        return None
+    if not metro_fetch.modified and out_path.exists():
+        return out_path
+    drops = DC_PRICE_DROPS_METRO_CSV_PATH if DC_PRICE_DROPS_METRO_CSV_PATH.exists() else None
+    frame = dc_frame(DC_METRO_CSV_PATH, drops, region_type="metro", history_months=0, tracked_regions=tracked_regions, since=since)
+    if frame.is_empty():
+        return None
+    _write_parquet(frame, out_path)
+    return out_path
 
 
 def fetch_all(

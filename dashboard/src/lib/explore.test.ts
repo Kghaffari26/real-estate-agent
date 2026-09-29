@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createTimeStore } from '../state/timeStore';
 import { areaSearch, milesBetween, parsePin, parseRadius, ringPolygon, type AreaMetro } from './area';
-import { changeHeight, divergingBound, divergingColor, extentOf, MIN_STUB, parseChannels, valueHeight } from './columns';
-import { changeAt, monthIndex, timelineFromSeries } from './timeline';
+import { changeHeight, divergingBound, divergingColor, extentOf, MIN_STUB, parseChannels, robustBound, valueHeight } from './columns';
+import { changeAt, monthEnds, monthIndex, timelineFromSeries, YOY_LEAD } from './timeline';
 
 const metro = (slug: string, lat: number, lon: number, o: Partial<AreaMetro> = {}): AreaMetro => ({
   slug,
@@ -89,6 +89,14 @@ describe('column scale', () => {
     expect(extentOf([null])).toBeNull();
   });
 
+  it('a long history uses a robust bound so one outlier cannot wash the scale out', () => {
+    const changes = [...Array.from({ length: 999 }, (_, i) => ((i % 20) - 10) / 100), 0.704]; // ±10% plus one 70.4% month
+    expect(divergingBound(changes)).toBe(0.704);
+    expect(robustBound(changes)).toBeCloseTo(0.1, 12); // the 98th percentile of |change| (-10% is 5% of months)
+    expect(robustBound([0.02, -0.05, 0.704])).toBe(0.704); // small sets: the exact max
+    expect(robustBound([])).toBe(1);
+  });
+
   it('YoY heights are centered on zero', () => {
     expect(changeHeight(0.086, 0.086)).toBe(1);
     expect(changeHeight(-0.043, 0.086)).toBe(-0.5);
@@ -125,6 +133,15 @@ describe('timeline', () => {
     expect(monthIndex(t.dates, '2025-01')).toBe(0);
     expect(monthIndex(t.dates, '1999-01')).toBe(1);
     expect(monthIndex(t.dates, null)).toBe(1);
+  });
+
+  it('rebuilds a timeline axis from its ref (month ends, leap years)', () => {
+    expect(monthEnds('2012-01-31', 3)).toEqual(['2012-01-31', '2012-02-29', '2012-03-31']);
+    expect(monthEnds('2023-11-30', 4)).toEqual(['2023-11-30', '2023-12-31', '2024-01-31', '2024-02-29']);
+    const axis = monthEnds('2012-01-31', 176);
+    expect(axis.at(-1)).toBe('2026-08-31');
+    expect(axis.slice(YOY_LEAD)[0]).toBe('2013-01-31'); // the time machine starts a year in
+    expect(monthEnds('2012-01-31', 0)).toEqual([]);
   });
 
   it('derives the 12-month change by the metric kind', () => {

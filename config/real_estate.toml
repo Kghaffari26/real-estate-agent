@@ -7,6 +7,9 @@ max_index_kb = 150
 max_metro_kb = 40
 # meta.warnings when Redfin's latest month is older than this many days (normal lag ~55)
 redfin_stale_after_days = 75
+# §6.4 timelines: monthly history (from this month) for the dashboard's time machine
+timeline_since = "2012-01"
+max_timeline_kb = 120
 
 [flags]
 inventory_surge_yoy = 0.25

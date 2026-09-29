@@ -63,6 +63,9 @@ sample-data/ ──► public/data/  +  source.json {source: data-branch | sampl
   GitHub Pages lets browsers cache JSON for ~10 minutes, so a fixed URL could pair
   a freshly deployed app with the previous deploy's data. With the hash, each build
   fetches exactly its own data, and an unchanged dataset keeps its cache.
+- **Timelines (schema 1.3.0).** `timeline/<metric>.json` holds monthly history since
+  2012 for five metrics; the index's `timelines` lists which exist, and the atlas's time
+  machine loads one on first scrub (Jan 2013 onward, so every month has a YoY).
 - **Sparklines.** The Metros table draws each row's trend from the index's
   `metros[].spark` (schema 1.2.0), so it fetches no metro files.
 - **Units.** Metric values and changes are ratios (0.968 → 96.8%, 0.009 → +0.9 pp).

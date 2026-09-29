@@ -51,3 +51,16 @@ export function monthIndex(dates: readonly string[], ym: string | null | undefin
   const i = dates.findIndex((d) => d.slice(0, 7) === ym);
   return i >= 0 ? i : dates.length - 1;
 }
+
+/** Months the time machine skips at a timeline's start, so every month on its axis has a year-ago value. */
+export const YOY_LEAD = 12;
+
+/** `months` consecutive month-end ISO dates from `start` (a month end), e.g. a TimelineRef's axis. */
+export function monthEnds(start: string, months: number): string[] {
+  const [y, m] = start.split('-').map(Number) as [number, number];
+  return Array.from({ length: Math.max(0, months) }, (_, i) => {
+    const month = m - 1 + i;
+    const last = new Date(Date.UTC(y, month + 1, 0)); // day 0 of the next month
+    return last.toISOString().slice(0, 10);
+  });
+}

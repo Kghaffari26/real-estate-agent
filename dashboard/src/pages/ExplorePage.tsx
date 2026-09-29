@@ -23,7 +23,7 @@ import { copyText } from '../lib/clipboard';
 import { parseChannels, type DivergingStops, type RGB } from '../lib/columns';
 import { detectRateEvents } from '../lib/events';
 import { formatMonth, formatValue } from '../lib/format';
-import { monthIndex } from '../lib/timeline';
+import { monthEnds, monthIndex, YOY_LEAD } from '../lib/timeline';
 import { TICK_MS, timeStore, useTime } from '../state/timeStore';
 import { AtlasChrome } from '../ui/AtlasChrome';
 import { Dock } from '../ui/Dock';
@@ -101,7 +101,7 @@ function Explore({ index }: { index: IndexOutput }) {
   const metros = useMemo(() => atlasMetros(index), [index]);
   const bySlug = useMemo(() => new Map(metros.map((m) => [m.slug, m])), [metros]);
   const metrics = useMemo(() => atlasMetrics(index.metric_registry, metros), [index.metric_registry, metros]);
-  const dates = index.national.series.dates as string[];
+  const nationalDates = index.national.series.dates as string[];
 
   // ---------- URL state ----------
   const metricKey = metrics.some((m) => m.key === params.get('m')) ? params.get('m')! : 'median_sale_price';
@@ -117,6 +117,12 @@ function Explore({ index }: { index: IndexOutput }) {
   const table = params.get('view') === 'table';
   const tier = params.get('tier') === 'low' ? 'low' : 'high';
   // The default view fits the U.S. into the space between the panels at any desktop width.
+  // The time axis: with a published timeline (§6.4), from its start + 12 months (so every
+  // month has a year-ago value) to the latest; otherwise the metro files' 36 months.
+  const ref = index.timelines.find((t) => t.metric === metric.key);
+  const offset = ref ? YOY_LEAD : 0;
+  const dates = useMemo(() => (ref ? monthEnds(ref.start, ref.months).slice(YOY_LEAD) : nationalDates), [ref, nationalDates]);
+
   const [initialCamera] = useState<Camera>(() => {
     const saved = parseCamera(params.get('cam'));
     if (saved) return saved;
@@ -129,12 +135,17 @@ function Explore({ index }: { index: IndexOutput }) {
   const time = useTime((s) => s.index);
   const playing = useTime((s) => s.playing);
   const speed = useTime((s) => s.speed);
+  // (Re)build the axis when it changes (a metric with or without a timeline), keeping the month.
+  const prevAxis = useRef<string[] | null>(null);
   useEffect(() => {
-    timeStore.getState().setCount(dates.length, monthIndex(dates, params.get('t')));
-    return () => timeStore.getState().setPlaying(false);
-    // Initialize once per axis; later URL changes come from this page.
+    const prev = prevAxis.current;
+    const month = prev ? prev[timeStore.getState().index]?.slice(0, 7) : params.get('t');
+    timeStore.getState().setCount(dates.length, monthIndex(dates, month));
+    prevAxis.current = dates;
+    // `params` is read once for the first axis; later URL changes come from this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dates.length]);
+  }, [dates]);
+  useEffect(() => () => timeStore.getState().setPlaying(false), []);
   const last = dates.length - 1;
   const isLatest = time >= last;
   // Playback advances the store; the URL catches up once playback stops.
@@ -156,15 +167,17 @@ function Explore({ index }: { index: IndexOutput }) {
     if (count > 0 && (!isLatest || playing)) setWantHistory(true);
   }, [count, isLatest, playing]);
   const slugs = useMemo(() => metros.map((m) => m.slug), [metros]);
-  const history = useResource(wantHistory ? `timeline:${metric.key}` : 'timeline:none', () => (wantHistory ? loadTimeline(metric.key, slugs) : Promise.resolve(null)));
+  const history = useResource(wantHistory ? `timeline:${metric.key}:${Boolean(ref)}` : 'timeline:none', () =>
+    wantHistory ? loadTimeline(metric.key, slugs, { compact: Boolean(ref) }) : Promise.resolve(null),
+  );
   const timeline = history.status === 'ready' ? history.data : null;
   const historyPending = wantHistory && history.status === 'loading';
 
   // ---------- columns ----------
   const palette = useMemo(readStops, [dark]);
   const set = useMemo(
-    () => columnSet({ metros, metric, monthIndex: time, isLatest: isLatest || !timeline, timeline, colorBy, heightBy, ...palette }),
-    [metros, metric, time, isLatest, timeline, colorBy, heightBy, palette],
+    () => columnSet({ metros, metric, monthIndex: time + offset, isLatest: isLatest || !timeline, timeline, colorBy, heightBy, ...palette }),
+    [metros, metric, time, offset, isLatest, timeline, colorBy, heightBy, palette],
   );
   const valuesBySlug = useMemo(() => Object.fromEntries(set.columns.map((c) => [c.slug, { value: c.value, change: c.change }])), [set]);
   const shownMonth = isLatest || !timeline ? last : time;
@@ -272,8 +285,8 @@ function Explore({ index }: { index: IndexOutput }) {
   const national = index.national.series[metric.key] as Array<number | null> | undefined;
   const announcement = focusMetro
     ? `${monthLabel}: ${focusMetro.name} ${metric.label.toLowerCase()} ${fmtMetric(metric, valuesBySlug[focusMetro.slug]?.value)}, ${fmtChange(metric, valuesBySlug[focusMetro.slug]?.change)} YoY`
-    : national
-      ? `${formatMonth(dates[time], true)}: U.S. ${metric.label.toLowerCase()} ${fmtMetric(metric, national[time])}`
+    : national && nationalDates.includes(dates[time]!)
+      ? `${formatMonth(dates[time], true)}: U.S. ${metric.label.toLowerCase()} ${fmtMetric(metric, national[nationalDates.indexOf(dates[time]!)])}`
       : formatMonth(dates[time], true);
 
   // ---------- table rows ----------
@@ -290,11 +303,15 @@ function Explore({ index }: { index: IndexOutput }) {
       miles: inArea?.get(m.slug) ?? null,
     }));
 
-  const noYoy = colorBy === 'yoy' && !isLatest && timeline != null && time < 12;
+  const noYoy = offset === 0 && !isLatest && timeline != null && time < YOY_LEAD;
   const legend = {
-    note: noYoy ? `No year-ago value before ${formatMonth(dates[12], true)}: the history starts ${formatMonth(dates[0], true)}.` : null,
-    min: fmtChange(metric, -set.bound),
-    max: fmtChange(metric, set.bound),
+    note: noYoy
+      ? `No year-ago value before ${formatMonth(dates[12], true)}: the history starts ${formatMonth(dates[0], true)}.`
+      : set.clamped && colorBy === 'yoy'
+        ? `Scale set at the 98th percentile of every month's YoY; rarer extremes take the end colors.`
+        : null,
+    min: `${set.clamped ? '≤ ' : ''}${fmtChange(metric, -set.bound)}`,
+    max: `${set.clamped ? '≥ ' : ''}${fmtChange(metric, set.bound)}`,
     valueMax: fmtMetric(metric, set.extent?.max),
   };
 

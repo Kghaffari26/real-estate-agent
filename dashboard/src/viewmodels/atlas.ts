@@ -4,7 +4,7 @@
  * or, for past months, read from the published series (see lib/timeline.ts).
  */
 import type { AreaMetro } from '../lib/area';
-import { changeHeight, divergingBound, divergingColor, extentOf, sequentialColor, valueHeight, type DivergingStops, type Extent, type RGB } from '../lib/columns';
+import { changeHeight, divergingBound, divergingColor, extentOf, robustBound, sequentialColor, valueHeight, type DivergingStops, type Extent, type RGB } from '../lib/columns';
 import { spreadOverlapping } from '../lib/geo';
 import { changeAt, type Timeline } from '../lib/timeline';
 import type { IndexOutput, MetricRegistryEntry } from '../data/schema.gen';
@@ -98,6 +98,8 @@ export interface ColumnSet {
   extent: Extent | null;
   /** Largest |YoY| in scope: the diverging color bound and the YoY height bound. */
   bound: number;
+  /** True when some change in scope lies beyond `bound` (it clamps to the end color). */
+  clamped: boolean;
   heightBy: HeightBy;
 }
 
@@ -114,7 +116,10 @@ export function columnSet({ metros, metric, monthIndex, isLatest, timeline, colo
   const extent = extentOf([...allValues, ...metros.map((m) => m.latest[metric.key]?.value ?? null)]);
   const changes: Array<number | null> = metros.map((m) => m.latest[metric.key]?.yoy ?? null);
   if (timeline) for (const s of Object.values(timeline.metros)) for (let i = 12; i < s.length; i++) changes.push(changeAt(s, i, kind));
-  const bound = divergingBound(changes);
+  // The latest month: the exact largest |YoY|. A whole history: its 98th percentile
+  // (rarer extremes clamp to the end colors), so no single outlier grays the map out.
+  const bound = timeline ? robustBound(changes) : divergingBound(changes);
+  const clamped = timeline ? changes.some((c) => c != null && Math.abs(c) > bound) : false;
   const columns = metros.map((m) => {
     const { value, yoy } = at(m);
     const share = valueHeight(value, extent?.max);
@@ -131,7 +136,7 @@ export function columnSet({ metros, metric, monthIndex, isLatest, timeline, colo
       homesSold12m: m.homesSold12m,
     };
   });
-  return { columns, extent, bound, heightBy };
+  return { columns, extent, bound, clamped, heightBy };
 }
 
 /** Area-search inputs from the latest published values (true centroids). */

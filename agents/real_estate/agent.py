@@ -23,6 +23,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any
 
 import polars as pl
@@ -48,6 +49,7 @@ from agents.real_estate import metrics as metric_registry
 from agents.real_estate import movers as movers_mod
 from agents.real_estate import state as state_mod
 from agents.real_estate import temperature as temperature_mod
+from agents.real_estate import timeline as timeline_mod
 from agents.real_estate.config import Metro, Settings, load_metros, load_settings
 from agents.real_estate.flags import Flag, build_alerts, evaluate_flags
 from agents.real_estate.schema import (
@@ -76,6 +78,7 @@ from agents.real_estate.schema import (
     RatesLatest,
     TemperatureDetail,
     TemperatureSummary,
+    TimelineOutput,
 )
 
 AGENT_NAME = "real_estate"
@@ -228,6 +231,12 @@ def _prior_major_flag_ids(rows: list[dict[str, Any]], thresholds: dict[str, floa
     return {f.id for f in flags if f.severity == "major"}
 
 
+def _first_month(value: str) -> date:
+    """'2012-01' (or '2012-01-31') → 2012-01-01."""
+    year, month = value.split("-")[:2]
+    return date(int(year), int(month), 1)
+
+
 def json_size(obj: BaseModel | dict[str, Any]) -> int:
     """Bytes as agents_core.publish writes them (compact JSON, UTF-8)."""
     data = obj.model_dump(mode="json") if isinstance(obj, BaseModel) else obj
@@ -253,6 +262,7 @@ class Fetched:
     any_source_changed: bool = False
     sources: list[Source] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    timeline_path: Path | None = None  # §6.4 long monthly history (Data Center only)
 
 
 @dataclass
@@ -290,6 +300,7 @@ class Computed:
     m30_latest: tuple[str, float] | None
     world: investigate.World | None = None
     targets: list[investigate.Target] = field(default_factory=list)
+    timelines: dict[str, TimelineOutput] = field(default_factory=dict)
 
 
 # ---- the agent -------------------------------------------------------------
@@ -299,7 +310,7 @@ class RealEstateAgent(Agent):
     id = AGENT_NAME
     name = "Real Estate Market Agent"
     route = "/real-estate"
-    schema_version = "1.2.0"  # 1.1.0: §6.3 investigations, alert figures; 1.2.0: metros[].spark (additive)
+    schema_version = "1.3.0"  # 1.1.0: §6.3 investigations, alert figures; 1.2.0: metros[].spark; 1.3.0: §6.4 timelines (additive)
     expected_interval_hours = 168
     next_run_hint = "Fridays 08:00 PT"
     history_keep = 52
@@ -351,6 +362,13 @@ class RealEstateAgent(Agent):
             Source(name=labels.get(url, url), url=url, retrieved_at=now)
             for url in (*metro_fetch.urls, *national_fetch.urls)
         ]
+        if settings.timeline_since:
+            try:
+                out.timeline_path = fetch_redfin.fetch_metro_timeline(
+                    metro_fetch, tracked_regions={m.redfin_region for m in metros}, since=_first_month(settings.timeline_since)
+                )
+            except Exception as exc:  # noqa: BLE001 - optional (§6.4): the site works without timelines
+                ctx.warn(f"timeline extract failed: {exc}")
 
         region_ids = {m.zillow_region_id for m in metros if m.zillow_region_id is not None}
         if region_ids:
@@ -715,6 +733,20 @@ class RealEstateAgent(Agent):
             {slug: mc.changes["median_sale_price"].yoy for slug, mc in computed_metros.items()},
         )
 
+        timelines: dict[str, TimelineOutput] = {}
+        if raw.timeline_path is not None and global_data_through is not None:
+            with tracing.span("custom", "timelines") as sp:
+                built = timeline_mod.build_timelines(
+                    pl.scan_parquet(raw.timeline_path).collect().to_dicts(),
+                    metros,
+                    _first_month(settings.timeline_since),
+                    global_data_through,
+                )
+                timelines, size_warnings = timeline_mod.fit(built, json_size, int(settings.max_timeline_kb * 1024))
+                for w in size_warnings:
+                    ctx.warn(w)
+                sp.set(metrics=list(timelines), months=len(next(iter(timelines.values())).dates) if timelines else 0)
+
         return Computed(
             fetched=raw,
             metros=computed_metros,
@@ -735,6 +767,7 @@ class RealEstateAgent(Agent):
             m30_latest=m30_latest,
             world=world,
             targets=targets,
+            timelines=timelines,
         )
 
     def _build_world(
@@ -910,8 +943,11 @@ class RealEstateAgent(Agent):
             summaries.append(summary)
             files[f"metros/{slug}.json"] = detail
 
+        for key, tl in data.timelines.items():
+            files[f"timeline/{key}.json"] = tl
         body = self._index_body(data, national_brief, summaries)
         body["investigations"] = [self._investigation_summary(i) for i in investigations.values()]
+        body["timelines"] = timeline_mod.refs(data.timelines)
         limit = int(settings.max_index_kb * 1024) - INDEX_SIZE_MARGIN_BYTES
         body, size_warnings = fit_index(body, lambda b: self._index_size(ctx, b, raw.sources), limit)
         for w in size_warnings:

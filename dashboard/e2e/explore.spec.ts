@@ -76,7 +76,7 @@ test("area search: the panel shows exactly the pure function's numbers", async (
   await expect(panel.getByTestId('area-count')).toHaveText(`${small.metros.length} ${small.metros.length === 1 ? 'metro' : 'metros'} inside`);
 });
 
-test('time machine: scrubbing shows the published history for the selected metro', async ({ page }, info) => {
+test('time machine: the full published history, with a year-ago value in every month', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop', 'desktop layout');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await gotoView(page, '/explore?sel=austin-tx');
@@ -84,20 +84,37 @@ test('time machine: scrubbing shows the published history for the selected metro
   const panel = page.getByTestId('metro-panel');
   const latest = index.metros.find((m: { slug: string }) => m.slug === 'austin-tx').latest.median_sale_price;
   await expect(panel.getByTestId('metro-value')).toHaveText(formatValue(latest.value, 'currency'));
+  // §6.4: the index lists the timeline; the axis runs from its start + 12 months.
+  const ref = index.timelines.find((t: { metric: string }) => t.metric === 'median_sale_price');
+  const tl = JSON.parse(readFileSync(resolve(root, 'sample-data', ref.path), 'utf8'));
+  const s: Array<number | null> = tl.metros['austin-tx'];
   const month = page.getByRole('slider', { name: 'Month' });
   await month.focus();
   await page.keyboard.press('Home');
-  const dates: string[] = austinFile.series.dates;
-  const s: number[] = austinFile.series.median_sale_price;
-  await expect(month).toHaveAttribute('aria-valuetext', formatMonth(dates[0], true));
-  await expect(panel.getByTestId('metro-value')).toHaveText(formatValue(s[0], 'currency'), { timeout: 15_000 });
-  await expect(page).toHaveURL(new RegExp(`t=${dates[0]!.slice(0, 7)}`));
+  await expect(month).toHaveAttribute('aria-valuetext', formatMonth(tl.dates[12], true)); // January 2013
+  await expect(page).toHaveURL(/t=2013-01/);
+  await expect(panel.getByTestId('metro-value')).toHaveText(formatValue(s[12], 'currency'), { timeout: 15_000 });
+  // Every month on the axis has a year-ago value: no neutral first year.
+  await expect(panel.getByTestId('metro-change')).toHaveText(formatDelta(s[12]! / s[0]! - 1, 'percent_signed'));
+  await expect(page.getByText(/No year-ago value/)).toHaveCount(0);
   // ',' and '.' step the month from anywhere on the page
   await page.locator('body').press('.');
-  await expect(panel.getByTestId('metro-value')).toHaveText(formatValue(s[1], 'currency'));
-  // Month 13: the change is read from the published series (value vs 12 months earlier).
-  for (let i = 0; i < 12; i++) await page.locator('body').press('.');
+  await expect(panel.getByTestId('metro-value')).toHaveText(formatValue(s[13], 'currency'));
   await expect(panel.getByTestId('metro-change')).toHaveText(formatDelta(s[13]! / s[1]! - 1, 'percent_signed'));
+});
+
+test("time machine: a metric without a published timeline uses the metro files' 36 months", async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'desktop layout');
+  expect(index.timelines.some((t: { metric: string }) => t.metric === 'homes_sold')).toBe(false);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await gotoView(page, '/explore?sel=austin-tx&m=homes_sold');
+  await waitForAtlas(page);
+  const month = page.getByRole('slider', { name: 'Month' });
+  await month.focus();
+  await page.keyboard.press('Home');
+  await expect(month).toHaveAttribute('aria-valuetext', formatMonth(austinFile.series.dates[0], true));
+  await expect(page.getByTestId('metro-panel').getByTestId('metro-value')).toHaveText(formatValue(austinFile.series.homes_sold[0], 'count'), { timeout: 15_000 });
+  await expect(page.getByText(/No year-ago value/)).toBeVisible();
 });
 
 test('table view mirrors the map and follows the area', async ({ page }) => {

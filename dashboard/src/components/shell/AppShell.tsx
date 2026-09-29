@@ -81,8 +81,10 @@ export function AppShell({ children, crumbs, freshness, metros, theme, onThemeCh
         >
           Skip to content
         </a>
+        <div className="flex min-h-screen">
         <Sidebar collapsed={collapsed} onToggle={toggle} />
-        <div className={`flex min-h-screen flex-col pb-16 print:!pl-0 print:pb-0 transition-[padding] duration-2 ease-out lg:pb-0 ${collapsed ? 'lg:pl-sidebar-c' : 'lg:pl-sidebar'}`}>
+        {/* pb-16 + safe area: room for the fixed bottom nav on phones */}
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] print:pb-0 lg:pb-0">
           <TopBar crumbs={crumbs} freshness={freshness} onOpenPalette={() => setPaletteOpen(true)} theme={theme} onThemeChange={onThemeChange} isMac={isMac} />
           <main id="main" tabIndex={-1} className="mx-auto min-h-[640px] lg:min-h-[900px] w-full max-w-[1400px] flex-1 px-4 py-6 outline-none print:min-h-0 lg:px-6 lg:py-8">
             <m.div key={location.pathname} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}>
@@ -90,6 +92,7 @@ export function AppShell({ children, crumbs, freshness, metros, theme, onThemeCh
             </m.div>
           </main>
           <Footer {...footer} />
+        </div>
         </div>
         <BottomNav />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} metros={metros} onNavigate={(to) => navigate(to)} />

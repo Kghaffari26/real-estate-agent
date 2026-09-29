@@ -1,4 +1,4 @@
-import { ArrowRight, Table2 } from 'lucide-react';
+import { ArrowRight, GitCompare, MapPin, Table2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { TimeSeriesChart } from '../components/charts';
@@ -31,6 +31,58 @@ import { alertViews, heatCells, investigationSummaryViews, moverRows, nationalMe
 
 const RANGE_OPTIONS = RANGES.map((r) => ({ value: r, label: r }));
 const KPI_KEYS = ['median_sale_price', 'inventory', 'homes_sold', 'median_dom', 'price_drops'] as const;
+
+/**
+ * 1 investigation: the card spans two columns beside an "explore" panel; 2: halves;
+ * 3: thirds. No empty half-row either way.
+ */
+function InvestigationGrid({ views }: { views: ReturnType<typeof investigationSummaryViews> }) {
+  if (views.length === 1) {
+    const v = views[0]!;
+    return (
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <InvestigationTeaser view={v} />
+        </div>
+        <ExplorePanel slug={v.slug} name={v.name} />
+      </div>
+    );
+  }
+  return (
+    <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${views.length >= 3 ? 'xl:grid-cols-3' : ''}`}>
+      {views.map((view) => (
+        <InvestigationTeaser key={view.slug} view={view} />
+      ))}
+    </div>
+  );
+}
+
+function ExplorePanel({ slug, name }: { slug: string; name: string }) {
+  const links = [
+    { to: `/metro/${slug}`, icon: MapPin, title: `Open ${name}`, text: 'KPIs, trend, temperature drivers, flags and the full explanation' },
+    { to: `/compare?m=${slug}`, icon: GitCompare, title: `Compare ${name.replace(/, [A-Z]{2}$/, '')} with peers`, text: 'Overlay up to three metros, indexed to 100' },
+    { to: '/metros', icon: Table2, title: 'Browse all 50 metros', text: 'Map, sortable table and CSV export' },
+  ];
+  return (
+    <aside aria-label="Explore further" className="card flex flex-col gap-1 p-2">
+      <p className="eyebrow px-2 pb-1 pt-2">Explore the metro</p>
+      {links.map(({ to, icon: Icon, title, text }) => (
+        <Link key={to} to={to} className="group flex items-start gap-3 rounded-md p-2 text-text no-underline hover:bg-surface-2">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent" aria-hidden="true">
+            <Icon className="h-4 w-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="flex items-center gap-1 text-sm font-medium">
+              {title}
+              <ArrowRight aria-hidden="true" className="h-3.5 w-3.5 text-text-3 transition-transform duration-1 group-hover:translate-x-0.5" />
+            </span>
+            <span className="block text-xs text-text-3">{text}</span>
+          </span>
+        </Link>
+      ))}
+    </aside>
+  );
+}
 
 export function OverviewPage() {
   useDocumentTitle('Overview');
@@ -294,11 +346,7 @@ function Overview({ index }: { index: IndexOutput }) {
         {index.investigations.length === 0 ? (
           <EmptyState title="No investigations this run" />
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {investigationSummaryViews(index, registry).map((view) => (
-              <InvestigationTeaser key={view.slug} view={view} />
-            ))}
-          </div>
+          <InvestigationGrid views={investigationSummaryViews(index, registry)} />
         )}
       </section>
     </div>

@@ -265,21 +265,38 @@ def test_fit_index_trims_national_series_beyond_the_core_6_then_fails():
 
     def body():
         series = {"dates": ["2026-05-31"], **{k: [1.0] * 100 for k in NATIONAL_SERIES_KEYS}}
-        return {"national": SimpleNamespace(series=series)}
+        return {"national": SimpleNamespace(series=series), "metros": [SimpleNamespace(spark=[1] * 24)]}
 
     def measure(b):
-        return 100 * len(b["national"].series)
+        return 100 * len(b["national"].series) + 10 * sum(len(m.spark) for m in b["metros"])
 
     # under the limit: untouched, no warning
     b, warnings = fit_index(body(), measure, 10_000)
     assert len(b["national"].series) == 9 and warnings == []
     # over it: the non-core series go (§10) and it says so
-    b, warnings = fit_index(body(), measure, 800)
+    b, warnings = fit_index(body(), measure, 1000)
     assert set(b["national"].series) == {"dates", *CORE_NATIONAL_SERIES_KEYS}
     assert len(warnings) == 1 and "§10" in warnings[0]
+    assert len(b["metros"][0].spark) == 24
+    # still over: metros[].spark goes next (§6.3, 1.2.0)
+    b, warnings = fit_index(body(), measure, 800)
+    assert b["metros"][0].spark == [] and len(warnings) == 2 and "spark" in warnings[1]
     # still over after trimming: fail rather than publish an oversized index
     with pytest.raises(PublishSizeError):
         fit_index(body(), measure, 500)
+
+
+def test_spark_series_is_the_last_24_month_ends_rounded():
+    from datetime import date
+
+    from agents.real_estate.agent import spark_series
+
+    rows = [{"period_end": date(2026, m, [31, 28, 31, 30, 31, 30, 31, 31][m - 1]), "median_sale_price": 400000.4 + m} for m in range(1, 9)]
+    out = spark_series(rows, date(2026, 8, 31))
+    assert len(out) == 24
+    assert out[-1] == 400008 and out[-8] == 400001
+    assert out[0] is None  # months before the data are null
+    assert spark_series(rows, None) == []
 
 
 def test_committed_json_schema_is_current(tmp_path):

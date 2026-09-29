@@ -763,6 +763,21 @@
               "title": "Slug",
               "type": "string"
             },
+            "spark": {
+              "description": "\u00a76.3 (1.2.0): the last 24 month-end median sale prices, whole dollars, oldest first, null where missing; for table sparklines without fetching metro files",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": "Spark",
+              "type": "array"
+            },
             "stale": {
               "default": false,
               "title": "Stale",

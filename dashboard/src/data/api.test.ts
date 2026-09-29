@@ -8,8 +8,15 @@ function response(body: unknown, status = 200): Response {
 beforeEach(() => clearCache());
 
 describe('api', () => {
-  it('builds URLs under the base path', () => {
-    expect(dataUrl('latest.json')).toMatch(/\/data\/latest\.json$/);
+  it('builds versioned URLs under the base path', () => {
+    expect(dataUrl('latest.json')).toMatch(/\/data\/latest\.json\?v=[0-9a-z]+$/);
+    expect(dataUrl('metros/austin-tx.json', 'abc123')).toMatch(/\/data\/metros\/austin-tx\.json\?v=abc123$/);
+  });
+
+  it('fetches with the build\'s data version so a deploy never pairs with stale cached JSON', async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ source: 'sample' }));
+    await loadDataSource(fetcher);
+    expect(String(fetcher.mock.calls[0]![0])).toMatch(/source\.json\?v=/);
   });
 
   it('validates slugs', () => {

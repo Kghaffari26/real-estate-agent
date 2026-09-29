@@ -468,7 +468,7 @@ The pydantic models in `agents/real_estate/schema.py` are the source of truth, e
 
 `id: "real_estate"`, `route: "/real-estate"`, `expected_interval_hours: 168`, `next_run_hint: "Fridays 08:00 PT"`, `items_count: 50`.
 
-### 6.3 Additive fields (schema 1.1.0): metro investigations, alert figures, warnings
+### 6.3 Additive fields (schema 1.1.0–1.2.0): metro investigations, alert figures, warnings, sparklines
 
 Added 2026-09-27 (`schema_version` 1.0.0 → 1.1.0). **Every field here is additive and
 has a default**, so an index or metro file published under 1.0.0 still validates and
@@ -553,6 +553,17 @@ metro's own figure:
     { "slug": "jacksonville-fl", "name": "Jacksonville, FL", "label": "Inventory -24% YoY", "value": -0.2416, "severity": "notable" },
     { "slug": "miami-fl", "name": "Miami, FL", "label": "Inventory -20% YoY", "value": -0.2036, "severity": "notable" }
   ] }
+```
+
+**Metro sparklines (schema 1.2.0, added 2026-09-29).** Each `metros[]` entry in the
+index gains `spark`: the last 24 month-end **median sale prices**, oldest first, rounded
+to whole dollars, `null` for a missing month (default `[]`). It lets a site draw a trend
+sparkline per metro without fetching 50 metro files (~7 KB for 50 metros). If the index
+is still over `max_index_kb` after §10's national-series trim, `spark` is dropped next
+(with a `meta.warnings` line) before the run fails.
+
+```json
+{ "slug": "austin-tx", "...": "...", "spark": [441000, 438500, null, 452000] }
 ```
 
 **Shared meta.** `meta.warnings` (agents-core ≥ 0.2.0) lists this run's degraded

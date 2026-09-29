@@ -8,6 +8,9 @@
 @layer base {
   html {
     @apply bg-bg text-base text-text antialiased;
+    /* Keyboard focus and in-page links never land under the sticky header / bottom nav. */
+    scroll-padding-top: calc(var(--header-h) + 8px);
+    scroll-padding-bottom: 80px;
     font-family: var(--font-sans);
     font-feature-settings: var(--font-features);
     text-rendering: optimizeLegibility;

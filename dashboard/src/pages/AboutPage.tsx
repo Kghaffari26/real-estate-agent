@@ -1,6 +1,7 @@
 import { Calculator, Cpu, Database, Sparkles } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Card } from '../components/ui/Card';
+import { ScrollArea } from '../components/ui/ScrollArea';
 import { PageHeader } from '../components/ui/PageHeader';
 import { PageSkeleton } from '../components/ui/Skeleton';
 import { ErrorState } from '../components/ui/StateViews';
@@ -87,6 +88,32 @@ export function AboutPage() {
         <p className="mt-4 text-xs text-text-3">Basemap © OpenFreeMap, © OpenMapTiles, data © OpenStreetMap contributors. Raw datasets are not redistributed.</p>
       </Card>
 
+      <Card id="methodology-changes" eyebrow="September 2026" title="Data sources and methodology changes" copyLink>
+        <div className="space-y-3 text-sm leading-relaxed text-text-2">
+          <p>
+            Redfin relaunched its Data Center in 2026 and stopped updating its older market-tracker exports after May 2026. Since September 2026, every
+            Redfin series here comes from the <strong className="font-medium text-text">relaunched Redfin Data Center files</strong>, with monthly history back
+            to 2012.
+          </p>
+          <ul className="space-y-1.5">
+            <li className="flex gap-2">
+              <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-text-3" aria-hidden="true" />
+              Each series comes from one source end to end: the new files are never spliced with the retired tracker, so every change and trend compares like with like.
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-text-3" aria-hidden="true" />
+              Some definitions and coverage changed, so some figures differ from earlier releases for the same month. For example, the national median sale price
+              for May 2026 is $399,900 in the new files versus $449,846 in the old tracker. "Sold above list" now means above the <em>original</em> list price, and
+              the price-drop share is the share of active listings with a price cut.
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-text-3" aria-hidden="true" />
+              Year-over-year and month-over-month changes are still computed here from the series; they match Redfin's own published changes within rounding.
+            </li>
+          </ul>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card id="temperature" title="How market temperature works" subtitle="How competitive a metro is relative to the other tracked metros" copyLink>
           <ol className="space-y-3 text-sm leading-relaxed text-text-2">
@@ -113,7 +140,7 @@ export function AboutPage() {
       </div>
 
       <Card id="flags" title="How flags are computed" subtitle="Deterministic rules with configurable thresholds (defaults shown). Alerts group notable and major flags across metros." copyLink>
-        <div className="relative max-w-full overflow-x-auto rounded-md border border-border" tabIndex={0} role="region" aria-label="Flag rules">
+        <ScrollArea label="Flag rules">
           <table className="table-base min-w-max">
             <caption className="sr-only">Flag rules and severities</caption>
             <thead>
@@ -135,7 +162,7 @@ export function AboutPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollArea>
       </Card>
     </div>
   );

@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ColumnPicker } from '../components/data/ColumnPicker';
 import { DataTable, type Column, type TableRow } from '../components/data/DataTable';
-import { SparkCell } from '../components/data/SparkCell';
+import { Sparkline } from '../components/charts/Sparkline';
 import { MetroMap } from '../components/map';
 import { MapLegend } from '../components/map/MapLegend';
 import { Badge } from '../components/ui/Badge';
@@ -82,11 +82,10 @@ function Metros({ index }: { index: IndexOutput }) {
     toast(`Exported ${filtered.length} metros`);
   };
 
-  const trendMetric = metric;
   const columns: Column[] = [
     { id: 'name', header: 'Metro', sortable: true },
     { id: 'temperature', header: 'Temp.', sortable: true, align: 'right' },
-    { id: 'trend', header: 'Trend', sub: `${metricLabel(registry, trendMetric)}, 24 mo` },
+    { id: 'trend', header: 'Price trend', sub: 'Median sale price, 24 mo' },
     ...columnsShown.map((id): Column => {
       const [key, field] = id.split('.') as [string, string];
       return { id, header: metricLabel(registry, key), sub: field === 'yoy' ? (key.startsWith('permits_') ? 'YoY (12-mo)' : 'YoY') : undefined, align: 'right', sortable: true };
@@ -116,7 +115,7 @@ function Metros({ index }: { index: IndexOutput }) {
             <span className="sr-only">{r.temperatureLabel}</span>
           </span>
         ),
-        trend: <SparkCell slug={r.slug} metric={trendMetric} />,
+        trend: r.spark.some((v) => v !== null) ? <Sparkline values={r.spark} area={false} className="h-6 w-20" /> : <span className="text-text-3">—</span>,
         market_type: <span className="text-text-2">{r.marketType ?? '—'}</span>,
         flags: r.flags.length ? (
           <span className="flex max-w-[280px] flex-wrap gap-1">
@@ -215,7 +214,6 @@ function Metros({ index }: { index: IndexOutput }) {
           <>
             {view === 'table' && (
               <>
-                <Select label="Trend column metric" hideLabel value={metric} onChange={setMetric} options={withData.map((k) => ({ value: k, label: `Trend: ${metricLabel(registry, k)}` }))} />
                 <button type="button" className="btn" onClick={() => setView('both')}>
                   <MapIcon aria-hidden="true" className="h-3.5 w-3.5" />
                   Show map

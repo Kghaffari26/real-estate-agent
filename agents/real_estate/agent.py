@@ -150,14 +150,32 @@ def fit_index(
         return body, []
     national = body["national"]
     national.series = {k: v for k, v in national.series.items() if k == "dates" or k in CORE_NATIONAL_SERIES_KEYS}
+    warnings = [f"latest.json over {limit_bytes} bytes: dropped national.series beyond the core 6 (§10)"]
+    if measure(body) > limit_bytes:
+        for metro in body["metros"]:
+            metro.spark = []
+        warnings.append(f"latest.json over {limit_bytes} bytes: dropped metros[].spark (§6.3)")
     size = measure(body)
     if size > limit_bytes:
         raise PublishSizeError(f"latest.json is {size} bytes after trimming (limit {limit_bytes})")
-    return body, [f"latest.json over {limit_bytes} bytes: dropped national.series beyond the core 6 (§10)"]
+    return body, warnings
 
 
 def _series(df_rows: list[dict[str, Any]], key: str) -> list[tuple[date, float | None]]:
     return [(row["period_end"], row.get(key)) for row in df_rows]
+
+
+SPARK_MONTHS = 24
+
+
+def spark_series(rows: list[dict[str, Any]], through: date | None, months: int = SPARK_MONTHS) -> list[int | None]:
+    """§6.3 `metros[].spark`: the last `months` month-end median sale prices through
+    `through`, rounded to whole dollars, oldest first (null where a month is missing)."""
+    if through is None:
+        return []
+    dates = compute.month_end_dates(through, months)
+    values = compute.series_for_dates(_series(rows, "median_sale_price"), dates)
+    return [round(v) if v is not None else None for v in values]
 
 
 def _summary_metric(change: compute.MetricChange) -> MetricSummaryValue:
@@ -281,7 +299,7 @@ class RealEstateAgent(Agent):
     id = AGENT_NAME
     name = "Real Estate Market Agent"
     route = "/real-estate"
-    schema_version = "1.1.0"  # 1.1.0: §6.3 investigations, per-metro alert figures (additive)
+    schema_version = "1.2.0"  # 1.1.0: §6.3 investigations, alert figures; 1.2.0: metros[].spark (additive)
     expected_interval_hours = 168
     next_run_hint = "Fridays 08:00 PT"
     history_keep = 52
@@ -1035,6 +1053,7 @@ class RealEstateAgent(Agent):
             flags=[f.id for f in mc.flags],
             brief_excerpt=brief.text.split(". ")[0][:160] if brief.text else "",
             stale=stale,
+            spark=spark_series(mc.rows, mc.data_through or global_through),
         )
         detail = MetroDetailOutput(
             slug=m.slug,

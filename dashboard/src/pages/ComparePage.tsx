@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { TimeSeriesChart } from '../components/charts';
 import { Card } from '../components/ui/Card';
+import { ScrollArea } from '../components/ui/ScrollArea';
 import { Checkbox } from '../components/ui/Checkbox';
 import { CopyLinkButton } from '../components/ui/CopyLinkButton';
 import { MetroSearch } from '../components/ui/MetroSearch';
@@ -150,7 +151,7 @@ function Comparison({ index, metros }: { index: IndexOutput; metros: MetroDetail
       </div>
 
       <Card id="compare-table" title="Side by side" subtitle="Latest month. Crown: best where a direction is better (e.g. more homes sold, hotter, lower payment); arrows: simply the highest." copyLink>
-        <div className="relative max-w-full overflow-x-auto rounded-md border border-border" tabIndex={0} role="region" aria-label="Side-by-side comparison table">
+        <ScrollArea label="Side-by-side comparison table">
           <table className="table-base min-w-max">
             <caption className="sr-only">Latest values and year-over-year changes for each compared metro, with the leader per metric marked</caption>
             <thead>
@@ -195,7 +196,7 @@ function Comparison({ index, metros }: { index: IndexOutput; metros: MetroDetail
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollArea>
       </Card>
     </>
   );

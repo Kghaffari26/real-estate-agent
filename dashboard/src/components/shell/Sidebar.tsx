@@ -12,11 +12,14 @@ interface SidebarProps {
 /** Desktop navigation (≥1024px). Collapses to an icon rail; the choice is remembered. */
 export function Sidebar({ collapsed, onToggle, footer }: SidebarProps) {
   return (
+    // The aside stretches with the page (its background never stops mid-page); the
+    // inner column is sticky and viewport-tall, so nav and controls stay in view.
     <aside
-      className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border bg-surface transition-[width] duration-2 ease-out lg:flex ${collapsed ? 'w-sidebar-c' : 'w-sidebar'}`}
+      className={`relative z-40 hidden shrink-0 self-stretch border-r border-border bg-surface transition-[width] duration-2 ease-out lg:block ${collapsed ? 'w-sidebar-c' : 'w-sidebar'}`}
       data-no-print
     >
-      <div className={`flex h-header items-center border-b border-border ${collapsed ? 'justify-center' : 'px-4'}`}>
+      <div className="sticky top-0 flex h-screen flex-col">
+      <div className={`flex h-header shrink-0 items-center border-b border-border ${collapsed ? 'justify-center' : 'px-4'}`}>
         <NavLink to="/" className="no-underline" aria-label="Metro Pulse home">
           <Wordmark collapsed={collapsed} />
         </NavLink>
@@ -49,6 +52,7 @@ export function Sidebar({ collapsed, onToggle, footer }: SidebarProps) {
           {!collapsed && <span className="text-text-2">Collapse</span>}
         </button>
       </div>
+      </div>
     </aside>
   );
 }
@@ -56,7 +60,7 @@ export function Sidebar({ collapsed, onToggle, footer }: SidebarProps) {
 /** Mobile navigation (<1024px): a compact bottom tab bar. */
 export function BottomNav() {
   return (
-    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur lg:hidden" data-no-print>
+    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" data-no-print>
       <ul className="mx-auto grid max-w-md grid-cols-4">
         {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
           <li key={to}>

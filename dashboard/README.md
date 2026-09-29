@@ -24,10 +24,10 @@ npm run dev             # http://localhost:5173/real-estate-agent/
 |---|---|
 | `npm run fetch-data` | Fill `public/data/` (see "Data flow"). `RE_DATA_DIR=../public-data npm run fetch-data` uses a local agent run instead. |
 | `npm run gen:schema` | Regenerate `src/data/schema.gen.ts` from `../schemas/real_estate.schema.json`. `check:schema` fails if it's stale. |
-| `npm run lint` / `typecheck` / `test` | ESLint (0 warnings), `tsc -b`, Vitest + Testing Library (106 tests). |
+| `npm run lint` / `typecheck` / `test` | ESLint (0 warnings), `tsc -b`, Vitest + Testing Library (110 tests). |
 | `npm run build` / `preview` | Production build into `dist/`. `DASHBOARD_BASE` overrides the base path. |
 | `npm run check:bundle` | Performance budget: initial JS ≤ 300 KB gzipped (CI enforces it). |
-| `npm run e2e` | Playwright smoke + axe: every route in light and dark, desktop and 360 px, plus the interactions (35 checks). |
+| `npm run e2e` | Playwright smoke + axe: every route in light and dark, desktop and 360 px, plus the interactions and phone checks (39 checks). |
 | `npm run screenshots` | Rewrite `../docs/screenshots/*.png`: every view in light, dark and mobile. |
 | `npm run brand-assets` | Re-render `public/og.png` and `public/apple-touch-icon.png` from the brand config. |
 
@@ -58,6 +58,13 @@ sample-data/ ──► public/data/  +  source.json {source: data-branch | sampl
   spend. It holds the full index, all 50 metro files, the manifest entry and one
   history file, with nothing hand-edited. While it's in use, the freshness chip
   shows **Sample**.
+- **Cache-busting.** Every data URL carries `?v=<content hash of public/data>`,
+  computed at build time (`scripts/data-version.mjs`, injected by `vite.config.ts`).
+  GitHub Pages lets browsers cache JSON for ~10 minutes, so a fixed URL could pair
+  a freshly deployed app with the previous deploy's data. With the hash, each build
+  fetches exactly its own data, and an unchanged dataset keeps its cache.
+- **Sparklines.** The Metros table draws each row's trend from the index's
+  `metros[].spark` (schema 1.2.0), so it fetches no metro files.
 - **Units.** Metric values and changes are ratios (0.968 → 96.8%, 0.009 → +0.9 pp).
   Mortgage rates and `key_stats` are already in percent (7.03 → 7.03%). See
   `lib/metrics.ts` (`valueScale`) and `lib/format.ts` (`scale`).
@@ -169,18 +176,18 @@ header and footer, so it's the starting point for a white-label PDF report.
 
 ## Performance
 
-- **Initial JS: 109 KB gzipped**: 44 KB app + 65 KB React/Router/zod. The budget is
+- **Initial JS: 110 KB gzipped**: 45 KB app + 65 KB React/Router/zod. The budget is
   300 KB, checked in CI by `npm run check:bundle`.
 - **Lazy chunks:**
   - Recharts: ~110 KB, loaded when a chart nears the viewport.
   - MapLibre: ~280 KB, plus its worker, loaded when the map nears the viewport.
   - framer-motion's animation features: 15 KB, loaded asynchronously.
   - Every page except the Overview.
-- **Lighthouse on the Overview** (2026-09-28, local `vite preview`, Lighthouse 12):
+- **Lighthouse on the Overview** (2026-09-29, local `vite preview`, Lighthouse 12):
 
   | | Performance | Accessibility | Best practices | SEO |
   |---|---|---|---|---|
-  | Mobile (simulated Moto G, 4× CPU) | 96 | 100 | 100 | 100 |
+  | Mobile (simulated Moto G, 4× CPU) | 95 | 100 | 100 | 100 |
   | Desktop | 99 | 100 | 100 | 100 |
 
 ## Known limitations
@@ -190,8 +197,5 @@ header and footer, so it's the starting point for a white-label PDF report.
   land and state lines from `us-atlas`). The live site uses OpenFreeMap's
   `positron` and `dark` styles. If WebGL or the basemap fails, the map is replaced
   by a list, and the full table is always on the Metros page.
-- **Table sparklines load per row.** The index has no per-metro series, so each
-  visible row loads its metro file. A `metros[].spark` array in the index would
-  avoid that (see STATUS.md).
 - **Missing sources.** Permits and ACS income are null in the current data, so those
   panels show friendly empty states and payment-to-income is unavailable.

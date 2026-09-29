@@ -12,7 +12,7 @@ function serve(files: Record<string, string | number>) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      const path = String(url).replace(/^.*\/data\//, '');
+      const path = String(url).replace(/^.*\/data\//, '').replace(/\?.*$/, '');
       const body = files[path];
       if (body === undefined) return new Response('not found', { status: 404 });
       if (typeof body === 'number') return new Response('', { status: body });

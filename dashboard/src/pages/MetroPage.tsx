@@ -59,21 +59,21 @@ export function MetroPage() {
   return <Metro metro={metro.data} index={index.data} />;
 }
 
-function TileBadges({ tile }: { tile: MetricTileView }) {
+function TrendChip({ tile }: { tile: MetricTileView }) {
   const trend = tile.trend ? TREND[tile.trend] : null;
+  if (!trend) return null;
   return (
-    <>
-      {tile.high36 && <Badge tone="accent">36-mo high</Badge>}
-      {tile.low36 && <Badge tone="accent">36-mo low</Badge>}
-      {trend && (
-        <Badge title={trend.text}>
-          <trend.Icon aria-hidden="true" className="h-3 w-3" />
-          <span className="sr-only">{trend.text}</span>
-          <span aria-hidden="true">3 mo</span>
-        </Badge>
-      )}
-    </>
+    <Badge title={trend.text}>
+      <trend.Icon aria-hidden="true" className="h-3 w-3" />
+      <span className="sr-only">{trend.text}</span>
+      <span aria-hidden="true">3 mo</span>
+    </Badge>
   );
+}
+
+function ExtremeBadges({ tile }: { tile: MetricTileView }) {
+  if (!tile.high36 && !tile.low36) return null;
+  return <Badge tone="accent">{tile.high36 ? '36-month high' : '36-month low'}</Badge>;
 }
 
 function Metro({ metro, index }: { metro: MetroDetailOutput; index: IndexOutput }) {
@@ -130,7 +130,8 @@ function Metro({ metro, index }: { metro: MetroDetailOutput; index: IndexOutput 
         { value: t.yoy, format: t.deltaFormat, label: t.permits ? 'YoY 12-mo' : 'YoY' },
         ...(t.permits ? [] : [{ value: t.mom, format: t.deltaFormat, label: 'MoM' }]),
       ]}
-      badges={<TileBadges tile={t} />}
+      badges={<TrendChip tile={t} />}
+      highlights={t.high36 || t.low36 ? <ExtremeBadges tile={t} /> : undefined}
       spark={spark(t.key)}
       sparkTone={tone}
       note={t.note}

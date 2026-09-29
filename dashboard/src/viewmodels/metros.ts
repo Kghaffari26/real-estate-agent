@@ -20,6 +20,8 @@ export interface MetroRow {
   flags: string[];
   metrics: Record<string, MetricCell>;
   stale: boolean;
+  /** Last 24 month-end median sale prices (§6.3 `metros[].spark`); [] in pre-1.2.0 data. */
+  spark: (number | null)[];
 }
 
 export function metricCell(summary: MetroSummary['latest'][string] | undefined): MetricCell {
@@ -41,6 +43,7 @@ export function buildMetroRows(index: Pick<IndexOutput, 'metros'>): MetroRow[] {
     flags: m.flags,
     metrics: Object.fromEntries(Object.entries(m.latest).map(([k, v]) => [k, metricCell(v)])),
     stale: m.stale,
+    spark: m.spark,
   }));
 }
 

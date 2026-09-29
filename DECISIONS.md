@@ -124,3 +124,15 @@ One line per consequential judgment call made while working unattended.
 - `sr-only` spans inside horizontally scrolling tables escaped the clip (absolute positioning, unpositioned scroll wrapper) and caused a 126px page overflow at 360px; scroll wrappers are now `relative`.
 - Pushed to `main` as asked, and to the session branch `claude/great-bohr-u6up6d`.
 
+## Session 8 (2026-09-29): dashboard phase 3 polish
+
+- `metros[].spark` = 24 month-ends of median sale price only (the table's default trend metric), whole dollars, oldest first, null for gaps; `schema_version` 1.1.0 → 1.2.0. ~9 KB for 50 metros. Size safety: `fit_index` drops it after the §10 national trim and before failing (with a warning), since it's the most expendable field.
+- The table's "Trend" column is now always median sale price (from `spark`); the per-metric trend selector was dropped rather than keep lazy per-metro fetches for other metrics.
+- Snapshot regenerated from the existing scratch run state ($0: facts unchanged, briefs and investigation reused), so the only data change is `spark` + meta.
+- Data cache-busting: `?v=<12-hex SHA-256 of public/data paths+bytes>` baked in at build via Vite `define`, rather than hashed file copies: simplest, keeps fetch-data unchanged, and unchanged data keeps its cache across deploys. `source.json` is excluded (its fetch timestamp isn't data). index.html is already revalidated by Pages, so a new HTML always carries the new version.
+- Sidebar: the aside stretches with the page (flex row) and only its inner column is `sticky top-0 h-screen`, instead of `position: fixed`, so the background never ends mid-page (including in full-page captures).
+- KPI headers: title `line-clamp-2` + chip `shrink-0`; 36-month badges moved below the deltas so no card has two header chips.
+- Table overflow cue: a shared `ScrollArea` (fade on the right edge while scrollable, `data-scrolled` → shadow on the sticky first column); used by the Metros, Compare and Methodology tables. The Metros table keeps its sticky header inside a 70vh scroll region.
+- One investigation → the card spans 2 of 3 columns next to an "Explore the metro" panel (open metro, compare, browse all); two → halves; three → thirds.
+- Mobile: bottom nav gets `env(safe-area-inset-bottom)` padding; content padding matches; `scroll-padding` keeps focused/linked elements clear of the sticky header and bottom nav. The 360px e2e project uses `hasTouch` so the palette test taps.
+

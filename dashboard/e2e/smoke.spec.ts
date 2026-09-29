@@ -175,3 +175,55 @@ test('unknown metro shows not found', async ({ page }) => {
   await gotoView(page, '/metro/nowhere-zz');
   await expect(page.getByRole('heading', { level: 1, name: 'Metro not found' })).toBeVisible();
 });
+
+test('data URLs carry this build\'s data version; Metros fetches no metro files', async ({ page }) => {
+  const dataRequests: string[] = [];
+  page.on('request', (r) => r.url().includes('/data/') && dataRequests.push(r.url()));
+  await gotoView(page, '/metros');
+  await ready(page, /^Metros$/);
+  expect(dataRequests.length).toBeGreaterThan(0);
+  const versions = new Set(dataRequests.map((u) => new URL(u).searchParams.get('v')));
+  expect(versions.size).toBe(1);
+  expect([...versions][0]).toMatch(/^[0-9a-f]{12}$/);
+  // Table sparklines come from metros[].spark in the index (schema 1.2.0).
+  expect(dataRequests.filter((u) => u.includes('/data/metros/'))).toEqual([]);
+  await expect(page.locator('#table svg').first()).toBeVisible();
+});
+
+test.describe('mobile (360px)', () => {
+  test.beforeEach(({ browserName }, info) => {
+    void browserName; // Playwright requires a destructured fixture argument
+    test.skip(info.project.name !== 'mobile-360', 'phone layout');
+  });
+
+  test('the search button opens the command palette by tap', async ({ page }) => {
+    await gotoView(page, '/');
+    await ready(page, /./);
+    await page.getByRole('button', { name: 'Search metros and pages' }).tap().catch(async () => page.getByRole('button', { name: 'Search metros and pages' }).click());
+    const dialog = page.getByRole('dialog', { name: 'Command palette' });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.type('boston');
+    await dialog.getByRole('option', { name: /Boston, MA/ }).first().click();
+    await expect(page).toHaveURL(/#\/metro\/boston-ma/);
+  });
+
+  test('the bottom nav never covers the calculator or the end of the page', async ({ page }) => {
+    await gotoView(page, `/metro/${investigated}`);
+    await ready(page, /, [A-Z]{2}/);
+    await page.getByRole('button', { name: 'Affordability', exact: true }).click();
+    const nav = page.getByRole('navigation', { name: 'Main' }).last();
+    const navTop = (await nav.boundingBox())!.y;
+    // Scrolled all the way down, the last calculator control and the footer sit above the nav.
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const reset = page.getByRole('button', { name: 'Reset to defaults' });
+    await reset.scrollIntoViewIfNeeded();
+    const box = (await reset.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(navTop);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const footerText = page.getByText(/Every number is computed in code/);
+    const f = (await footerText.boundingBox())!;
+    expect(f.y + f.height).toBeLessThanOrEqual(navTop);
+    // And the reset button is actually clickable (not intercepted by the nav).
+    await reset.click();
+  });
+});

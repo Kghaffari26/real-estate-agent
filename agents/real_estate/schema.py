@@ -153,6 +153,11 @@ class MetroSummary(BaseModel):
     flags: list[str] = Field(default_factory=list)
     brief_excerpt: str = ""
     stale: bool = False
+    spark: list[int | None] = Field(
+        default_factory=list,
+        description="§6.3 (1.2.0): the last 24 month-end median sale prices, whole dollars, "
+        "oldest first, null where missing; for table sparklines without fetching metro files",
+    )
 
 
 class RatesLatest(BaseModel):

@@ -3,6 +3,38 @@
 Last updated 2026-09-28 by an unattended Claude Code session. Judgment calls
 are logged one per line in `DECISIONS.md` ("Session 4", "Session 6", "Session 7").
 
+## Session 8 (2026-09-29): dashboard phase 3 polish + sparkline contract
+
+- **Contract (schema 1.2.0, additive).** `metros[].spark` holds the last 24 month-end
+  median sale prices in whole dollars (spec §6.3). The index grows from 86 to
+  95 KB, under the 150 KB limit. `fit_index` drops `spark` before failing if the
+  index is ever too large.
+- **Snapshot.** Regenerated from the existing run state for **$0** (every brief and
+  the investigation were reused).
+- **Metros table sparklines.** They now come from `spark`: the Metros page makes no
+  metro-file requests (an e2e test checks this). This closes gap 1 below.
+- **Stale data after deploys (fixed).** Every data URL now carries `?v=<content
+  hash of public/data>`, computed at build time (`scripts/data-version.mjs`). Pages'
+  ~10-minute browser cache can no longer pair a new app with old JSON, and an
+  unchanged dataset keeps its cache. Unit and e2e tests cover it.
+- **Layout fixes.**
+  - Sidebar: its background runs the full page, and its contents are sticky.
+  - KPI cards: every card has the same header; titles wrap before the trend chip
+    moves, and 36-month badges move under the deltas.
+  - Tables (Metros, Compare, Methodology): sticky header row and first column, a
+    right-edge fade while more columns are hidden, and a shadow on the pinned
+    column once scrolled.
+  - Overview: a single investigation spans two columns beside an "Explore the
+    metro" panel.
+- **Methodology.** The About page has a "Data sources and methodology changes"
+  note on the Redfin Data Center relaunch.
+- **Mobile.** Safe-area padding and scroll padding clear the bottom nav. New e2e
+  checks: the calculator's last control and the footer end above the nav at
+  360px, and the ⌘K palette opens by tap.
+- **Checks.** 110 unit tests, 39 e2e checks, 242 Python tests. Lighthouse on the
+  Overview: 95 mobile / 99 desktop performance, accessibility 100. Initial JS is
+  110 KB.
+
 ## Session 7 (2026-09-28): Redfin Data Center + dashboard phase 2 (Metro Pulse)
 
 **Data freshness (fixed).**
@@ -53,9 +85,7 @@ are logged one per line in `DECISIONS.md` ("Session 4", "Session 6", "Session 7"
   (15 files).
 
 **Data-contract gaps still open** (the dashboard works around each):
-1. The index has no per-metro series, so table sparklines fetch each metro file.
-   A 12–24 point `metros[].spark` for one metric would add ~15 KB to the index and
-   save up to 50 requests.
+1. ~~The index has no per-metro series~~ (closed in session 8: `metros[].spark`).
 2. The `percent`/`pp_signed` unit ambiguity between metrics (ratios) and
    `key_stats`/rates (percent) is unchanged from session 6.
 3. `flags[].facts` carry no formats, and index flags are ids only.

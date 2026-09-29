@@ -2,6 +2,8 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { BRAND } from './src/config/brand';
+// @ts-expect-error: plain .mjs build script without types
+import { dataVersion } from './scripts/data-version.mjs';
 
 /** Fills %BRAND_*% placeholders in index.html from the single brand config. */
 function brandHtml(): Plugin {
@@ -23,6 +25,9 @@ function brandHtml(): Plugin {
 // GitHub Pages serves the site at /real-estate-agent/; override with DASHBOARD_BASE.
 export default defineConfig({
   base: process.env.DASHBOARD_BASE ?? '/real-estate-agent/',
+  // Cache-busts every data URL per dataset (see scripts/data-version.mjs); prebuild's
+  // fetch-data has already filled public/data when this runs.
+  define: { __DATA_VERSION__: JSON.stringify(dataVersion(new URL('./public/data', import.meta.url).pathname)) },
   plugins: [react(), brandHtml()],
   worker: { format: 'es' },
   build: {

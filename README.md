@@ -115,8 +115,8 @@ successful agent run.
   palette, deep links on everything, PNG and CSV export, and a print-ready metro
   one-pager.
 - **Quality.** Axe-clean on every route in both themes; no horizontal scroll at
-  360 px; 109 KB of initial JS (budget 300 KB, checked in CI). Lighthouse on the
-  Overview: performance 96 mobile and 99 desktop, accessibility 100.
+  360 px; 110 KB of initial JS (budget 300 KB, checked in CI). Lighthouse on the
+  Overview: performance 95 mobile and 99 desktop, accessibility 100.
 
 ```bash
 cd dashboard && npm ci && npm run fetch-data && npm run dev

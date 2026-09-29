@@ -17,9 +17,12 @@ export class DataError extends Error {
   }
 }
 
-export function dataUrl(path: string): string {
+/** The deploy's data version (a content hash); `?v=` makes each deploy fetch its own data. */
+export const DATA_VERSION: string = typeof __DATA_VERSION__ === 'string' ? __DATA_VERSION__ : 'dev';
+
+export function dataUrl(path: string, version: string = DATA_VERSION): string {
   const base = import.meta.env.BASE_URL ?? '/';
-  return `${base.endsWith('/') ? base : `${base}/`}data/${path}`;
+  return `${base.endsWith('/') ? base : `${base}/`}data/${path}?v=${encodeURIComponent(version)}`;
 }
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

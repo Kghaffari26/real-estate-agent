@@ -142,6 +142,7 @@ export const MetroSummarySchema = z.object({
   market_type: z.string().nullable(),
   name: z.string(),
   slug: z.string(),
+  spark: optionalField(z.array(seriesNumber), [], "MetroSummary.spark"),
   stale: optionalField(z.boolean(), false, "MetroSummary.stale"),
   temperature: TemperatureSummarySchema,
 });

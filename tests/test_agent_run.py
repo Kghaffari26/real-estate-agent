@@ -223,6 +223,10 @@ def test_real_run_publishes_the_data_branch_contract_then_reuses_briefs(workdir)
     assert index.national.brief.narrative_source == "llm"
     assert index.national.brief.model == "claude-sonnet-5"
     assert [m.slug for m in index.metros] == ["alpha-tx", "beta-tx"]
+    assert index.meta.schema_version == "1.2.0"
+    # §6.3 metros[].spark: 24 month-end median prices, whole dollars, latest last
+    alpha = index.metros[0]
+    assert len(alpha.spark) == 24 and alpha.spark[-1] == round(alpha.latest["median_sale_price"].value)
     # No new major flag in the fixture data: the top mover is investigated.
     [summary] = index.investigations
     assert summary.trigger == "top_mover" and summary.narrative_source == "llm"

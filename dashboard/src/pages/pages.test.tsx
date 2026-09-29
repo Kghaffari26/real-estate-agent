@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { clearCache } from '../data/api';
 
@@ -27,6 +27,13 @@ const renderAt = (path: string) =>
       <App />
     </MemoryRouter>,
   );
+
+// Routes are React.lazy: the first import of each page module is compiled on demand,
+// which under a busy parallel run can outlast findBy's timeout. Load them up front so
+// every timed wait only covers rendering, never compilation.
+beforeAll(async () => {
+  await Promise.all([import('./MetrosPage'), import('./MetroPage'), import('./ComparePage'), import('./AboutPage'), import('./NotFoundPage')]);
+}, 60_000);
 
 beforeEach(() => clearCache());
 afterEach(() => vi.unstubAllGlobals());

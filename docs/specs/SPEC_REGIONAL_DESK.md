@@ -26,6 +26,8 @@ division, our `anaheim-ca`) is the first market; others follow the same pattern.
 | Where houses come from | **Agents add addresses.** Geocoded with the free U.S. Census geocoder, pinned, and shown with their ZIP/city market stats. The model leaves room for a licensed listings feed later. |
 | First market | **Orange County**, down to ZIP and city. |
 | Users | **A team or brokerage**: a shared pipeline and territory, calls attributed to the agent who made them, a manager view. |
+| Homes for sale (2026-09-29, after gate E feedback) | **The brokerage's MLS feed** (CRMLS for Orange County) through its RESO Web API, under the broker's IDX data license. No scraping of listing sites. |
+| Foreclosures | **All stages:** bank-owned (REO) and short-sale listings (MLS `SpecialListingConditions`), plus **pre-foreclosure notices** (notices of default / trustee sale) and **auctions** from a paid foreclosure data provider (e.g. ATTOM or PropertyRadar; the owner picks one). |
 
 ## 3. Principles (unchanged from v1/v2)
 
@@ -84,10 +86,36 @@ division, our `anaheim-ca`) is the first market; others follow the same pattern.
   contact; no auto-dialing, no bulk messaging. Export and delete a client's data on
   request.
 
-### 4.4 Out of scope (for now)
+### 4.4 Listings, price briefings and foreclosures (owner feedback at gate E)
 
-Licensed MLS/IDX listings, photos, payments/subscriptions, email or SMS sending, a
-native app, and LLM features touching client data.
+- **Where listing data lives:** licensed to the brokerage for display, so it never goes
+  into the public data branch. A scheduled job (holding the MLS credentials as
+  secrets) syncs the RESO `Property` resource into the backend; the site queries it by
+  map view for signed-in users (and a public IDX view later if the license allows).
+- **Map and list, listing-site conventions:** homes for sale as markers on the atlas at
+  city zoom (a marker sits on its address; the 3D building under it highlights), a
+  list beside the map with photo cards (price, beds, baths, sq ft, days on market,
+  status badges: New, Price cut, Bank-owned, Short sale, Auction), filters (price,
+  beds, baths, type, status, special conditions), and a listing drawer. Conventions
+  borrowed from listing sites; no copying of any site's branding or content.
+- **"Why is it priced like this?"** A briefing per listing. Every number is computed in
+  code first: price and price per sq ft against the listing's ZIP and city medians and
+  their YoY, its days on market against the ZIP's, its price-cut history, the ZIP's
+  sale-to-list and months of supply, and (when the feed allows) recent comparable
+  sales. An LLM narrates those facts only, through the same number guard as the
+  agent's briefs, from a backend function (the API key never reaches the browser);
+  cached per listing until its facts change.
+- **Foreclosures:** REO and short-sale listings come flagged in the feed; pre-foreclosure
+  notices and scheduled auctions come from the paid provider as their own map layer and
+  a lead list that feeds the call log (R5), with the do-not-call rule applied.
+- **Compliance:** IDX attribution (listing office) and the MLS disclaimer on every
+  listing view, the feed's refresh and display rules, and no listing data in exports
+  beyond what the license allows.
+
+### 4.5 Out of scope (for now)
+
+Payments/subscriptions, email or SMS sending, auto-dialing, a native app, and LLM
+features touching client data.
 
 ## 5. Phases and gates
 
@@ -97,12 +125,21 @@ native app, and LLM features touching client data.
 | **R1 Local data** | The ZIP/city extract, geometry script, schema 1.5.0, tests, budgets, sample snapshot. | Python green; files within budget; the site still works without them. |
 | **R2 Regional market view** | ZIP choropleth and city layers with labels, a region panel (county → city → ZIP drill-down), rankings, trends, the time machine at ZIP level, table view, area search over ZIPs. | **GATE E:** Orange County screenshots at 3 zooms × 2 themes + phone. |
 | **R3 Backend + auth** | Supabase project (the owner creates it), schema and RLS policies as committed migrations, sign-in, team and invites, a security review of every policy with tests. | RLS tests prove cross-team isolation; no secret in the client bundle. |
-| **R4 Properties and favorites** | Add by address (geocoder), pins, status, notes, favorites, the properties list and layer. | e2e against a local Supabase. |
-| **R5 Clients and calls** | Clients, target areas, calls with outcomes, the follow-up queue, the do-not-call rule, the manager view. | e2e; axe; a data-export test. |
-| **R6 Polish** | Performance, a11y, docs (setup, backup, privacy), screenshots. | **GATE F:** final review; merge; verify live. |
+| **Listing Prep Advisor** | The pre-listing ROI advisor (`SPEC_LISTING_PREP.md`, phases P1-P7, gate G), built right after R3 at the owner's direction. | See its spec. |
+| **R4 Listings** | The RESO sync job (credentials as secrets), the listings table and its RLS, map markers with the building highlight, the list with photo cards and filters, the listing drawer, IDX attribution. Built and tested against a clearly labelled local fixture until the feed is live. | e2e against a local backend; the live feed verified once credentials arrive. |
+| **R5 Price briefings** | Listing facts computed in code, the narrating function with the number guard and a template fallback, caching, cost caps. | Guard tests; an eval of briefings against their facts. |
+| **R6 Foreclosures** | REO/short-sale flags from the feed; pre-foreclosure notices and auctions from the chosen provider; their layer and lead list. | e2e; provider data verified. |
+| **R7 Properties, clients and calls** | Favorites and saved houses, clients and target areas, the call log and follow-up queue, do-not-call, the manager view. | e2e; axe; a data-export test. |
+| **R8 Polish** | Performance, a11y, docs (setup, backup, privacy, the licenses), screenshots. | **GATE F:** final review; merge; verify live. |
 
-## 6. What the owner provides (when R3 starts)
+## 6. What the owner provides
 
-A Supabase project (free tier): its **project URL** and **anon (public) key** for the
-site, set as GitHub Actions secrets by the owner. The service-role key is never used by
-the site or committed. The first manager account and team name.
+- **R3:** a Supabase project (free tier to start): its **project URL** and **anon (public)
+  key** for the site, set as GitHub Actions secrets by the owner. The service-role key
+  is never used by the site, never committed and never sent in chat. The first manager
+  account and team name.
+- **R4:** the brokerage's **MLS data license** for this site (CRMLS, through the broker):
+  the RESO Web API endpoint and client credentials, set as secrets by the owner, plus the
+  display rules that come with them.
+- **R5:** an **Anthropic API key** for the briefing function, set as a backend secret.
+- **R6:** an account with a **foreclosure data provider** for notices and auctions.

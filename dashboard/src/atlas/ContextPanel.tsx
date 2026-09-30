@@ -16,22 +16,22 @@ const REG_INV = { key: 'inventory', format: 'count', change_kind: 'ratio' } as M
 // ---------- area search ----------
 
 /** The counties inside the ring (agent §6.7): count, weighted median and the busiest few. */
-function CountyBlock({ counties, radiusMi }: { counties: CountyResult; radiusMi: number }) {
+function CountyBlock({ counties, radiusMi, title = 'Counties inside', note, testId = 'area-counties' }: { counties: CountyResult; radiusMi: number; title?: string; note?: string; testId?: string }) {
   const n = counties.counties.length;
   return (
-    <div className="mt-5 border-t border-mp-line pt-4" data-testid="area-counties">
+    <div className="mt-5 border-t border-mp-line pt-4" data-testid={testId}>
       <div className="flex items-baseline justify-between gap-3">
-        <div className="mp-label">Counties inside</div>
-        <div className="mp-num text-xs text-mp-ink-3" data-testid="area-county-count">
+        <div className="mp-label">{title}</div>
+        <div className="mp-num text-xs text-mp-ink-3" data-testid={`${testId}-count`}>
           {n}
         </div>
       </div>
       {n === 0 ? (
-        <p className="mt-2 text-sm text-mp-ink-2">No county centers within {Math.round(radiusMi)} miles.</p>
+        <p className="mt-2 text-sm text-mp-ink-2">No {title.toLowerCase().replace(' inside', '')} centers within {Math.round(radiusMi)} miles.</p>
       ) : (
         <>
           <p className="mt-1 text-sm text-mp-ink-2">
-            <span className="mp-num text-mp-ink" data-testid="area-county-price">
+            <span className="mp-num text-mp-ink" data-testid={`${testId}-price`}>
               {formatValue(counties.price, 'currency_compact')}
             </span>{' '}
             weighted median ·{' '}
@@ -49,7 +49,7 @@ function CountyBlock({ counties, radiusMi }: { counties: CountyResult; radiusMi:
           </ul>
           {n > 5 && <p className="mt-1 text-xs text-mp-ink-3">+{n - 5} more counties</p>}
           <p className="mt-2 text-[11px] leading-4 text-mp-ink-3">
-            Redfin county data, weighted by the latest month's homes sold ({formatValue(counties.homesSold, 'count')}); a county counts when its center is inside the ring. ZIP codes aren't published.
+            {note ?? `Redfin county data, weighted by the latest month's homes sold (${formatValue(counties.homesSold, 'count')}); a county counts when its center is inside the ring.`}
           </p>
         </>
       )}
@@ -59,6 +59,7 @@ function CountyBlock({ counties, radiusMi }: { counties: CountyResult; radiusMi:
 export function AreaPanel({
   area,
   counties = null,
+  zips = null,
   label,
   dataThrough,
   onRadius,
@@ -69,6 +70,8 @@ export function AreaPanel({
   area: AreaResult;
   /** §6.7 counties inside the ring; null when the agent hasn't published county files. */
   counties?: CountyResult | null;
+  /** v3 R2: ZIP codes of a loaded region inside the ring. */
+  zips?: CountyResult | null;
   label: string;
   dataThrough: string;
   onRadius: (r: number) => void;
@@ -183,6 +186,15 @@ export function AreaPanel({
         </>
       )}
       {counties && <CountyBlock counties={counties} radiusMi={area.radiusMi} />}
+      {zips && (
+        <CountyBlock
+          counties={zips}
+          radiusMi={area.radiusMi}
+          title="ZIP codes inside"
+          testId="area-zips"
+          note={`Redfin ZIP data (rolling 3 months), weighted by homes sold (${formatValue(zips.homesSold, 'count')}); a ZIP counts when its center is inside the ring.`}
+        />
+      )}
     </section>
   );
 }

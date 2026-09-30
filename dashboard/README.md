@@ -124,7 +124,7 @@ Every route is deep-linkable:
 | Route | Query parameters |
 |---|---|
 | `#/` (Arrival: globe, brief, heat field, rates vs prices, movers, investigations) | none |
-| `#/explore` (the atlas) | `?m=&t=YYYY-MM&style=&h=value|yoy&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low` |
+| `#/explore` (the atlas) | `?m=&t=YYYY-MM&style=&h=value|yoy&by=&b=0&terrain=1&pin=lat,lon&r=10-250&sel=a,b&view=table&cam=lon,lat,zoom,pitch,bearing&tier=low&region=orange-county&city=<GEOID>&zip=<ZIP>` |
 | `#/metro/:slug` (dossier) | `?m=&range=1Y|3Y|All&mode=yoy&vs=1&section=affordability&tier=low` (v1's `?metric=` still works) |
 | `#/metro/:slug/afford` (affordability studio) | `?price=&down=&rate=&term=15|20|30&tier=low` |
 | `#/compare` (the arena) | `?m=a,b,c&metrics=x,y&range=1Y\|3Y\|All&indexed=1&tier=low` |

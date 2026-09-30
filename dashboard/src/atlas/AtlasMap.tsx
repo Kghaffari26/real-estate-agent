@@ -5,9 +5,11 @@
  * chunk) by ./index.tsx. Pure presentation: every value arrives preformatted/computed.
  */
 import { atlasStyle, mixRgb, type BasemapTokens } from './basemap';
+import type { ZipFeature, ZipLayer } from '../viewmodels/region';
+import type { PlacePoint } from '../lib/places';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { HexagonLayer } from '@deck.gl/aggregation-layers';
-import { ColumnLayer, PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
+import { ColumnLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { AttributionControl, Map as MLMap, setWorkerUrl, type StyleSpecification } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -30,6 +32,15 @@ export interface HoverInfo {
   y: number;
 }
 
+/** v3 R2: a region's ZIP choropleth, city outlines and labels, drawn under the columns. */
+export interface RegionLayerProps {
+  layer: ZipLayer;
+  selectedZip: string | null;
+  selectedCity: string | null;
+  onHover: (info: { zip: string; x: number; y: number } | null) => void;
+  onSelect: (zip: string) => void;
+}
+
 export interface AtlasMapHandle {
   panBy: (dx: number, dy: number) => void;
   zoomBy: (delta: number) => void;
@@ -37,6 +48,8 @@ export interface AtlasMapHandle {
   flyTo: (lon: number, lat: number, zoom?: number) => void;
   /** Zoom out (never in) so the view is at most `zoom`. */
   zoomOutTo: (zoom: number) => void;
+  /** Place labels (city, town, suburb…) from the loaded basemap tiles, to name a spot. */
+  placesNear: () => PlacePoint[];
   reset: (camera: Camera) => void;
   /** A PNG of the current view (map + columns), for the share menu. */
   snapshot: () => Promise<string | null>;
@@ -69,6 +82,8 @@ export interface AtlasMapProps {
   onOpen: (slug: string) => void;
   onPickEmpty: (lat: number, lon: number) => void;
   onLasso: (slugs: string[]) => void;
+  /** v3 R2: the region layer, when a region is open. */
+  region?: RegionLayerProps | null;
   onReady: () => void;
   onFail: (reason: string) => void;
 }
@@ -130,11 +145,69 @@ function setTerrain(map: MLMap, on: boolean) {
 // Columns keep a similar on-screen size as you zoom (never taller than at the national view).
 const zoomFactor = (zoom: number) => 2 ** (0.9 * (3.35 - Math.max(zoom, 2.9)));
 
-function deckLayers(p: AtlasMapProps, zoom: number, accent: RGB) {
+function regionLayers(r: RegionLayerProps, zoom: number, accent: RGB, ink: RGB, dark: boolean): unknown[] {
+  const { layer } = r;
+  const selCity = r.selectedCity ? layer.cities.filter((c) => c.id === r.selectedCity) : [];
+  const out: unknown[] = [
+    new PolygonLayer({
+      id: 'zip-fill',
+      data: layer.features,
+      getPolygon: (d: ZipFeature) => d.polygon,
+      getFillColor: (d: ZipFeature) => [...d.color, d.lowSample ? 60 : dark ? 165 : 175] as [number, number, number, number],
+      stroked: true,
+      getLineColor: [...ink, dark ? 70 : 90] as [number, number, number, number],
+      lineWidthUnits: 'pixels',
+      getLineWidth: 0.8,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: [...accent, 110] as [number, number, number, number],
+      updateTriggers: { getFillColor: layer.features },
+    }),
+    new PathLayer({
+      id: 'city-lines',
+      data: layer.cities.flatMap((c) => c.paths.map((path) => ({ path }))),
+      getPath: (d: { path: Array<[number, number]> }) => d.path,
+      getColor: [...ink, dark ? 120 : 150] as [number, number, number, number],
+      getWidth: 1.4,
+      widthUnits: 'pixels',
+      pickable: false,
+    }),
+  ];
+  if (selCity.length) {
+    out.push(new PathLayer({ id: 'city-selected', data: selCity.flatMap((c) => c.paths.map((path) => ({ path }))), getPath: (d: { path: Array<[number, number]> }) => d.path, getColor: [...accent, 255] as [number, number, number, number], getWidth: 2.4, widthUnits: 'pixels', pickable: false }));
+  }
+  if (r.selectedZip) {
+    const sel = layer.features.filter((f) => f.zip === r.selectedZip);
+    // Ink, not the accent: the value ramp ends in the accent, so an accent outline would vanish.
+    out.push(new PathLayer({ id: 'zip-selected', data: sel.flatMap((f) => f.polygon.map((path) => ({ path }))), getPath: (d: { path: Array<[number, number]> }) => d.path, getColor: [...ink, 255] as [number, number, number, number], getWidth: 3, widthUnits: 'pixels', pickable: false }));
+  }
+  if (zoom >= 10.8) {
+    out.push(
+      new TextLayer({
+        id: 'zip-labels',
+        data: layer.labels,
+        getPosition: (d: { lat: number; lon: number }) => [d.lon, d.lat],
+        getText: (d: { text: string }) => d.text,
+        getSize: 11,
+        getColor: [...ink, 235] as [number, number, number, number],
+        // A system font: deck draws text into its own atlas and a web font may not be loaded yet.
+        fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+        characterSet: '0123456789',
+        background: true,
+        getBackgroundColor: dark ? [5, 7, 13, 170] : [255, 255, 255, 190],
+        backgroundPadding: [3, 1],
+        pickable: false,
+      }),
+    );
+  }
+  return out;
+}
+
+function deckLayers(p: AtlasMapProps, zoom: number, accent: RGB, ink: RGB = [128, 128, 128]) {
   const f = zoomFactor(zoom);
   const data = p.columns.filter((c) => c.height != null);
   const sel = new Set(p.selected);
-  const layers: unknown[] = [];
+  const layers: unknown[] = p.region ? regionLayers(p.region, zoom, accent, ink, p.dark) : [];
   if (p.ring) {
     layers.push(
       new PolygonLayer({ id: 'ring-fill', data: [{ polygon: p.ring }], getPolygon: (d: { polygon: Array<[number, number]> }) => d.polygon, getFillColor: [...accent, 22], stroked: false, pickable: false }),
@@ -338,16 +411,32 @@ const Atlas = forwardRef<AtlasMapHandle, AtlasMapProps>(function AtlasMap(props,
           const ctr = map.getCenter();
           propsRef.current.onCamera({ lon: ctr.lng, lat: ctr.lat, zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() });
         });
-        const pick = (x: number, y: number) => overlay.pickObject({ x, y, radius: 6 })?.object as ColumnDatum | undefined;
+        // Columns win over the region's ZIP fill beneath them.
+        const pickAny = (x: number, y: number) => overlay.pickObject({ x, y, radius: 6 });
+        const pick = (x: number, y: number) => {
+          const info = pickAny(x, y);
+          return info?.layer?.id === 'zip-fill' ? undefined : (info?.object as ColumnDatum | undefined);
+        };
+        const pickZip = (x: number, y: number) => {
+          const info = pickAny(x, y);
+          return info?.layer?.id === 'zip-fill' ? (info.object as ZipFeature) : undefined;
+        };
         map.on('mousemove', (e) => {
           const hit = pick(e.point.x, e.point.y);
-          map.getCanvas().style.cursor = hit ? 'pointer' : '';
+          const zip = hit ? undefined : pickZip(e.point.x, e.point.y);
+          map.getCanvas().style.cursor = hit || zip ? 'pointer' : '';
           propsRef.current.onHover(hit ? { slug: hit.slug, x: e.point.x, y: e.point.y } : null);
+          propsRef.current.region?.onHover(zip ? { zip: zip.zip, x: e.point.x, y: e.point.y } : null);
         });
-        map.getCanvas().addEventListener('mouseleave', () => propsRef.current.onHover(null));
+        map.getCanvas().addEventListener('mouseleave', () => {
+          propsRef.current.onHover(null);
+          propsRef.current.region?.onHover(null);
+        });
         map.on('click', (e) => {
           const hit = pick(e.point.x, e.point.y);
+          const zip = hit ? undefined : pickZip(e.point.x, e.point.y);
           if (hit) propsRef.current.onSelect(hit.slug);
+          else if (zip && propsRef.current.region) propsRef.current.region.onSelect(zip.zip);
           else propsRef.current.onPickEmpty(e.lngLat.lat, e.lngLat.lng);
         });
         map.on('dblclick', (e) => {
@@ -392,7 +481,8 @@ const Atlas = forwardRef<AtlasMapHandle, AtlasMapProps>(function AtlasMap(props,
 
   // Deck layers follow the data.
   useEffect(() => {
-    overlayRef.current?.setProps({ layers: deckLayers(props, zoom, tokens().accent) as never });
+    const t = tokens();
+    overlayRef.current?.setProps({ layers: deckLayers(props, zoom, t.accent, t.ink) as never });
   });
 
   useImperativeHandle(
@@ -413,6 +503,20 @@ const Atlas = forwardRef<AtlasMapHandle, AtlasMapProps>(function AtlasMap(props,
         const target = { center: [lon, lat] as [number, number], zoom: z ?? Math.max(m.getZoom(), 6.2), pitch: Math.max(m.getPitch(), 50) };
         if (props.reducedMotion) m.jumpTo(target);
         else m.flyTo({ ...target, ...CAMERA_FLIGHT });
+      },
+      placesNear: () => {
+        const m = mapRef.current;
+        if (!m || !m.getSource('openmaptiles')) return [];
+        try {
+          return m.querySourceFeatures('openmaptiles', { sourceLayer: 'place' }).flatMap((f) => {
+            const name = (f.properties?.['name:en'] ?? f.properties?.name) as string | undefined;
+            const cls = f.properties?.class as string | undefined;
+            const g = f.geometry as { type: string; coordinates: [number, number] };
+            return name && cls && g.type === 'Point' ? [{ name, cls, lon: g.coordinates[0], lat: g.coordinates[1] }] : [];
+          });
+        } catch {
+          return [];
+        }
       },
       zoomOutTo: (z) => {
         const m = mapRef.current;

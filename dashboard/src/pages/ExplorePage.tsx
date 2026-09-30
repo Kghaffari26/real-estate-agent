@@ -7,10 +7,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Atlas, type AtlasMapHandle, type HoverInfo } from '../atlas';
 import { AreaPanel, IdlePanel, MetroPanel } from '../atlas/ContextPanel';
+import { RegionPanel, RegionShortcuts, RegionTable, ZipHoverCard } from '../atlas/RegionPanel';
 import { AtlasTable, BottomSheet, Dialog, HoverCard, ShortcutList, type TableRow } from '../atlas/bits';
 import { fmtChange, fmtMetric } from '../atlas/format';
 import { LayerDockBody } from '../atlas/LayerDock';
-import { loadArea, loadTimeline } from '../data/api';
+import { loadArea, loadRegion, loadRegionGeometry, loadTimeline } from '../data/api';
 import { useEvents, useIndex } from '../data/hooks';
 import type { IndexOutput } from '../data/schema.gen';
 import { useResource } from '../data/useResource';
@@ -23,6 +24,8 @@ import { areaSearch, countySearch, formatPin, metrosNearRing, milesBetween, pars
 import { copyText } from '../lib/clipboard';
 import { parseChannels, type DivergingStops, type RGB } from '../lib/columns';
 import { railMoments } from '../lib/moments';
+import { drill, placeAt, zipAreaInputs, zipLayer, zipValueAt } from '../viewmodels/region';
+import { nearestPlace } from '../lib/places';
 import { regionBySlug } from '../lib/regions';
 import { formatMonth, formatValue } from '../lib/format';
 import { monthEnds, monthIndex, YOY_LEAD } from '../lib/timeline';
@@ -54,7 +57,7 @@ import {
 /** A zoom that fits a ring of `radiusMi` in roughly 480 px (tilted view). */
 const zoomForRadius = (radiusMi: number) => Math.max(3.5, Math.min(10, Math.log2(17_897 / radiusMi) - 0.6));
 
-function readStops(): { stops: DivergingStops; low: RGB; high: RGB } {
+function readStops(): { stops: DivergingStops; low: RGB; high: RGB; regionLow: RGB } {
   const css = getComputedStyle(document.documentElement);
   const g = (n: string) => parseChannels(css.getPropertyValue(`--mp-${n}`));
   const ink = g('ink');
@@ -63,6 +66,8 @@ function readStops(): { stops: DivergingStops; low: RGB; high: RGB } {
     stops: { cool2: g('cool-2'), cool1: g('cool-1'), mid: g('mid'), hot1: g('hot-1'), hot2: g('hot-2') },
     low: [0, 1, 2].map((k) => Math.round(bg[k]! + (ink[k]! - bg[k]!) * 0.22)) as RGB,
     high: g('accent'),
+    // The ZIP choropleth's floor sits further off the canvas, so cheap ZIPs never read as holes.
+    regionLow: [0, 1, 2].map((k) => Math.round(bg[k]! + (ink[k]! - bg[k]!) * 0.36)) as RGB,
   };
 }
 
@@ -177,15 +182,43 @@ function Explore({ index }: { index: IndexOutput }) {
   const timeline = history.status === 'ready' ? history.data : null;
   const historyPending = wantHistory && history.status === 'loading';
 
+  // ---------- the region (v3 R2): ZIP choropleth, drill-down, table ----------
+  const regionRef = index.regions.find((r) => r.slug === params.get('region')) ?? null;
+  const regionData = useResource(regionRef ? `region:${regionRef.slug}` : 'region:none', async () =>
+    regionRef ? Promise.all([loadRegion(regionRef.slug), regionRef.geometry ? loadRegionGeometry(regionRef.slug) : Promise.resolve(null)]) : null,
+  );
+  const [region, regionGeometry] = regionData.status === 'ready' && regionData.data ? regionData.data : [null, null];
+  const regionCity = params.get('city');
+  const regionZip = params.get('zip');
+  const hiddenMetros = useMemo(() => new Set(region ? region.metros : []), [region]);
+  const [zipHover, setZipHover] = useState<{ zip: string; x: number; y: number } | null>(null);
+  const registry = useMemo(() => new Map(index.metric_registry.map((r) => [r.key, r])), [index.metric_registry]);
+
   // ---------- columns ----------
   const palette = useMemo(readStops, [dark]);
   const set = useMemo(
-    () => columnSet({ metros, metric, monthIndex: time + offset, isLatest: isLatest || !timeline, timeline, colorBy, heightBy, ...palette }),
-    [metros, metric, time, offset, isLatest, timeline, colorBy, heightBy, palette],
+    () => {
+      const shown = hiddenMetros.size ? metros.filter((m) => !hiddenMetros.has(m.slug)) : metros;
+      return columnSet({ metros: shown, metric, monthIndex: time + offset, isLatest: isLatest || !timeline, timeline, colorBy, heightBy, ...palette });
+    },
+    [metros, metric, time, offset, isLatest, timeline, colorBy, heightBy, palette, hiddenMetros],
   );
   const valuesBySlug = useMemo(() => Object.fromEntries(set.columns.map((c) => [c.slug, { value: c.value, change: c.change }])), [set]);
   const shownMonth = isLatest || !timeline ? last : time;
   const monthLabel = formatMonth(dates[shownMonth], true);
+  const regionMonth = isLatest || !timeline ? null : (dates[time] ?? null);
+  const regionLayer = useMemo(
+    () => (region && regionGeometry ? zipLayer(region, regionGeometry, metric, colorBy, regionMonth, { ...palette, low: palette.regionLow }) : null),
+    [region, regionGeometry, metric, colorBy, regionMonth, palette],
+  );
+  const regionDrill = useMemo(() => (region ? drill(region, regionCity, regionZip) : null), [region, regionCity, regionZip]);
+  const openRegionArea = useCallback(
+    (city: string | null, zip: string | null, fly?: { lat: number; lon: number; zoom: number }) => {
+      setQuery({ city, zip });
+      if (fly) mapRef.current?.flyTo(fly.lon, fly.lat, fly.zoom);
+    },
+    [setQuery],
+  );
 
   // ---------- area ----------
   const area = useMemo(() => (pin ? areaSearch(pin, radius, areaMetros(metros)) : null), [pin?.lat, pin?.lon, radius, metros]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -201,8 +234,15 @@ function Explore({ index }: { index: IndexOutput }) {
     () => (pin && index.areas.length && countyFiles.status === 'ready' ? countySearch(pin, radius, countyFiles.data) : null),
     [pin?.lat, pin?.lon, radius, countyFiles, index.areas.length], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  const areaZips = useMemo(() => (pin && region ? countySearch(pin, radius, [{ slug: region.slug, areas: zipAreaInputs(region) }]) : null), [pin?.lat, pin?.lon, radius, region]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The place under the pin, read from the basemap's labels once its tiles are in.
+  const [pinPlace, setPinPlace] = useState<string | null>(null);
   const pinLabel = useMemo(() => {
     if (!pin) return '';
+    // Inside a loaded region: its city and ZIP. Else the basemap's nearest place. Else the nearest metro.
+    const inRegion = regionLayer ? placeAt(regionLayer, pin.lat, pin.lon) : null;
+    if (inRegion) return inRegion.city ? `${inRegion.city} (${inRegion.zip})` : inRegion.zip;
+    if (pinPlace) return pinPlace;
     // Metros that share a centroid (Redfin divisions) tie on distance: prefer the city over a
     // "… County" division, then the larger market.
     const near = metros
@@ -210,7 +250,7 @@ function Explore({ index }: { index: IndexOutput }) {
       .sort((a, b) => a.d - b.d || Number(/ County,/.test(a.m.name)) - Number(/ County,/.test(b.m.name)) || (b.m.homesSold12m ?? 0) - (a.m.homesSold12m ?? 0))[0];
     if (near && near.d <= 20) return near.m.name;
     return `${Math.abs(pin.lat).toFixed(2)}°${pin.lat >= 0 ? 'N' : 'S'}, ${Math.abs(pin.lon).toFixed(2)}°${pin.lon >= 0 ? 'E' : 'W'}`;
-  }, [pin, metros]);
+  }, [pin, metros, regionLayer, pinPlace]);
 
   // ---------- actions ----------
   const select = useCallback((slugsNext: string[]) => setQuery({ sel: slugsNext.length ? slugsNext.join(',') : null }), [setQuery]);
@@ -224,6 +264,12 @@ function Explore({ index }: { index: IndexOutput }) {
 
   // A new pin flies the camera to its ring (not on radius changes, not on first load with a saved camera).
   const [mapReady, setMapReady] = useState(false);
+  useEffect(() => {
+    setPinPlace(null);
+    if (!pin || !mapReady) return;
+    const t = window.setTimeout(() => setPinPlace(nearestPlace(mapRef.current?.placesNear() ?? [], pin)?.name ?? null), 900);
+    return () => window.clearTimeout(t);
+  }, [pin?.lat, pin?.lon, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
   const pinKey = pin ? formatPin(pin) : '';
   const hadCamera = useRef(Boolean(params.get('cam')));
   // `?region=` (from ⌘K or a link) frames the region, also when chosen on this page.
@@ -365,6 +411,7 @@ function Explore({ index }: { index: IndexOutput }) {
     <AreaPanel
       area={area}
       counties={counties}
+      zips={areaZips}
       label={pinLabel}
       dataThrough={index.data_through}
       onRadius={(r) => setQuery({ r: String(Math.round(r)) })}
@@ -386,8 +433,22 @@ function Explore({ index }: { index: IndexOutput }) {
       onFly={flyToMetro}
       onAround={(m) => dropPin(m.trueLat, m.trueLon, 50)}
     />
+  ) : region && regionDrill ? (
+    <RegionPanel
+      region={region}
+      d={regionDrill}
+      registry={registry}
+      metric={metric}
+      layer={regionLayer}
+      requestedMonth={regionMonth}
+      onOpen={openRegionArea}
+      onClose={() => setQuery({ region: null, city: null, zip: null })}
+    />
   ) : (
-    <IdlePanel headline={index.headline} national={`${formatValue(index.key_stats[0]?.value, index.key_stats[0]?.format)} U.S. median · data through ${formatMonth(index.data_through, true)}`} />
+    <>
+      <IdlePanel headline={index.headline} national={`${formatValue(index.key_stats[0]?.value, index.key_stats[0]?.format)} U.S. median · data through ${formatMonth(index.data_through, true)}`} />
+      <RegionShortcuts regions={index.regions} onOpen={(slug) => setQuery({ region: slug, city: null, zip: null })} />
+    </>
   );
 
   const hoverMetro = hover ? bySlug.get(hover.slug) : null;
@@ -436,9 +497,20 @@ function Explore({ index }: { index: IndexOutput }) {
         onOpen={(s) => navigate(metroPath(s))}
         onPickEmpty={(lat, lon) => dropPin(lat, lon)}
         onLasso={(s) => (s.length ? select(s) : undefined)}
+        region={
+          regionLayer
+            ? { layer: regionLayer, selectedZip: regionDrill?.level === 'zip' ? regionDrill.area.id : null, selectedCity: regionDrill?.city?.id ?? null, onHover: setZipHover, onSelect: (zip) => openRegionArea(null, zip) }
+            : null
+        }
       />
       <span className="mp-grain" aria-hidden="true" />
 
+      {region && zipHover && !hover && !table && (() => {
+        const z = region.zips.find((a) => a.id === zipHover.zip);
+        if (!z) return null;
+        const v = zipValueAt(z, region.dates, metric, regionLayer?.month === region.data_through ? null : regionMonth);
+        return <ZipHoverCard area={z} metric={metric} value={v.value} change={v.change} x={zipHover.x} y={zipHover.y} bounds={bounds} />;
+      })()}
       {hoverMetro && hover && !table && (
         <HoverCard metro={hoverMetro} metric={metric} value={valuesBySlug[hoverMetro.slug]?.value ?? null} change={valuesBySlug[hoverMetro.slug]?.change ?? null} x={hover.x} y={hover.y} bounds={bounds} />
       )}
@@ -450,7 +522,7 @@ function Explore({ index }: { index: IndexOutput }) {
       </div>
 
       {mobile ? (
-        <BottomSheetHost dock={dock} context={context} scrubber={scrubber} hasContext={Boolean(area || selectedMetros.length)} />
+        <BottomSheetHost dock={dock} context={context} scrubber={scrubber} hasContext={Boolean(area || selectedMetros.length || region)} />
       ) : (
         <>
           <Dock title="Layers" className="absolute left-6 top-[76px] z-20 w-[248px]">
@@ -465,6 +537,9 @@ function Explore({ index }: { index: IndexOutput }) {
 
       {table && (
         <div className={`absolute z-30 ${mobile ? 'inset-x-2 bottom-2 top-[68px]' : 'bottom-[132px] left-[292px] right-[392px] top-[76px]'}`}>
+          {region ? (
+            <RegionTable region={region} registry={registry} onOpen={(city, zip) => openRegionArea(city, zip)} onClose={() => setQuery({ view: null })} />
+          ) : (
           <AtlasTable
             rows={rows}
             metric={metric}
@@ -474,6 +549,7 @@ function Explore({ index }: { index: IndexOutput }) {
             onSelect={(s) => select([s])}
             onClose={() => setQuery({ view: null })}
           />
+          )}
         </div>
       )}
 

@@ -1,0 +1,35 @@
+item,category,unit,low_usd,high_usd,notes
+interior_paint_walls,paint,sq_ft_floor_area,,,"Walls only, two coats, includes minor patching"
+interior_paint_trim_doors,paint,door,,,
+exterior_paint,paint,sq_ft_floor_area,,,
+cabinet_refinish,kitchen,linear_ft,,,Paint or stain existing boxes and doors
+cabinet_hardware,kitchen,piece,,,
+countertop_quartz_install,kitchen,sq_ft,,,
+kitchen_backsplash,kitchen,sq_ft,,,
+kitchen_faucet_sink,kitchen,each,,,
+appliance_package_midrange,kitchen,each,,,"Range, dishwasher, microwave, refrigerator"
+bath_vanity_replace,bath,each,,,
+bath_regrout_recaulk,bath,each,,,
+bath_fixtures_update,bath,each,,,"Faucets, shower head, towel bars"
+flooring_lvp,flooring,sq_ft,,,"Luxury vinyl plank, installed"
+flooring_carpet,flooring,sq_ft,,,
+flooring_hardwood_refinish,flooring,sq_ft,,,
+light_fixture_replace,lighting,each,,,
+recessed_lighting,lighting,each,,,
+closet_system_walkin,storage,each,,,
+closet_system_reachin,storage,each,,,
+garage_storage,storage,each,,,Shelving and overhead racks
+built_in_shelving,storage,linear_ft,,,
+home_office_setup,rooms,each,,,
+landscaping_refresh,exterior,sq_ft_yard,,,"Mulch, plants, cleanup"
+lawn_sod,exterior,sq_ft,,,
+front_door_replace_or_paint,exterior,each,,,
+exterior_lighting,exterior,each,,,
+window_replace,windows,each,,,
+smart_thermostat,smart_home,each,,,
+smart_locks_doorbell,smart_home,each,,,
+minor_repairs_handyman,repairs,hour,,,
+staging_partial,staging,month,,,
+staging_full,staging,month,,,
+professional_cleaning,prep,each,,,
+pressure_washing,prep,each,,,

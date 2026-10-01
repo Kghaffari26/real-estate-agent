@@ -377,3 +377,55 @@ export function findingCounts(findings: ReadonlyArray<{ status: string }>): Reco
   for (const f of findings) if (f.status in out) out[f.status as keyof typeof out]++;
   return out;
 }
+
+// ---------- value priors (P4) ----------
+
+export interface ValuePrior {
+  item: string;
+  recovery_low: number;
+  recovery_high: number;
+  source: string;
+  notes: string | null;
+}
+
+export const PRIOR_HEADER = ['item', 'recovery_low', 'recovery_high', 'source', 'notes'] as const;
+
+/**
+ * The team's value priors from `docs/templates/value_priors.csv`: the share of an item's
+ * cost recovered at resale (1.2 = 120%), low to high, and the source the team relies on.
+ * Rows left blank are skipped (no prior: "not enough evidence"); a priced row needs a source.
+ */
+export function parseValuePriors(text: string): { rows: ValuePrior[]; problems: string[]; blank: number } {
+  const records = parseCsvRecords(text);
+  const header = (records[0] ?? []).map((h) => h.trim().toLowerCase());
+  const missing = PRIOR_HEADER.filter((h) => h !== 'notes' && !header.includes(h));
+  if (missing.length) return { rows: [], problems: [`Line 1: missing column${missing.length > 1 ? 's' : ''} ${missing.join(', ')} (expected ${PRIOR_HEADER.join(',')})`], blank: 0 };
+  const col = (r: string[], name: string) => (r[header.indexOf(name)] ?? '').trim();
+  const ratio = (s: string) => (s === '' ? null : s.endsWith('%') ? Number(s.slice(0, -1)) / 100 : Number(s));
+  const rows: ValuePrior[] = [];
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  let blank = 0;
+  records.slice(1).forEach((r, i) => {
+    const line = i + 2;
+    const item = col(r, 'item').toLowerCase();
+    const lo = ratio(col(r, 'recovery_low'));
+    const hi = ratio(col(r, 'recovery_high'));
+    const source = col(r, 'source');
+    const notes = header.includes('notes') ? col(r, 'notes') || null : null;
+    const bad = (m: string) => problems.push(`Line ${line} (${item || 'no item'}): ${m}`);
+    if (!/^[a-z0-9_]{2,60}$/.test(item)) return bad('item must be 2–60 lowercase letters, digits or _');
+    if (lo === null && hi === null) {
+      blank++;
+      return;
+    }
+    if (seen.has(item)) return bad('listed twice');
+    if (lo === null || hi === null) return bad('give both recovery_low and recovery_high');
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo < 0 || hi > 10) return bad('recoveries are ratios like 0.8 or 1.25 (or 80%, 125%)');
+    if (hi < lo) return bad('recovery_high is below recovery_low');
+    if (source.length < 2) return bad('name the source of this prior (it’s shown with every estimate that uses it)');
+    seen.add(item);
+    rows.push({ item, recovery_low: lo, recovery_high: hi, source, notes });
+  });
+  return { rows, problems, blank };
+}

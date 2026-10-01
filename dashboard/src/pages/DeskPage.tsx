@@ -18,6 +18,7 @@ import { Button, Segmented } from '../ui/controls';
 import { GlassPanel } from '../ui/Glass';
 import { CostBookPanel } from './desk/CostBookPanel';
 import { PropertiesPanel } from './desk/PropertiesPanel';
+import { ValuePriorsPanel } from './desk/ValuePriorsPanel';
 
 type Load = { status: 'loading' } | { status: 'off' } | { status: 'ready'; client: SupabaseClient };
 
@@ -271,7 +272,10 @@ function Workspace({ client, session }: { client: SupabaseClient; session: Sessi
             {tab === 'properties' ? (
               <PropertiesPanel key={current.id} client={client} team={current} me={me.id} />
             ) : tab === 'cost-book' ? (
-              <CostBookPanel key={current.id} client={client} team={current} me={me.id} />
+              <div className="space-y-6">
+                <CostBookPanel key={current.id} client={client} team={current} me={me.id} />
+                <ValuePriorsPanel key={`${current.id}-priors`} client={client} team={current} me={me.id} />
+              </div>
             ) : (
               <TeamPanel key={current.id} client={client} team={current} me={me.id} onChanged={refresh} onError={setError} />
             )}

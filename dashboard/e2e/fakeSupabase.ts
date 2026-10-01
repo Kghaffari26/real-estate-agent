@@ -31,7 +31,7 @@ export interface State {
 }
 
 export type Row = Record<string, unknown>;
-const TABLES = ['properties', 'seller_consents', 'photos', 'cost_book', 'quotes', 'vision_jobs', 'photo_results', 'findings', 'property_insights'];
+const TABLES = ['properties', 'seller_consents', 'photos', 'cost_book', 'quotes', 'vision_jobs', 'photo_results', 'findings', 'property_insights', 'value_priors'];
 const DEFAULTS: Record<string, () => Row> = {
   properties: () => ({ status: 'watching', facts: {}, facts_confirmed_at: null, facts_confirmed_by: null, notes: null, matched_address: null, lat: null, lon: null, zip: null, city: null, place_id: null, tract: null, county_fips: null }),
   seller_consents: () => ({ revoked_at: null }),
@@ -184,6 +184,15 @@ export async function fakeBackend(page: Page, s: State) {
       const gone = (s.tables.photos ?? []).filter((p) => p.property_id === body.property);
       s.tables.photos = (s.tables.photos ?? []).filter((p) => p.property_id !== body.property);
       return json(route, gone.length);
+    }
+    if (path === '/rest/v1/rpc/save_value_priors') {
+      const priors = (s.tables.value_priors ??= []);
+      for (const r of body.rows as Row[]) {
+        const existing = priors.find((x) => x.team_id === body.team && x.item === r.item);
+        if (existing) Object.assign(existing, r, { updated_by: ME.id });
+        else priors.push({ team_id: body.team, ...r, updated_by: ME.id });
+      }
+      return json(route, (body.rows as Row[]).length);
     }
     if (path === '/rest/v1/rpc/save_cost_rows') {
       const book = (s.tables.cost_book ??= []);

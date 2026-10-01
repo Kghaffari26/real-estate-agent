@@ -7,7 +7,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { GeocodeMatch } from '../../../supabase/functions/_shared/census.ts';
-import { preparePhoto, type CostRow, type Facts, type PropertyStatus, type Room } from '../lib/intake';
+import { preparePhoto, type CostRow, type Facts, type PropertyStatus, type Room, type ValuePrior } from '../lib/intake';
 import { DeskError, friendly } from './desk';
 
 export type { GeocodeMatch };
@@ -321,6 +321,17 @@ export function intakeApi(c: SupabaseClient) {
     async saveCostRows(team: string, rows: readonly CostRow[]): Promise<void> {
       if (!rows.length) return;
       check(await c.rpc('save_cost_rows', { team, rows }));
+    },
+
+    async valuePriors(team: string): Promise<ValuePrior[]> {
+      const rows = check(await c.from('value_priors').select('item, recovery_low, recovery_high, source, notes').eq('team_id', team).order('item')) as ValuePrior[];
+      return rows.map((r) => ({ ...r, recovery_low: Number(r.recovery_low), recovery_high: Number(r.recovery_high) }));
+    },
+
+    /** Insert or replace priors by item, through save_value_priors (managers only). */
+    async saveValuePriors(team: string, rows: readonly ValuePrior[]): Promise<void> {
+      if (!rows.length) return;
+      check(await c.rpc('save_value_priors', { team, rows }));
     },
 
     async deleteCostRow(team: string, item: string): Promise<void> {

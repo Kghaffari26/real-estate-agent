@@ -129,7 +129,21 @@ no addresses, names, photos or findings.
 The Edge Function (`geocode`) gets its own service key from Supabase automatically. It
 uses that key only to write the shared address cache.
 
-## 6. First team
+## 6. The team's prices and value priors
+
+Managers fill two tables on the Desk's **Cost book** tab, each from a template in
+`docs/templates/`:
+
+- `cost_book.csv`: your contractors' low and high price per unit for each improvement.
+- `value_priors.csv`: for each improvement, the share of its cost your team expects to
+  recover at resale (e.g. `1.1` to `1.6`), and **the source** you rely on. It ships
+  blank on purpose. The industry cost-vs-value reports (Zonda's *Cost vs. Value*,
+  NAR's *Remodeling Impact Report*) are copyrighted, and their terms forbid building
+  their figures into software without a license. Use your team's own experience or a
+  source you're licensed to use. Improvements without a prior are reported as "not
+  enough evidence", never guessed.
+
+## 7. First team
 
 Open the live site → **Desk**, sign in with the first manager's email, and create the
 team. That account becomes its manager and invites everyone else from the Team panel.

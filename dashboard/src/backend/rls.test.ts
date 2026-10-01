@@ -177,6 +177,7 @@ describe('anonymous callers and coverage', () => {
       'property_team',
       'purge_property_photos',
       'save_cost_rows',
+      'save_value_priors',
       'valid_facts',
     ]);
     expect(await callable('anon')).toEqual([]);

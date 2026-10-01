@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RegionOutputSchema } from '../data/schema.gen';
 import vectors from '../backend/fixtures/facts-vectors.json';
-import { analysisReadiness, factsFromForm, findingCounts, formatDollars, factsProblems, fitWithin, formFromFacts, marketContext, missingCore, missingRooms, parseCostBook, parseCsvRecords } from './intake';
+import { analysisReadiness, factsFromForm, findingCounts, formatDollars, parseValuePriors, factsProblems, fitWithin, formFromFacts, marketContext, missingCore, missingRooms, parseCostBook, parseCsvRecords } from './intake';
 
 describe('facts', () => {
   it('agree with the database’s valid_facts on the shared vectors', () => {
@@ -97,5 +97,29 @@ describe('photo findings', () => {
 
   it('counts findings by status', () => {
     expect(findingCounts([{ status: 'proposed' }, { status: 'confirmed' }, { status: 'confirmed' }, { status: 'withdrawn' }])).toEqual({ proposed: 1, confirmed: 2, edited: 0, rejected: 0, withdrawn: 1 });
+  });
+});
+
+describe('value priors CSV', () => {
+  it('reads the committed template as all blank (no third-party figures are shipped)', () => {
+    const text = readFileSync(resolve(__dirname, '../../../docs/templates/value_priors.csv'), 'utf8');
+    expect(parseValuePriors(text)).toEqual({ rows: [], problems: [], blank: 34 });
+  });
+
+  it('accepts ratios or percents with a source, and reports each problem by line', () => {
+    const { rows, problems, blank } = parseValuePriors(
+      ['item,recovery_low,recovery_high,source,notes', 'interior_paint_walls,1.1,1.8,Team listings 2024–2026,', 'flooring_lvp,105%,140%,"Brokerage review, 2025",', 'staging_full,,,,', 'lawn_sod,0.5,,x,', 'window_replace,0.6,0.85,,', 'bad item,1,2,x,', 'garage_storage,2,1,x,'].join('\n'),
+    );
+    expect(rows).toEqual([
+      { item: 'interior_paint_walls', recovery_low: 1.1, recovery_high: 1.8, source: 'Team listings 2024–2026', notes: null },
+      { item: 'flooring_lvp', recovery_low: 1.05, recovery_high: 1.4, source: 'Brokerage review, 2025', notes: null },
+    ]);
+    expect(blank).toBe(1);
+    expect(problems).toEqual([
+      'Line 5 (lawn_sod): give both recovery_low and recovery_high',
+      'Line 6 (window_replace): name the source of this prior (it’s shown with every estimate that uses it)',
+      'Line 7 (bad item): item must be 2–60 lowercase letters, digits or _',
+      'Line 8 (garage_storage): recovery_high is below recovery_low',
+    ]);
   });
 });

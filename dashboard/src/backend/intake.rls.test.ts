@@ -169,4 +169,20 @@ describe('cost book and quotes', () => {
       await expect(t.as(null, () => t.rows(`select * from public.${table}`)), table).rejects.toThrow();
     }
   });
+
+  it('value priors: managers import them with a source; agents read; nothing without a source', async () => {
+    const save = (u: User, rows: unknown[]) => t.as(u, () => t.rows<{ n: number }>('select public.save_value_priors($1, $2::jsonb) as n', [teamA, JSON.stringify(rows)]));
+    const paint = { item: 'interior_paint_walls', recovery_low: 1.1, recovery_high: 1.8, source: 'Team listings 2024–2026', notes: null };
+    expect(await save(alice, [paint])).toEqual([{ n: 1 }]);
+    await save(alice, [{ ...paint, recovery_high: 2.0 }]);
+    expect(await t.as(bob, () => t.rows('select item, recovery_low::float as lo, recovery_high::float as hi, source from public.value_priors'))).toEqual([
+      { item: 'interior_paint_walls', lo: 1.1, hi: 2, source: 'Team listings 2024–2026' },
+    ]);
+    await expect(save(bob, [paint])).rejects.toThrow();
+    await expect(save(carol, [paint])).rejects.toThrow();
+    expect(await t.as(carol, () => t.rows('select item from public.value_priors'))).toEqual([]);
+    await expect(save(alice, [{ ...paint, source: ' ' }])).rejects.toThrow();
+    await expect(save(alice, [{ ...paint, recovery_low: 2, recovery_high: 1 }])).rejects.toThrow();
+    await expect(save(alice, [{ ...paint, recovery_low: -0.1 }])).rejects.toThrow();
+  });
 });

@@ -31,14 +31,16 @@ export interface State {
 }
 
 export type Row = Record<string, unknown>;
-const TABLES = ['properties', 'seller_consents', 'photos', 'cost_book', 'quotes'];
+const TABLES = ['properties', 'seller_consents', 'photos', 'cost_book', 'quotes', 'vision_jobs', 'photo_results', 'findings'];
 const DEFAULTS: Record<string, () => Row> = {
   properties: () => ({ status: 'watching', facts: {}, facts_confirmed_at: null, facts_confirmed_by: null, notes: null, matched_address: null, lat: null, lon: null, zip: null, city: null, place_id: null, tract: null, county_fips: null }),
   seller_consents: () => ({ revoked_at: null }),
   photos: () => ({ label: null }),
   cost_book: () => ({ notes: null }),
   quotes: () => ({ notes: null, vendor: null, quoted_on: null }),
+  vision_jobs: () => ({ status: 'queued', photos_total: null, photos_done: 0, error: null, finished_at: null }),
 };
+const activeConsent = (s: State, property: unknown) => (s.tables.seller_consents ?? []).some((c) => c.property_id === property && !c.revoked_at);
 const RESERVED = new Set(['select', 'order', 'on_conflict', 'limit', 'offset', 'columns']);
 
 /** PostgREST's eq./is. filters and order=col.asc|desc, as supabase-js sends them. */
@@ -58,7 +60,11 @@ async function table(route: Route, s: State, name: string, url: URL, body: unkno
   const rows = (s.tables[name] ??= []);
   const object = (req.headers()['accept'] ?? '').includes('vnd.pgrst.object');
   const reply = (out: Row[], status = 200) => json(route, object ? (out[0] ?? null) : out, status);
-  if (req.method() === 'GET') return reply(filtered(rows, url));
+  if (req.method() === 'GET') {
+    // The database hides a property's photos (and their results) without an active consent.
+    if (name === 'photos') return reply(filtered(rows, url).filter((r) => activeConsent(s, r.property_id)));
+    return reply(filtered(rows, url));
+  }
   if (req.method() === 'POST') {
     const merge = (req.headers()['prefer'] ?? '').includes('merge-duplicates');
     const keys = (url.searchParams.get('on_conflict') ?? '').split(',').filter(Boolean);
@@ -77,6 +83,13 @@ async function table(route: Route, s: State, name: string, url: URL, body: unkno
       // The database's trigger: editing the facts un-confirms them.
       if (name === 'properties' && 'facts' in (body as Row) && JSON.stringify(r.facts) !== JSON.stringify((body as Row).facts)) Object.assign(r, { facts_confirmed_at: null, facts_confirmed_by: null });
       Object.assign(r, body);
+      // The revocation trigger: withdraw the property's findings, cancel its jobs, clear results.
+      if (name === 'seller_consents' && (body as Row).revoked_at && !activeConsent(s, r.property_id)) {
+        for (const f of s.tables.findings ?? []) if (f.property_id === r.property_id) f.status = 'withdrawn';
+        for (const j of s.tables.vision_jobs ?? []) if (j.property_id === r.property_id && ['queued', 'running'].includes(j.status as string)) Object.assign(j, { status: 'cancelled', error: 'consent_revoked' });
+        const photoIds = new Set((s.tables.photos ?? []).filter((p) => p.property_id === r.property_id).map((p) => p.id));
+        s.tables.photo_results = (s.tables.photo_results ?? []).filter((x) => !photoIds.has(x.photo_id));
+      }
     }
     return reply(hit);
   }
@@ -166,6 +179,11 @@ export async function fakeBackend(page: Page, s: State) {
       p.facts_confirmed_at = new Date().toISOString();
       p.facts_confirmed_by = ME.id;
       return json(route, p.facts_confirmed_at);
+    }
+    if (path === '/rest/v1/rpc/purge_property_photos') {
+      const gone = (s.tables.photos ?? []).filter((p) => p.property_id === body.property);
+      s.tables.photos = (s.tables.photos ?? []).filter((p) => p.property_id !== body.property);
+      return json(route, gone.length);
     }
     if (path === '/rest/v1/rpc/save_cost_rows') {
       const book = (s.tables.cost_book ??= []);

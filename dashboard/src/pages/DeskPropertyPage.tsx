@@ -9,11 +9,13 @@ import { ArrowLeft, Camera, ClipboardCheck, FileSignature, LineChart, Receipt, T
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { DeskError } from '../backend/desk';
-import { CONSENT_TEXT, CONSENT_VERSION, intakeApi, type Consent, type Photo, type Property, type Quote } from '../backend/intake';
+import { deskApi } from '../backend/desk';
+import { CONSENT_TEXT, CONSENT_TITLE, CONSENT_VERSION, intakeApi, PROCESSING_VERSIONS, type Consent, type Finding, type Photo, type PhotoResult, type Property, type Quote, type VisionJob } from '../backend/intake';
 import { useRegionForZip } from '../data/hooks';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { formatDate, formatDelta, formatValue } from '../lib/format';
 import {
+  analysisReadiness,
   factsFromForm,
   factsProblems,
   formatDollars,
@@ -33,6 +35,7 @@ import {
 } from '../lib/intake';
 import { Button } from '../ui/controls';
 import { Card, DeskFrame } from './DeskPage';
+import { FindingsCard } from './desk/FindingsCard';
 
 const input = 'h-11 rounded-control border border-mp-line bg-mp-panel px-3 text-mp-ink';
 const errText = (e: unknown) => (e instanceof DeskError ? e.message : e instanceof Error ? e.message : 'Something went wrong. Try again.');
@@ -56,6 +59,10 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [costBook, setCostBook] = useState<CostRow[]>([]);
+  const [job, setJob] = useState<VisionJob | null>(null);
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [results, setResults] = useState<PhotoResult[]>([]);
+  const [manager, setManager] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -64,11 +71,23 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
       setProperty(p);
       if (!p) return;
       onTitle(p.address);
-      const [c, ph, q, book] = await Promise.all([api.consents(id), api.photos(id), api.quotes(id), api.costBook(p.team_id)]);
+      const [c, ph, q, book, j, f, members] = await Promise.all([
+        api.consents(id),
+        api.photos(id),
+        api.quotes(id),
+        api.costBook(p.team_id),
+        api.latestJob(id),
+        api.findings(id),
+        deskApi(client).members(p.team_id),
+      ]);
       setConsents(c);
       setPhotos(ph);
       setQuotes(q);
       setCostBook(book);
+      setJob(j);
+      setFindings(f);
+      setManager(members.some((m) => m.user_id === me && m.role === 'manager'));
+      setResults(await api.photoResults(ph.map((x) => x.id)));
     } catch (e) {
       setError(errText(e));
     }
@@ -77,6 +96,13 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
   useEffect(() => {
     load();
   }, [load]);
+  // While an analysis is queued or running, check on it every 15 seconds.
+  const jobActive = job?.status === 'queued' || job?.status === 'running';
+  useEffect(() => {
+    if (!jobActive) return;
+    const t = window.setInterval(load, 15_000);
+    return () => window.clearInterval(t);
+  }, [jobActive, load]);
 
   const act = async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -96,6 +122,15 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
       </Card>
     );
   const consent = consents.find((c) => !c.revoked_at) ?? null;
+  const analyzedIds = new Set(results.map((r) => r.photo_id));
+  const readiness = analysisReadiness({
+    factsConfirmed: Boolean(property.facts_confirmed_at),
+    consent: consent ? { version: consent.consent_version } : null,
+    processingVersions: PROCESSING_VERSIONS,
+    photos: photos.length,
+    pendingPhotos: photos.filter((p) => !analyzedIds.has(p.id)).length,
+    jobActive,
+  });
   return (
     <div className="space-y-6" data-testid="desk-property">
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-mp-ink-2">
@@ -123,8 +158,10 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
       <FactsCard key={property.facts_confirmed_at ?? 'unconfirmed'} property={property} onSave={(f) => act(() => api.saveFacts(id, f))} onConfirm={() => act(() => api.confirmFacts(id))} />
       <ConsentCard
         consents={consents}
+        manager={manager}
         onRecord={(c) => act(() => api.recordConsent(id, me, c))}
         onRevoke={(cid) => act(() => api.revokeConsent(cid))}
+        onPurge={() => act(() => api.purgePhotos(id))}
       />
       <PhotosCard
         facts={property.facts}
@@ -145,6 +182,15 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
         }}
         onRoom={(pid, room) => act(() => api.setPhotoRoom(pid, room))}
         onDelete={(p) => act(() => api.deletePhoto(p))}
+      />
+      <FindingsCard
+        readiness={readiness}
+        job={job}
+        findings={findings}
+        photos={photos}
+        results={results}
+        onRequest={() => act(() => api.requestAnalysis(id, me))}
+        onReview={(fid, edit) => act(() => api.reviewFinding(fid, edit))}
       />
       <QuotesCard quotes={quotes} costBook={costBook} onAdd={(q) => act(() => api.addQuote(id, me, q))} onDelete={(qid) => act(() => api.deleteQuote(qid))} />
     </div>
@@ -311,24 +357,61 @@ function FactsCard({ property, onSave, onConfirm }: { property: Property; onSave
 
 // ---------- consent ----------
 
-function ConsentCard({ consents, onRecord, onRevoke }: { consents: Consent[]; onRecord: (c: { seller_name: string; method: Consent['method']; given_on: string }) => Promise<void>; onRevoke: (id: string) => Promise<void> }) {
+function ConsentCard({
+  consents,
+  manager,
+  onRecord,
+  onRevoke,
+  onPurge,
+}: {
+  consents: Consent[];
+  manager: boolean;
+  onRecord: (c: { seller_name: string; method: Consent['method']; given_on: string }) => Promise<void>;
+  onRevoke: (id: string) => Promise<void>;
+  onPurge: () => Promise<void>;
+}) {
   const active = consents.find((c) => !c.revoked_at) ?? null;
+  const revokedOnly = !active && consents.some((c) => c.revoked_at);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [confirmPurge, setConfirmPurge] = useState(false);
   const [name, setName] = useState('');
   const [method, setMethod] = useState<Consent['method']>('signed_form');
   const [on, setOn] = useState(() => new Date().toISOString().slice(0, 10));
   const METHODS: Record<Consent['method'], string> = { signed_form: 'Signed form', email: 'By email', in_person: 'In person' };
   return (
     <Card title="Seller’s consent for photos" icon={<FileSignature size={16} strokeWidth={1.5} aria-hidden="true" />} testId="desk-consent">
-      <blockquote className="border-l-2 border-mp-line pl-3 text-sm text-mp-ink-2">{CONSENT_TEXT}</blockquote>
-      <p className="mt-1 text-xs text-mp-ink-3">Consent text version {CONSENT_VERSION}. Have your brokerage’s counsel review it before first use.</p>
+      <blockquote className="space-y-2 border-l-2 border-mp-line pl-3 text-sm text-mp-ink-2">
+        <p className="font-medium text-mp-ink">{CONSENT_TITLE}</p>
+        {CONSENT_TEXT.map((para, i) => (
+          <p key={i}>{i === 0 ? para : `${i}. ${para}`}</p>
+        ))}
+      </blockquote>
+      <p className="mt-1 text-xs text-mp-warn">Draft text, version {CONSENT_VERSION}: your brokerage’s counsel must review it before you use it with sellers.</p>
       {active ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm" data-testid="desk-consent-active">
           <span className="text-mp-ink">
-            Given by <b>{active.seller_name}</b> ({METHODS[active.method].toLowerCase()}, {formatDate(active.given_on)})
+            Given by <b>{active.seller_name}</b> ({METHODS[active.method].toLowerCase()}, {formatDate(active.given_on)}, text {active.consent_version})
           </span>
-          <Button variant="quiet" onClick={() => onRevoke(active.id)}>
-            Record a revocation
-          </Button>
+          {confirmRevoke ? (
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-mp-ink-2">The photos will be hidden, any analysis withdrawn, and the photos deleted after 30 days.</span>
+              <Button variant="primary" onClick={() => onRevoke(active.id).then(() => setConfirmRevoke(false))}>
+                Confirm revocation
+              </Button>
+              <Button variant="quiet" onClick={() => setConfirmRevoke(false)}>
+                Cancel
+              </Button>
+            </span>
+          ) : (
+            <Button variant="quiet" onClick={() => setConfirmRevoke(true)}>
+              Record a revocation
+            </Button>
+          )}
+          {!PROCESSING_VERSIONS.includes(active.consent_version) && (
+            <p className="w-full text-xs text-mp-warn" data-testid="desk-consent-outdated">
+              This consent was recorded under an earlier text that doesn’t cover AI analysis. Photos can be added, but nothing is analyzed until the seller consents to the current text: record a revocation, then the new consent.
+            </p>
+          )}
         </div>
       ) : (
         <form
@@ -360,6 +443,30 @@ function ConsentCard({ consents, onRecord, onRevoke }: { consents: Consent[]; on
             Record consent
           </Button>
         </form>
+      )}
+      {revokedOnly && (
+        <div className="mt-4 rounded-control border border-mp-line p-3 text-sm text-mp-ink-2" data-testid="desk-consent-revoked">
+          Consent is revoked: this property’s photos are hidden, no photo is analyzed, and any findings are withdrawn. The photos are deleted 30 days after the revocation.
+          {manager && (
+            <span className="mt-2 flex flex-wrap items-center gap-2">
+              {confirmPurge ? (
+                <>
+                  <span className="text-xs">Delete every photo of this property now? This can’t be undone.</span>
+                  <Button variant="primary" onClick={() => onPurge().then(() => setConfirmPurge(false))}>
+                    Delete all photos
+                  </Button>
+                  <Button variant="quiet" onClick={() => setConfirmPurge(false)}>
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button variant="quiet" onClick={() => setConfirmPurge(true)}>
+                  Delete all photos now
+                </Button>
+              )}
+            </span>
+          )}
+        </div>
       )}
       {consents.some((c) => c.revoked_at) && (
         <ul className="mt-3 text-xs text-mp-ink-3">

@@ -325,11 +325,16 @@ create policy findings_review on public.findings for update to authenticated
 
 revoke all on public.storage_deletions, public.vision_jobs, public.photo_results, public.findings,
   public.geocode_cache, public.geocode_hits from anon, authenticated;
-revoke all on function public.queue_photo_deletion(), public.purge_property_photos(uuid), public.expire_photos(int, int),
-  public.queue_orphan_photos(), public.facts_confirmed(uuid), public.claim_vision_job(), public.guard_findings(),
-  public.photo_property(uuid), public.consent_revoked(), public.geocode_gate(text), public.geocode_store(text, jsonb),
-  public.processing_consent(uuid), public.guard_photo_results()
+-- Supabase's default privileges grant EXECUTE on new functions to anon and authenticated
+-- directly (not only through PUBLIC), so revoking from PUBLIC alone leaves them callable.
+-- The worker-only functions are revoked from every API role, then granted to service_role.
+revoke all on function public.purge_property_photos(uuid), public.facts_confirmed(uuid), public.photo_property(uuid),
+  public.geocode_gate(text), public.processing_consent(uuid)
   from public, anon;
+revoke all on function public.queue_photo_deletion(), public.expire_photos(int, int), public.queue_orphan_photos(),
+  public.claim_vision_job(), public.guard_findings(), public.consent_revoked(), public.geocode_store(text, jsonb),
+  public.guard_photo_results()
+  from public, anon, authenticated;
 
 grant select, insert (property_id, requested_by) on public.vision_jobs to authenticated;
 grant select on public.photo_results to authenticated;

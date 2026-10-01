@@ -151,6 +151,37 @@ describe('anonymous callers and coverage', () => {
     expect(open).toEqual([]);
   });
 
+  it('signed-in users can call exactly the functions meant for them (Supabase grants new ones by default)', async () => {
+    const callable = async (role: string) =>
+      (
+        await t.rows<{ proname: string }>(
+          `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.prorettype <> 'trigger'::regtype and has_function_privilege($1, p.oid, 'execute')
+           order by 1`,
+          [role],
+        )
+      ).map((r) => r.proname);
+    expect(await callable('authenticated')).toEqual([
+      'accept_invite',
+      'confirm_facts',
+      'create_team',
+      'facts_confirmed',
+      'geocode_gate',
+      'has_photo_consent',
+      'is_manager',
+      'is_member',
+      'my_invites',
+      'photo_path_ok',
+      'photo_property',
+      'processing_consent',
+      'property_team',
+      'purge_property_photos',
+      'save_cost_rows',
+      'valid_facts',
+    ]);
+    expect(await callable('anon')).toEqual([]);
+  });
+
   it('deleting a team (service role) cascades past the last-manager rule', async () => {
     await t.admin(`delete from public.teams where id = '${teamB}'`);
     expect(await t.rows('select * from public.team_members where team_id = $1', [teamB])).toEqual([]);

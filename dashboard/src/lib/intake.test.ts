@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RegionOutputSchema } from '../data/schema.gen';
 import vectors from '../backend/fixtures/facts-vectors.json';
-import { factsFromForm, formatDollars, factsProblems, fitWithin, formFromFacts, marketContext, missingCore, missingRooms, parseCostBook, parseCsvRecords } from './intake';
+import { analysisReadiness, factsFromForm, findingCounts, formatDollars, factsProblems, fitWithin, formFromFacts, marketContext, missingCore, missingRooms, parseCostBook, parseCsvRecords } from './intake';
 
 describe('facts', () => {
   it('agree with the database’s valid_facts on the shared vectors', () => {
@@ -80,5 +80,22 @@ describe('market context', () => {
     // No place id (an unmatched address with a typed ZIP): the ZIP's own city.
     expect(marketContext(region, '92606', null).city?.name).toBe('Irvine');
     expect(marketContext(region, '00000', null)).toEqual({ zip: null, city: null, zipPriceRank: null });
+  });
+});
+
+describe('photo findings', () => {
+  const base = { factsConfirmed: true, consent: { version: '2026-10b' }, processingVersions: ['2026-10b'], photos: 3, pendingPhotos: 3, jobActive: false };
+  it('says what to do before an analysis can run, in the order the database checks', () => {
+    expect(analysisReadiness(base)).toEqual({ ok: true });
+    expect(analysisReadiness({ ...base, jobActive: true })).toMatchObject({ ok: false, reason: expect.stringMatching(/already queued/) });
+    expect(analysisReadiness({ ...base, factsConfirmed: false })).toMatchObject({ reason: 'Confirm the facts first.' });
+    expect(analysisReadiness({ ...base, consent: null })).toMatchObject({ reason: 'Record the seller’s consent first.' });
+    expect(analysisReadiness({ ...base, consent: { version: '2026-10' } })).toMatchObject({ reason: expect.stringMatching(/2026-10, which doesn’t cover AI analysis/) });
+    expect(analysisReadiness({ ...base, photos: 0, pendingPhotos: 0 })).toMatchObject({ reason: 'Add photos first.' });
+    expect(analysisReadiness({ ...base, pendingPhotos: 0 })).toMatchObject({ reason: expect.stringMatching(/Every photo/) });
+  });
+
+  it('counts findings by status', () => {
+    expect(findingCounts([{ status: 'proposed' }, { status: 'confirmed' }, { status: 'confirmed' }, { status: 'withdrawn' }])).toEqual({ proposed: 1, confirmed: 2, edited: 0, rejected: 0, withdrawn: 1 });
   });
 });

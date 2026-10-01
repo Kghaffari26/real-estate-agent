@@ -322,3 +322,58 @@ export function marketContext(region: RegionOutput, zip: string | null, placeId:
   }
   return { zip: z, city, zipPriceRank };
 }
+
+// ---------- photo findings (P2) ----------
+
+export const CATEGORY_LABELS: Record<string, string> = {
+  paint: 'Paint',
+  walls_ceilings: 'Walls and ceilings',
+  flooring: 'Flooring',
+  lighting: 'Lighting',
+  fixtures_hardware: 'Fixtures and hardware',
+  cabinets: 'Cabinets',
+  countertops: 'Countertops',
+  appliances: 'Appliances',
+  windows_doors: 'Windows and doors',
+  storage: 'Storage',
+  bath: 'Bath',
+  landscaping: 'Landscaping',
+  exterior: 'Exterior',
+  roof_gutters: 'Roof and gutters',
+  curb_appeal: 'Curb appeal',
+  decluttering: 'Decluttering',
+  cleaning: 'Cleaning',
+  repair: 'Repair',
+  staging: 'Staging',
+  other: 'Other',
+};
+
+export const SEVERITY_LABELS = { cosmetic: 'Cosmetic', minor_repair: 'Minor repair', major_repair: 'Major repair' } as const;
+export const CONDITION_LABELS = ['', 'Needs replacing', 'Worn or dated', 'Average wear', 'Good', 'Like new'] as const;
+
+export type Readiness = { ok: true } | { ok: false; reason: string };
+
+/** Whether an analysis can be requested now, and if not, what to do first (the database checks the same). */
+export function analysisReadiness(p: {
+  factsConfirmed: boolean;
+  consent: { version: string } | null;
+  processingVersions: readonly string[];
+  photos: number;
+  pendingPhotos: number;
+  jobActive: boolean;
+}): Readiness {
+  if (p.jobActive) return { ok: false, reason: 'An analysis is already queued or running.' };
+  if (!p.factsConfirmed) return { ok: false, reason: 'Confirm the facts first.' };
+  if (!p.consent) return { ok: false, reason: 'Record the seller’s consent first.' };
+  if (!p.processingVersions.includes(p.consent.version))
+    return { ok: false, reason: `The seller’s consent was recorded under text ${p.consent.version}, which doesn’t cover AI analysis. Record consent to the current text first.` };
+  if (p.photos === 0) return { ok: false, reason: 'Add photos first.' };
+  if (p.pendingPhotos === 0) return { ok: false, reason: 'Every photo has been analyzed. Add new photos to analyze them.' };
+  return { ok: true };
+}
+
+export function findingCounts(findings: ReadonlyArray<{ status: string }>): Record<'proposed' | 'confirmed' | 'edited' | 'rejected' | 'withdrawn', number> {
+  const out = { proposed: 0, confirmed: 0, edited: 0, rejected: 0, withdrawn: 0 };
+  for (const f of findings) if (f.status in out) out[f.status as keyof typeof out]++;
+  return out;
+}

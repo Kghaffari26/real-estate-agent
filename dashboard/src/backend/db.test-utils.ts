@@ -25,6 +25,11 @@ const AUTH_STUB = `
   create role anon nologin;
   create role authenticated nologin;
   create role service_role nologin bypassrls;
+  -- Supabase's default privileges: every new table, sequence and function in public is
+  -- granted to the API roles directly (so a migration must revoke from them explicitly).
+  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+  alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+  alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
   create schema auth;
   create table auth.users (id uuid primary key, email text, aud text, role text);
   create function auth.uid() returns uuid language sql stable as $$

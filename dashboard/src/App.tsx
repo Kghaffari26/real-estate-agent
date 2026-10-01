@@ -21,6 +21,7 @@ const MethodologyPage = lazy(() =>
   })),
 );
 const DeskPage = lazy(() => import('./pages/DeskPage').then((m) => ({ default: m.DeskPage })));
+const DeskPropertyPage = lazy(() => import('./pages/DeskPropertyPage').then((m) => ({ default: m.DeskPropertyPage })));
 const StyleguidePage = lazy(() => import('./pages/StyleguidePage').then((m) => ({ default: m.StyleguidePage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 
@@ -105,6 +106,14 @@ export function App() {
             element={
               <Page>
                 <DeskPage />
+              </Page>
+            }
+          />
+          <Route
+            path="desk/property/:id"
+            element={
+              <Page>
+                <DeskPropertyPage />
               </Page>
             }
           />

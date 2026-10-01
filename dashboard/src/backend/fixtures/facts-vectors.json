@@ -1,0 +1,21 @@
+{
+  "valid": [
+    { "beds": 3, "baths": 2.5, "sqft": 1850, "year_built": 1978, "property_type": "single_family" },
+    { "lot_sqft": 5200, "garage_spaces": 2, "pool": false, "stories": 2, "hoa_monthly": 145.5, "last_sale_price": 812000, "last_sale_date": "2016-05-20" },
+    { "beds": 0, "baths": 0.75, "sqft": 100, "property_type": "condo" },
+    {}
+  ],
+  "invalid": [
+    { "beds": 2.5 },
+    { "baths": 2.3 },
+    { "sqft": 50 },
+    { "year_built": 1700 },
+    { "property_type": "castle" },
+    { "pool": "yes" },
+    { "last_sale_date": "May 2016" },
+    { "color": "blue" },
+    { "sqft": "1850" },
+    { "stories": 0 },
+    { "hoa_monthly": -1 }
+  ]
+}

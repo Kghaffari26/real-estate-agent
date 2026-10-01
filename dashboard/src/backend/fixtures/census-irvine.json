@@ -1,0 +1,50 @@
+{
+ "result": {
+  "addressMatches": [
+   {
+    "geographies": {
+     "Incorporated Places": [
+      {
+       "GEOID": "0636770",
+       "BASENAME": "Irvine",
+       "NAME": "Irvine city"
+      }
+     ],
+     "Counties": [
+      {
+       "GEOID": "06059",
+       "BASENAME": "Orange",
+       "NAME": "Orange County"
+      }
+     ],
+     "Census Tracts": [
+      {
+       "GEOID": "06059052521",
+       "BASENAME": "525.21",
+       "NAME": "Census Tract 525.21"
+      }
+     ]
+    },
+    "coordinates": {
+     "x": -117.826300321793,
+     "y": 33.687524276951
+    },
+    "addressComponents": {
+     "zip": "92606",
+     "streetName": "CIVIC CENTER",
+     "preType": "",
+     "city": "IRVINE",
+     "preDirection": "",
+     "suffixDirection": "",
+     "fromAddress": "99",
+     "state": "CA",
+     "suffixType": "PLZ",
+     "toAddress": "1",
+     "suffixQualifier": "",
+     "preQualifier": ""
+    },
+    "matchedAddress": "1 CIVIC CENTER PLZ, IRVINE, CA, 92606"
+   }
+  ]
+ }
+}

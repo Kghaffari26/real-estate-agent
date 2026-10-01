@@ -3,7 +3,8 @@
  *
  * - **PGlite** (default; local and every CI run): a real Postgres compiled to
  *   WebAssembly, with a stand-in for Supabase's `auth` schema (users, `auth.uid()`,
- *   `auth.jwt()` reading `request.jwt.claims` as Supabase's do) and its roles, then every
+ *   `auth.jwt()` reading `request.jwt.claims` as Supabase's do), its roles and the parts of
+ *   `storage` the policies use (buckets, objects, `foldername()`), then every
  *   file in `supabase/migrations/` in order. Fast, no Docker.
  * - **The real local Supabase stack** when `DESK_TEST_DATABASE_URL` is set (the
  *   `desk-db` CI job runs `supabase start`, which applies the migrations to Supabase's own
@@ -33,6 +34,19 @@ const AUTH_STUB = `
   $$;
   grant usage on schema auth to anon, authenticated;
   grant usage on schema public to anon, authenticated;
+  -- Supabase Storage's tables and helper, as far as the policies use them.
+  create schema storage;
+  create table storage.buckets (id text primary key, name text not null, public boolean default false,
+    file_size_limit bigint, allowed_mime_types text[]);
+  create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text references storage.buckets (id),
+    name text, owner uuid, created_at timestamptz default now(), unique (bucket_id, name));
+  create function storage.foldername(name text) returns text[] language sql immutable as $$
+    select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1]
+  $$;
+  alter table storage.objects enable row level security;
+  grant usage on schema storage to anon, authenticated;
+  grant all on storage.objects to anon, authenticated;
+  grant select on storage.buckets to anon, authenticated;
 `;
 
 export interface User {

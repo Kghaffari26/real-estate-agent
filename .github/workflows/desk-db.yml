@@ -1,10 +1,12 @@
 name: desk-db
 
-# Re-runs the Desk's row-level security suite (dashboard/src/backend/rls.test.ts)
-# against a real local Supabase stack. Every dashboard CI run already proves it on
-# PGlite, whose `auth` schema is a stand-in; this job proves it on Supabase's own
-# Postgres image, auth schema, roles and default privileges, with the migrations applied
-# by `supabase start` exactly as on a hosted project.
+# Re-runs the Desk's row-level security suites (dashboard/src/backend/*.rls.test.ts)
+# against a real local Supabase stack. Every dashboard CI run already proves them on
+# PGlite, whose `auth` and `storage` schemas are stand-ins; this job proves them on
+# Supabase's own Postgres image, auth and storage schemas, roles and default privileges,
+# with the migrations applied by `supabase start` exactly as on a hosted project. Then
+# it drives the intake end to end through the stack's APIs (PostgREST, Storage, the
+# geocode Edge Function): dashboard/src/backend/stack.integration.test.ts.
 on:
   push:
     paths:
@@ -40,16 +42,26 @@ jobs:
           version: 2.118.0
       - name: Start a local Supabase stack (applies supabase/migrations)
         # Only what the suite needs: Postgres, auth (it migrates the auth schema), the API gateway.
-        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,supavisor,postgres-meta
-      - name: Row-level security suite on the real stack
-        run: npx vitest run src/backend/rls.test.ts
+        # What the suites use: Postgres, auth, the API gateway, Storage, the Edge Runtime.
+        run: supabase start -x studio,imgproxy,logflare,vector,realtime,supavisor,postgres-meta
+      - name: Row-level security suites on the real stack
+        run: npx vitest run src/backend/rls.test.ts src/backend/intake.rls.test.ts
         working-directory: dashboard
         env:
           DESK_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      - name: The local stack's API URL and anon key (local defaults, not secrets)
+        run: |
+          supabase status -o json > "$RUNNER_TEMP/status.json"
+          echo "DESK_TEST_API_URL=$(jq -r '.API_URL' "$RUNNER_TEMP/status.json")" >> "$GITHUB_ENV"
+          echo "DESK_TEST_ANON_KEY=$(jq -r '.ANON_KEY // .PUBLISHABLE_KEY' "$RUNNER_TEMP/status.json")" >> "$GITHUB_ENV"
+      - name: Intake end to end through the stack's APIs (PostgREST, Storage, Edge Function)
+        run: npx vitest run src/backend/stack.integration.test.ts
+        working-directory: dashboard
       - name: The suite really ran against Supabase (not PGlite)
         run: |
           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -tAc "select count(*) from pg_policies where schemaname = 'public'" | grep -qx '[1-9][0-9]*'
           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -tAc "select 1 from information_schema.routines where routine_schema = 'public' and routine_name = 'accept_invite'" | grep -qx 1
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -tAc "select public from storage.buckets where id = 'property-photos'" | grep -qx f
       - name: Stop the stack
         if: always()
         run: supabase stop --no-backup

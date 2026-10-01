@@ -16,11 +16,41 @@ import { formatDate } from '../lib/format';
 import { AtlasChrome } from '../ui/AtlasChrome';
 import { Button, Segmented } from '../ui/controls';
 import { GlassPanel } from '../ui/Glass';
+import { CostBookPanel } from './desk/CostBookPanel';
+import { PropertiesPanel } from './desk/PropertiesPanel';
 
 type Load = { status: 'loading' } | { status: 'off' } | { status: 'ready'; client: SupabaseClient };
 
 export function DeskPage() {
   useDocumentTitle('Desk');
+  return (
+    <DeskFrame
+      heading="Your team’s workspace"
+      intro="Private to your team: the homes you’re working, listing prep, and soon clients and calls. Market data stays public; everything here is visible only to your team’s members."
+    >
+      {(client, session) => <Workspace client={client} session={session} />}
+    </DeskFrame>
+  );
+}
+
+/**
+ * The Desk's page frame: loads the backend config, then the sign-in, and renders `children`
+ * with the client and session once someone is signed in. Every Desk route uses it.
+ */
+export function DeskFrame({
+  heading,
+  intro,
+  eyebrow = 'The Desk',
+  compact = false,
+  children,
+}: {
+  heading: ReactNode;
+  intro?: ReactNode;
+  eyebrow?: ReactNode;
+  /** A smaller heading (long addresses). */
+  compact?: boolean;
+  children: (client: SupabaseClient, session: Session) => ReactNode;
+}) {
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   useEffect(() => {
     let live = true;
@@ -32,9 +62,9 @@ export function DeskPage() {
   return (
     <AtlasChrome>
       <div className="mx-auto max-w-[980px] px-4 pb-24 pt-6 sm:px-8">
-        <div className="mp-label">The Desk</div>
-        <h1 className="mp-display mt-2 text-[40px] leading-[1.02] sm:text-[52px]">Your team’s workspace</h1>
-        <p className="mt-3 max-w-2xl text-mp-ink-2">Private to your team: the homes you’re working, and soon listing prep, clients and calls. Market data stays public; everything here is visible only to your team’s members.</p>
+        <div className="mp-label">{eyebrow}</div>
+        <h1 className={`mp-display mt-2 ${compact ? 'text-[28px] leading-[1.1] sm:text-[38px]' : 'text-[40px] leading-[1.02] sm:text-[52px]'}`}>{heading}</h1>
+        {intro && <p className="mt-3 max-w-2xl text-mp-ink-2">{intro}</p>}
         <div className="mt-8">
           {load.status === 'loading' ? (
             <p className="text-mp-ink-3" role="status">
@@ -43,7 +73,7 @@ export function DeskPage() {
           ) : load.status === 'off' ? (
             <NotConfigured />
           ) : (
-            <Signed client={load.client} />
+            <Signed client={load.client}>{children}</Signed>
           )}
         </div>
       </div>
@@ -51,7 +81,7 @@ export function DeskPage() {
   );
 }
 
-function Card({ title, icon, children, testId }: { title: string; icon?: ReactNode; children: ReactNode; testId?: string }) {
+export function Card({ title, icon, children, testId }: { title: string; icon?: ReactNode; children: ReactNode; testId?: string }) {
   return (
     <GlassPanel as="section" className="p-5 sm:p-6" aria-label={title} data-testid={testId}>
       <h2 className="flex items-center gap-2 text-[15px] font-medium text-mp-ink">
@@ -83,11 +113,11 @@ function useSession(client: SupabaseClient) {
   return session;
 }
 
-function Signed({ client }: { client: SupabaseClient }) {
+function Signed({ client, children }: { client: SupabaseClient; children: (client: SupabaseClient, session: Session) => ReactNode }) {
   const session = useSession(client);
   if (session === undefined) return <p className="text-mp-ink-3" role="status">Checking your sign-in…</p>;
   if (!session) return <SignIn client={client} />;
-  return <Workspace client={client} session={session} />;
+  return <>{children(client, session)}</>;
 }
 
 function SignIn({ client }: { client: SupabaseClient }) {
@@ -177,6 +207,7 @@ function Workspace({ client, session }: { client: SupabaseClient; session: Sessi
   };
 
   const current = teams?.find((t) => t.id === params.get('team')) ?? teams?.[0] ?? null;
+  const tab = (['cost-book', 'team'] as const).find((t) => t === params.get('tab')) ?? 'properties';
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-mp-ink-2">
@@ -227,7 +258,23 @@ function Workspace({ client, session }: { client: SupabaseClient; session: Sessi
                 </select>
               </label>
             )}
-            <TeamPanel key={current.id} client={client} team={current} me={me.id} onChanged={refresh} onError={setError} />
+            <Segmented
+              label="Section"
+              value={tab}
+              onChange={(v) => setQuery({ tab: v === 'properties' ? null : v })}
+              options={[
+                { value: 'properties', label: 'Properties' },
+                { value: 'cost-book', label: 'Cost book' },
+                { value: 'team', label: 'Team' },
+              ]}
+            />
+            {tab === 'properties' ? (
+              <PropertiesPanel key={current.id} client={client} team={current} me={me.id} />
+            ) : tab === 'cost-book' ? (
+              <CostBookPanel key={current.id} client={client} team={current} me={me.id} />
+            ) : (
+              <TeamPanel key={current.id} client={client} team={current} me={me.id} onChanged={refresh} onError={setError} />
+            )}
           </>
         )
       )}

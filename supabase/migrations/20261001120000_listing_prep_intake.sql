@@ -180,6 +180,28 @@ create table public.cost_book (
 create trigger cost_book_touch before update on public.cost_book
   for each row execute function public.touch_updated_at();
 
+-- Import or edit cost book rows by item. An upsert through PostgREST would SET every
+-- column in the payload (team_id, item included), which the column grants forbid; this
+-- updates only the price columns. SECURITY INVOKER: the policies above still decide.
+create function public.save_cost_rows(team uuid, rows jsonb) returns int
+language plpgsql security invoker set search_path = public as $$
+declare
+  n int;
+begin
+  if jsonb_typeof(rows) <> 'array' then
+    raise exception 'rows must be an array' using errcode = '22023';
+  end if;
+  insert into public.cost_book (team_id, item, category, unit, low_usd, high_usd, notes, updated_by)
+    select team, r.item, r.category, r.unit, r.low_usd, r.high_usd, r.notes, auth.uid()
+    from jsonb_to_recordset(rows) as r(item text, category text, unit text, low_usd numeric, high_usd numeric, notes text)
+  on conflict (team_id, item) do update
+    set category = excluded.category, unit = excluded.unit, low_usd = excluded.low_usd,
+        high_usd = excluded.high_usd, notes = excluded.notes, updated_by = excluded.updated_by;
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
 create table public.quotes (
   id uuid primary key default gen_random_uuid(),
   property_id uuid not null references public.properties (id) on delete cascade,
@@ -267,7 +289,7 @@ create policy property_photos_delete on storage.objects for delete to authentica
 -- ---------- privileges ----------
 
 revoke all on public.seller_consents, public.photos, public.cost_book, public.quotes from anon, authenticated;
-revoke all on function public.valid_facts(jsonb), public.facts_unconfirm(), public.confirm_facts(uuid),
+revoke all on function public.valid_facts(jsonb), public.facts_unconfirm(), public.confirm_facts(uuid), public.save_cost_rows(uuid, jsonb),
   public.has_photo_consent(uuid), public.guard_consents(), public.photo_path_ok(text) from public, anon;
 
 grant insert (matched_address, tract, county_fips, place_id),
@@ -283,5 +305,5 @@ grant select, delete, insert (team_id, item, category, unit, low_usd, high_usd, 
 grant select, delete, insert (property_id, item, low_usd, high_usd, vendor, notes, quoted_on, created_by),
   update (item, low_usd, high_usd, vendor, notes, quoted_on)
   on public.quotes to authenticated;
-grant execute on function public.confirm_facts(uuid), public.has_photo_consent(uuid), public.photo_path_ok(text),
+grant execute on function public.confirm_facts(uuid), public.save_cost_rows(uuid, jsonb), public.has_photo_consent(uuid), public.photo_path_ok(text),
   public.valid_facts(jsonb) to authenticated;

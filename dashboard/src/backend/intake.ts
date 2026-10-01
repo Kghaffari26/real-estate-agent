@@ -194,10 +194,10 @@ export function intakeApi(c: SupabaseClient) {
       return rows.map((r) => ({ ...r, low_usd: num(r.low_usd), high_usd: num(r.high_usd) }));
     },
 
-    /** Insert or replace rows by item (a CSV import, or one edit). */
-    async saveCostRows(team: string, me: string, rows: readonly CostRow[]): Promise<void> {
+    /** Insert or replace rows by item (a CSV import, or one edit), through save_cost_rows (see the migration). */
+    async saveCostRows(team: string, rows: readonly CostRow[]): Promise<void> {
       if (!rows.length) return;
-      check(await c.from('cost_book').upsert(rows.map((r) => ({ team_id: team, updated_by: me, ...r })), { onConflict: 'team_id,item' }).select('item'));
+      check(await c.rpc('save_cost_rows', { team, rows }));
     },
 
     async deleteCostRow(team: string, item: string): Promise<void> {

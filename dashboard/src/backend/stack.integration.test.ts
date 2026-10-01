@@ -75,7 +75,7 @@ describe.runIf(Boolean(URL_ && ANON))('intake on the real local Supabase stack',
     expect(Buffer.from(await fetched.arrayBuffer()).subarray(0, 3)).toEqual(JPEG.subarray(0, 3));
 
     // The cost book and a quote.
-    await api.saveCostRows(team, alice.id, [{ item: 'interior_paint_walls', category: 'paint', unit: 'sq_ft_floor_area', low_usd: 2.5, high_usd: 4.5, notes: null }]);
+    await api.saveCostRows(team, [{ item: 'interior_paint_walls', category: 'paint', unit: 'sq_ft_floor_area', low_usd: 2.5, high_usd: 4.5, notes: null }]);
     await api.addQuote(id, alice.id, { item: 'interior_paint_walls', low_usd: 6400, high_usd: 7200, vendor: 'Brightline Painting', notes: null, quoted_on: null });
     expect((await api.costBook(team))[0]).toMatchObject({ low_usd: 2.5, high_usd: 4.5 });
     expect((await api.quotes(id))[0]).toMatchObject({ low_usd: 6400, high_usd: 7200 });

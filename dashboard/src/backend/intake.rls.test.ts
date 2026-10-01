@@ -130,6 +130,25 @@ describe('cost book and quotes', () => {
     await expect(t.as(bob, () => t.rows(`update public.cost_book set high_usd = 99 where item = 'interior_paint_walls' returning item`))).resolves.toEqual([]);
   });
 
+  it('save_cost_rows imports and re-prices by item, for managers only, without touching ownership', async () => {
+    const save = (u: User, team: string, rows: unknown[]) => t.as(u, () => t.rows<{ n: number }>('select public.save_cost_rows($1, $2::jsonb) as n', [team, JSON.stringify(rows)]));
+    const rows = [
+      { item: 'interior_paint_walls', category: 'paint', unit: 'sq_ft_floor_area', low_usd: 2.5, high_usd: 4.5, notes: 'Walls only, two coats' },
+      { item: 'flooring_lvp', category: 'flooring', unit: 'sq_ft', low_usd: null, high_usd: null, notes: null },
+    ];
+    expect(await save(alice, teamA, rows)).toEqual([{ n: 2 }]);
+    await save(alice, teamA, [{ ...rows[1], low_usd: 4.25, high_usd: 7 }]);
+    expect(await t.as(bob, () => t.rows('select item, low_usd::float as low, high_usd::float as high from public.cost_book order by item'))).toEqual([
+      { item: 'flooring_lvp', low: 4.25, high: 7 },
+      { item: 'interior_paint_walls', low: 2.5, high: 4.5 },
+    ]);
+    await expect(save(bob, teamA, rows)).rejects.toThrow();
+    await expect(save(carol, teamA, rows)).rejects.toThrow();
+    await expect(save(alice, teamA, [{ ...rows[0], low_usd: 9, high_usd: 1 }])).rejects.toThrow();
+    // A plain upsert would SET team_id and item, which no one may update.
+    await expect(t.as(alice, () => t.rows(`insert into public.cost_book (team_id, item, category, unit, updated_by) values ($1, 'flooring_lvp', 'flooring', 'sq_ft', $2) on conflict (team_id, item) do update set team_id = excluded.team_id`, [teamA, alice.id]))).rejects.toThrow();
+  });
+
   it('prices are a low ≤ high pair or empty', async () => {
     await expect(t.as(alice, () => t.rows(`insert into public.cost_book (team_id, item, category, unit, low_usd, high_usd, updated_by) values ($1, 'x_item', 'paint', 'each', 5, 2, $2)`, [teamA, alice.id]))).rejects.toThrow();
     await expect(t.as(alice, () => t.rows(`insert into public.cost_book (team_id, item, category, unit, low_usd, updated_by) values ($1, 'y_item', 'paint', 'each', 5, $2)`, [teamA, alice.id]))).rejects.toThrow();

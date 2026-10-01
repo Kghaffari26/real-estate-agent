@@ -55,7 +55,7 @@ export function CostBookPanel({ client, team, me }: { client: SupabaseClient; te
   const importCsv = async (f: File) => {
     const parsed = parseCostBook(await f.text());
     setProblems(parsed.problems);
-    await act(() => api.saveCostRows(team.id, me, parsed.rows), `Imported ${parsed.rows.length} item${parsed.rows.length === 1 ? '' : 's'}${parsed.problems.length ? `; ${parsed.problems.length} line${parsed.problems.length === 1 ? '' : 's'} skipped` : ''}.`);
+    await act(() => api.saveCostRows(team.id, parsed.rows), `Imported ${parsed.rows.length} item${parsed.rows.length === 1 ? '' : 's'}${parsed.problems.length ? `; ${parsed.problems.length} line${parsed.problems.length === 1 ? '' : 's'} skipped` : ''}.`);
   };
 
   const exportCsv = () =>
@@ -151,7 +151,7 @@ export function CostBookPanel({ client, team, me }: { client: SupabaseClient; te
             <tbody>
               {rows.map((r) =>
                 editing === r.item ? (
-                  <EditRow key={r.item} row={r} onCancel={() => setEditing(null)} onSave={(next) => act(() => api.saveCostRows(team.id, me, [next]), `Saved ${next.item}.`).then(() => setEditing(null))} />
+                  <EditRow key={r.item} row={r} onCancel={() => setEditing(null)} onSave={(next) => act(() => api.saveCostRows(team.id, [next]), `Saved ${next.item}.`).then(() => setEditing(null))} />
                 ) : (
                   <tr key={r.item} className="border-t border-mp-line align-top">
                     <th scope="row" className="py-2 pr-3 text-left font-normal">

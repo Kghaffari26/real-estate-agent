@@ -27,10 +27,21 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-`db push` applies `supabase/migrations/*.sql`: the tables, row-level security policies
-and the `create_team` / `my_invites` / `accept_invite` functions. To check the result,
+`db push` applies `supabase/migrations/*.sql`: the tables, row-level security policies,
+the `create_team` / `my_invites` / `accept_invite` / `confirm_facts` functions, and the
+private `property-photos` storage bucket with its policies (Listing Prep intake). To check the result,
 run `select tablename, rowsecurity from pg_tables where schemaname = 'public'` in the
 SQL editor. Every row should show `true`.
+
+Then deploy the address lookup, an Edge Function that proxies the Census Bureau geocoder.
+The geocoder has no CORS headers, so the browser can't call it directly:
+
+```bash
+supabase functions deploy geocode
+```
+
+It holds no secrets and reads no rows. Supabase checks the caller's sign-in before it
+runs (`verify_jwt`), so only signed-in team members can use it.
 
 ## 3. Auth URLs
 

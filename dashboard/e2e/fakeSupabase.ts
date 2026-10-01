@@ -167,6 +167,15 @@ export async function fakeBackend(page: Page, s: State) {
       p.facts_confirmed_by = ME.id;
       return json(route, p.facts_confirmed_at);
     }
+    if (path === '/rest/v1/rpc/save_cost_rows') {
+      const book = (s.tables.cost_book ??= []);
+      for (const r of body.rows as Row[]) {
+        const existing = book.find((x) => x.team_id === body.team && x.item === r.item);
+        if (existing) Object.assign(existing, r, { updated_by: ME.id });
+        else book.push({ team_id: body.team, ...r, updated_by: ME.id });
+      }
+      return json(route, (body.rows as Row[]).length);
+    }
     if (path === '/functions/v1/geocode') {
       s.geocodeCalls.push(body?.address);
       return s.geocode === 'fail' ? json(route, { error: 'geocoder_unavailable' }, 502) : json(route, { matches: s.geocode });

@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { BRAND } from './src/config/brand';
 // @ts-expect-error: plain .mjs build script without types
 import { dataVersion } from './scripts/data-version.mjs';
+// @ts-expect-error: plain .mjs build script without types
+import { checkDeskConfig } from './scripts/secret-scan.mjs';
 
 /** Fills %BRAND_*% placeholders in index.html from the single brand config. */
 function brandHtml(): Plugin {
@@ -33,6 +35,40 @@ function preloadIndex(base: string, version: string): Plugin {
   };
 }
 
+/**
+ * The Desk's backend config (R3) as `desk-config.json`, from SUPABASE_URL and
+ * SUPABASE_ANON_KEY at build time (GitHub secrets in CI). The anon key is public by
+ * design; row-level security protects the data. Without both, no file: the Desk says
+ * it isn't configured and the rest of the site is unchanged. Never the service-role key:
+ * the build throws if it sees one, and scripts/check-secrets.mjs scans dist/ after it.
+ */
+function deskConfig(): Plugin {
+  const url = process.env.SUPABASE_URL ?? '';
+  const anonKey = process.env.SUPABASE_ANON_KEY ?? '';
+  const body = url && anonKey ? JSON.stringify({ url, anonKey }) : null;
+  // Refuse to build (or serve) a config that isn't exactly a public URL + anon key, so a
+  // service-role key pasted into the wrong secret never reaches the site.
+  const problems: string[] = body ? checkDeskConfig({ url, anonKey }) : [];
+  if (problems.length) throw new Error(`desk-config.json refused: ${problems.join('; ')}. Set SUPABASE_ANON_KEY to the project's anon (publishable) key.`);
+  return {
+    name: 'desk-config',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!req.url?.endsWith('/desk-config.json')) return next();
+        if (!body) {
+          res.statusCode = 404;
+          return res.end();
+        }
+        res.setHeader('Content-Type', 'application/json');
+        res.end(body);
+      });
+    },
+    generateBundle() {
+      if (body) this.emitFile({ type: 'asset', fileName: 'desk-config.json', source: body });
+    },
+  };
+}
+
 // GitHub Pages serves the site at /real-estate-agent/; override with DASHBOARD_BASE.
 const BASE = process.env.DASHBOARD_BASE ?? '/real-estate-agent/';
 // Cache-busts every data URL per dataset (see scripts/data-version.mjs); prebuild's
@@ -42,7 +78,7 @@ const DATA_VERSION = dataVersion(fileURLToPath(new URL('./public/data', import.m
 export default defineConfig({
   base: BASE,
   define: { __DATA_VERSION__: JSON.stringify(DATA_VERSION) },
-  plugins: [react(), brandHtml(), preloadIndex(BASE, DATA_VERSION)],
+  plugins: [react(), brandHtml(), preloadIndex(BASE, DATA_VERSION), deskConfig()],
   worker: { format: 'es' },
   build: {
     chunkSizeWarningLimit: 1100,

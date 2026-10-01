@@ -142,12 +142,15 @@ describe('photo files follow their rows', () => {
     expect(await t.as(alice, () => t.rows('select * from public.storage_deletions')).catch(() => 'denied')).toBe('denied');
   });
 
-  it('a manager can purge hidden photos; an agent can’t', async () => {
+  it('a manager can purge hidden photos, even with withdrawn findings on them; an agent can’t', async () => {
     const a = await addPhoto(bob);
+    await confirm();
+    await finding(a.id);
     await revoke(bob);
     await expect(t.as(bob, () => t.rows('select public.purge_property_photos($1)', [home]))).rejects.toThrow(/only a manager/);
     expect(await t.as(alice, () => t.rows<{ n: number }>('select public.purge_property_photos($1) as n', [home]))).toEqual([{ n: 1 }]);
     expect((await deletions()).map((d) => d.path)).toEqual([a.path]);
+    expect(await t.as(alice, () => t.rows('select status, photo_id from public.findings'))).toEqual([{ status: 'withdrawn', photo_id: null }]);
   });
 
   it('retention: a year after upload, or 30 days after consent is revoked; orphans after a day', async () => {

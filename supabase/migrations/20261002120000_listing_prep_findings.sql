@@ -196,7 +196,8 @@ begin
     end if;
     return new;
   end if;
-  if old.status = 'withdrawn' and new is distinct from old then
+  -- photo_id / job_id may still be cleared (their photo or job deleted: ON DELETE SET NULL).
+  if old.status = 'withdrawn' and (to_jsonb(new) - 'photo_id' - 'job_id') is distinct from (to_jsonb(old) - 'photo_id' - 'job_id') then
     raise exception 'a withdrawn finding can’t change; run the analysis again' using errcode = '42501';
   end if;
   if new.status = 'withdrawn' and old.status <> 'withdrawn' and public.has_photo_consent(new.property_id) then

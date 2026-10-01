@@ -1,0 +1,55 @@
+name: desk-db
+
+# Re-runs the Desk's row-level security suite (dashboard/src/backend/rls.test.ts)
+# against a real local Supabase stack. Every dashboard CI run already proves it on
+# PGlite, whose `auth` schema is a stand-in; this job proves it on Supabase's own
+# Postgres image, auth schema, roles and default privileges, with the migrations applied
+# by `supabase start` exactly as on a hosted project.
+on:
+  push:
+    paths:
+      - "supabase/**"
+      - "dashboard/src/backend/**"
+      - ".github/workflows/desk-db.yml"
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "dashboard/src/backend/**"
+      - ".github/workflows/desk-db.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rls-on-real-supabase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install dashboard dependencies (the test runner and pg)
+        run: npm ci
+        working-directory: dashboard
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.118.0
+      - name: Start a local Supabase stack (applies supabase/migrations)
+        # Only what the suite needs: Postgres, auth (it migrates the auth schema), the API gateway.
+        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,supavisor,postgres-meta
+      - name: Row-level security suite on the real stack
+        run: npx vitest run src/backend/rls.test.ts
+        working-directory: dashboard
+        env:
+          DESK_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      - name: The suite really ran against Supabase (not PGlite)
+        run: |
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -tAc "select count(*) from pg_policies where schemaname = 'public'" | grep -qx '[1-9][0-9]*'
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -tAc "select 1 from information_schema.routines where routine_schema = 'public' and routine_name = 'accept_invite'" | grep -qx 1
+      - name: Stop the stack
+        if: always()
+        run: supabase stop --no-backup

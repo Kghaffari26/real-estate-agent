@@ -20,6 +20,7 @@ const MethodologyPage = lazy(() =>
     default: m.MethodologyPage,
   })),
 );
+const DeskPage = lazy(() => import('./pages/DeskPage').then((m) => ({ default: m.DeskPage })));
 const StyleguidePage = lazy(() => import('./pages/StyleguidePage').then((m) => ({ default: m.StyleguidePage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 
@@ -96,6 +97,14 @@ export function App() {
             element={
               <Page>
                 <MethodologyPage />
+              </Page>
+            }
+          />
+          <Route
+            path="desk"
+            element={
+              <Page>
+                <DeskPage />
               </Page>
             }
           />

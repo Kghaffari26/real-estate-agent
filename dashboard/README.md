@@ -37,6 +37,7 @@ npm run dev             # http://localhost:5173/real-estate-agent/
 | `npm run lint` / `typecheck` / `test` | ESLint (0 warnings), `tsc -b`, Vitest + Testing Library. |
 | `npm run build` / `preview` | Production build into `dist/`. `DASHBOARD_BASE` overrides the base path. |
 | `npm run check:bundle` | Performance budget: initial JS ≤ 300 KB gzipped (CI enforces it; the spec allows 350). |
+| `npm run check:secrets` | Fails if `dist/` holds a backend secret (a `service_role` JWT, an `sb_secret_` key) or a `desk-config.json` beyond `{ url, anonKey }`. CI runs it after every build. |
 | `npm run e2e` | Playwright: axe (WCAG 2.1 AA) on every route in both themes, desktop and 360 px, the forced low tier and reduced motion, every interaction in the spec, and a frame-timing smoke (warning only). |
 | `npm run lighthouse` | Lighthouse on Arrival and Explore, mobile and desktop, against `vite preview` (accessibility must be 100; performance is reported). |
 | `npm run visual` / `visual:update` | Visual regression: every route × both themes × 390/1024/1440 px + the low tier, against local baselines. |
@@ -44,6 +45,8 @@ npm run dev             # http://localhost:5173/real-estate-agent/
 | `npm run brand-assets` | Re-render `public/og.png` and `public/apple-touch-icon.png` from the brand config. |
 
 `predev` and `prebuild` run `fetch-data --if-missing`, so a fresh checkout just works.
+
+**The Desk (`#/desk`)** needs a Supabase backend. Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` (the anon/publishable key, never the service-role key) when running `dev` or `build`, and the plugin writes `desk-config.json`. Without them the Desk says it isn't configured. Project setup, auth URLs, custom SMTP and the GitHub secrets: [`../docs/DESK_SETUP.md`](../docs/DESK_SETUP.md).
 
 ## Data flow
 

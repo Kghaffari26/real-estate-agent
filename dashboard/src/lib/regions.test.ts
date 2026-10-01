@@ -15,3 +15,11 @@ describe('regions', () => {
     expect(first).toMatchObject({ group: 'Regions', label: 'Orange County, CA', to: '/explore?region=orange-county' });
   });
 });
+
+describe('the palette reaches every page (phones have no nav links)', () => {
+  it('offers the Desk and the canonical Methodology route', () => {
+    const pages = paletteResults('', []).filter((i) => i.group === 'Go to');
+    expect(pages.map((p) => p.to)).toEqual(expect.arrayContaining(['/desk', '/methodology']));
+    expect(paletteResults('desk', [])[0]).toMatchObject({ label: 'Desk', to: '/desk' });
+  });
+});

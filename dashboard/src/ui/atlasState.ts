@@ -5,6 +5,7 @@ export const ATLAS_NAV = [
   { to: '/', label: 'Brief', end: true },
   { to: '/compare', label: 'Compare' },
   { to: '/methodology', label: 'Method' },
+  { to: '/desk', label: 'Desk' },
 ] as const;
 
 const MEDIA_KEY = 'mp-media-paused';

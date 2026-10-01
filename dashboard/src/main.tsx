@@ -5,6 +5,11 @@ import { App } from './App';
 import { removeBoot } from './lib/boot';
 import './styles/index.css';
 
+// A magic-link sign-in comes back as `?code=` (the Desk, R3): finish it, then the Desk loads.
+if (new URLSearchParams(window.location.search).has('code')) {
+  void import('./backend/client').then((m) => m.completeSignInFromUrl());
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <HashRouter>

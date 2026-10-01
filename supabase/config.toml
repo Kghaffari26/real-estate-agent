@@ -1,0 +1,60 @@
+# The Desk's local Supabase stack (`supabase start`): used by the desk-db CI job to run
+# the row-level security suite against Supabase's real Postgres image and auth schema,
+# and for local development. The hosted project is configured in its dashboard; the
+# settings that matter there are listed in docs/DESK_SETUP.md.
+
+project_id = "real-estate-agent"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[studio]
+enabled = false
+
+[storage]
+enabled = false
+
+[auth]
+enabled = true
+# Magic links return to the Desk's hash route (PKCE adds ?code= before the #).
+site_url = "http://localhost:5173/real-estate-agent/"
+additional_redirect_urls = [
+  "http://localhost:5173/real-estate-agent/**",
+  "http://localhost:4173/real-estate-agent/**",
+  "https://kghaffari26.github.io/real-estate-agent/**",
+]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.rate_limit]
+# Emails per hour. The hosted project's built-in sender allows only a few; custom SMTP
+# (docs/DESK_SETUP.md) lifts the cap. The Desk explains the limit when it's hit.
+email_sent = 2
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+otp_expiry = 3600
+
+# Custom SMTP for local testing of real delivery (see docs/DESK_SETUP.md). Never commit a
+# real password: `env(...)` reads it from the environment.
+# [auth.email.smtp]
+# enabled = true
+# host = "smtp.resend.com"
+# port = 465
+# user = "resend"
+# pass = "env(SMTP_PASSWORD)"
+# admin_email = "desk@yourbrokerage.com"
+# sender_name = "Metro Pulse Desk"

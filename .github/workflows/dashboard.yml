@@ -55,6 +55,12 @@ jobs:
       - run: npm run build
         env:
           DASHBOARD_BASE: /real-estate-agent/
+          # The Desk's public config (desk-config.json): project URL + anon key only. Unset
+          # secrets leave the Desk showing "not configured"; the build refuses a service key.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      - name: No backend secret in the built site (service-role JWTs, sb_secret_ keys, desk-config.json shape)
+        run: npm run check:secrets
       - name: Performance budget (initial JS <= 300 KB gzipped; the spec allows 350)
         run: npm run check:bundle
       - name: Playwright smoke + axe (+ the fps smoke, warning only)

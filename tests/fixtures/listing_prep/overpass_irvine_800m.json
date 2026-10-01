@@ -1,0 +1,325 @@
+{
+"elements": [
+{
+"type": "node",
+"lat": 33.6880627,
+"lon": -117.8340774,
+"tags": {
+"amenity": "cafe",
+"shop": "bakery"
+}
+},
+{
+"type": "node",
+"lat": 33.6880157,
+"lon": -117.83416,
+"tags": {
+"amenity": "cafe"
+}
+},
+{
+"type": "node",
+"lat": 33.6874998,
+"lon": -117.833896,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.6886229,
+"lon": -117.8338959,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.6878781,
+"lon": -117.83424,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.6882155,
+"lon": -117.8330178,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.6887086,
+"lon": -117.8315426,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6890566,
+"lon": -117.8182316,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.68588,
+"lon": -117.8343434,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6888227,
+"lon": -117.8179896,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6917654,
+"lon": -117.8287903,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6842623,
+"lon": -117.8270791,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6841125,
+"lon": -117.8260692,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6849559,
+"lon": -117.8258843,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6870932,
+"lon": -117.8297891,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.686797,
+"lon": -117.8298936,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6919941,
+"lon": -117.8290657,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6850151,
+"lon": -117.8267733,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6879679,
+"lon": -117.8315844,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6876615,
+"lon": -117.8341316,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.6882435,
+"lon": -117.832569,
+"tags": {
+"highway": "bus_stop"
+}
+},
+{
+"type": "node",
+"lat": 33.6873958,
+"lon": -117.8337396,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.6877516,
+"lon": -117.8342015,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.6882674,
+"lon": -117.8339178,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.6889571,
+"lon": -117.833673,
+"tags": {
+"amenity": "cafe"
+}
+},
+{
+"type": "node",
+"lat": 33.6882146,
+"lon": -117.832927,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.6882759,
+"lon": -117.8328756,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.688149,
+"lon": -117.8330258,
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "node",
+"lat": 33.68809,
+"lon": -117.8330856,
+"tags": {
+"amenity": "cafe"
+}
+},
+{
+"type": "node",
+"lat": 33.692671,
+"lon": -117.8272364,
+"tags": {
+"amenity": "cafe"
+}
+},
+{
+"type": "way",
+"center": {
+"lat": 33.6910434,
+"lon": -117.8176894
+},
+"tags": {
+"leisure": "park"
+}
+},
+{
+"type": "way",
+"center": {
+"lat": 33.6847153,
+"lon": -117.8194982
+},
+"tags": {
+"leisure": "park"
+}
+},
+{
+"type": "way",
+"center": {
+"lat": 33.6878308,
+"lon": -117.822507
+},
+"tags": {
+"leisure": "park"
+}
+},
+{
+"type": "way",
+"center": {
+"lat": 33.6808658,
+"lon": -117.8285737
+},
+"tags": {
+"leisure": "park"
+}
+},
+{
+"type": "way",
+"center": {
+"lat": 33.6812618,
+"lon": -117.8309558
+},
+"tags": {
+"leisure": "park"
+}
+},
+{
+"type": "way",
+"center": {
+"lat": 33.6892251,
+"lon": -117.8344534
+},
+"tags": {
+"shop": "supermarket"
+}
+},
+{
+"type": "way",
+"center": {
+"lat": 33.6885514,
+"lon": -117.8327437
+},
+"tags": {
+"amenity": "restaurant"
+}
+},
+{
+"type": "way",
+"center": {
+"lat": 33.695183,
+"lon": -117.80959
+},
+"tags": {
+"leisure": "park"
+}
+}
+]
+}

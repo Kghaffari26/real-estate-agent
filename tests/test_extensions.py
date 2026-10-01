@@ -226,3 +226,23 @@ def test_schema_refs_are_optional_so_a_1_3_index_still_validates():
     assert fields["events"].default is None and fields["pulse"].default is None
     assert fields["areas"].default_factory is list
     assert json.loads(events.ref(events.EventsOutput(since=date(2012, 1, 1), through=date(2026, 9, 1), rules={}, events=[])).model_dump_json())["path"] == "events.json"
+
+
+@respx.mock
+def test_an_unchanged_file_is_refiltered_when_the_cached_parquet_lacks_a_new_column(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from agents.real_estate import region
+
+    header = ["PERIOD END", "REGION TYPE", "REGION NAME", "METRO", *region.FETCH_COLUMNS.values()]
+    row = [date.today().isoformat(), "zip", "92618", "Anaheim, CA metro area", *["1" for _ in region.FETCH_COLUMNS]]
+    csv = (",".join(f'"{h}"' for h in header) + "\n" + ",".join(f'"{v}"' for v in row) + "\n").encode()
+    respx.get(fetch_redfin.ZIP_URL).mock(side_effect=[httpx.Response(200, content=csv, headers={"ETag": '"v1"'}), httpx.Response(304), httpx.Response(304)])
+    with Http(cache_dir=tmp_path / "http") as http:
+        first = fetch_redfin.fetch_zips(http, tracked_regions={"Anaheim, CA metro area"}, columns=region.FETCH_COLUMNS)
+        assert first.modified and "median_ppsf" in pl.read_parquet_schema(first.parquet_path)
+        # A parquet built before median_ppsf existed: rebuilt from the cached CSV.
+        pl.read_parquet(first.parquet_path).drop("median_ppsf").write_parquet(first.parquet_path)
+        again = fetch_redfin.fetch_zips(http, tracked_regions={"Anaheim, CA metro area"}, columns=region.FETCH_COLUMNS)
+        assert again.modified and "median_ppsf" in pl.read_parquet_schema(again.parquet_path)
+        # Up to date: reused.
+        assert not fetch_redfin.fetch_zips(http, tracked_regions={"Anaheim, CA metro area"}, columns=region.FETCH_COLUMNS).modified

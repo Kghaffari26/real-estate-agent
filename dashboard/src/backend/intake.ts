@@ -127,6 +127,25 @@ export interface PhotoResult {
   note: string | null;
 }
 
+/** What the worker computed for a property (P3): see agents/listing_prep/insights.py. */
+export interface Insights {
+  valuation: {
+    low: number;
+    mid: number;
+    high: number;
+    method: 'zip_ppsf' | 'comps';
+    confidence: 'high' | 'moderate' | 'low';
+    notes: string[];
+    inputs: Record<string, number | string | null>;
+  } | null;
+  segments: Array<{ key: string; label: string; weight: number; priorities: string[]; evidence: string[] }> | null;
+  schools: Array<{ name: string; level: string; grades: string; charter: boolean; miles: number }> | null;
+  amenities: Array<{ kind: string; count: number; nearest_miles: number | null }> | null;
+  sources: string[];
+  notes: string[];
+  computed_at: string;
+}
+
 export type FindingEdit = Partial<Pick<Finding, 'condition' | 'issue' | 'suggested_fix' | 'fix_item' | 'quantity' | 'severity' | 'status' | 'agent_note'>>;
 
 export interface NewProperty {
@@ -253,6 +272,10 @@ export function intakeApi(c: SupabaseClient) {
     /** Delete every photo of a property (managers; works while photos are hidden by a revocation). */
     async purgePhotos(property: string): Promise<number> {
       return check(await c.rpc('purge_property_photos', { property })) as number;
+    },
+
+    async insights(property: string): Promise<Insights | null> {
+      return check(await c.from('property_insights').select('valuation, segments, schools, amenities, sources, notes, computed_at').eq('property_id', property).maybeSingle<Insights>());
     },
 
     async latestJob(property: string): Promise<VisionJob | null> {

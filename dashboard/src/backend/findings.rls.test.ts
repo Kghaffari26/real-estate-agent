@@ -201,3 +201,37 @@ describe('the geocode function’s limits and cache', () => {
     expect((await gate(bob)).cached).toBeNull();
   });
 });
+
+describe('property insights (P3): the worker writes, members read', () => {
+  const queue = () => t.service(() => t.rows<{ id: string }>('select id from public.properties_needing_insights()'));
+  const write = () => t.service(() => t.rows(`insert into public.property_insights (property_id, valuation) values ($1, '{"low":1,"mid":2,"high":3}') on conflict (property_id) do update set computed_at = now()`, [home]));
+
+  it('queues confirmed properties without insights; members read, nobody else writes', async () => {
+    expect(await queue()).toEqual([]); // facts not confirmed yet
+    await confirm();
+    expect(await queue()).toEqual([{ id: home }]);
+    await write();
+    expect(await queue()).toEqual([]);
+    expect(await t.as(bob, () => t.rows('select valuation from public.property_insights'))).toEqual([{ valuation: { low: 1, mid: 2, high: 3 } }]);
+    expect(await t.as(carol, () => t.rows('select property_id from public.property_insights'))).toEqual([]);
+    await expect(t.as(alice, () => t.rows(`insert into public.property_insights (property_id) values ($1)`, [home]))).rejects.toThrow();
+    await expect(t.as(alice, () => t.rows('select * from public.properties_needing_insights()'))).rejects.toThrow();
+  });
+
+  it('editing the facts clears them; a newer review or 30 days queues a refresh', async () => {
+    await confirm();
+    await write();
+    await t.as(bob, () => t.rows(`update public.properties set facts = facts || '{"sqft": 1900}'::jsonb where id = $1`, [home]));
+    expect(await t.rows('select property_id from public.property_insights')).toEqual([]);
+    await confirm();
+    await write();
+    const photo = await addPhoto(bob);
+    const [{ id }] = (await finding(photo.id)) as [{ id: string }];
+    await t.admin(`update public.property_insights set computed_at = now() - interval '1 minute'`);
+    await t.as(bob, () => t.rows(`update public.findings set status = 'confirmed' where id = $1`, [id]));
+    expect(await queue()).toEqual([{ id: home }]); // reviewed after the insights
+    await write();
+    await t.admin(`update public.property_insights set computed_at = now() - interval '31 days'`);
+    expect(await queue()).toEqual([{ id: home }]);
+  });
+});

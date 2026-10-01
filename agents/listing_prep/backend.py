@@ -13,6 +13,7 @@ logged beyond counts and ids: the worker's logs are public on a public repositor
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Protocol
 from urllib.parse import quote
 
@@ -52,6 +53,9 @@ class Backend(Protocol):
     def queue_orphans(self) -> int: ...
     def deletions(self, limit: int) -> list[tuple[int, str]]: ...
     def clear_deletions(self, ids: list[int]) -> None: ...
+    def needing_insights(self, limit: int) -> list[dict[str, Any]]: ...
+    def reviewed_findings(self, property_id: str) -> list[tuple[int, str]]: ...
+    def upsert_insights(self, row: dict[str, Any]) -> None: ...
 
 
 class SupabaseBackend:
@@ -147,3 +151,19 @@ class SupabaseBackend:
     def clear_deletions(self, ids: list[int]) -> None:
         if ids:
             self._rest("DELETE", "storage_deletions", params={"id": f"in.({','.join(map(str, ids))})"})
+
+    # ---- insights (P3) ----
+
+    def needing_insights(self, limit: int) -> list[dict[str, Any]]:
+        return self._rpc("properties_needing_insights", {"max_rows": limit}) or []
+
+    def reviewed_findings(self, property_id: str) -> list[tuple[int, str]]:
+        """(condition, severity) of the findings an agent confirmed or edited."""
+        rows = self._rest("GET", "findings", params={"select": "condition,severity", "property_id": f"eq.{property_id}", "status": "in.(confirmed,edited)"})
+        return [(int(r["condition"]), r["severity"]) for r in rows]
+
+    def upsert_insights(self, row: dict[str, Any]) -> None:
+        # computed_at is sent explicitly: a merge only updates the columns it's given.
+        body = {**row, "computed_at": datetime.now(UTC).isoformat()}
+        self._rest("POST", "property_insights", params={"on_conflict": "property_id"}, body=body, prefer="resolution=merge-duplicates")
+

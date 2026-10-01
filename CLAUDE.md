@@ -184,6 +184,8 @@ uv run python scripts/export_re_schema.py      # after any schema.py change
 uv run python scripts/build_county_centroids.py  # regenerate config/county_centroids.csv (§6.7) after metros.toml changes
 uv run python scripts/fix_division_coords.py     # place metro divisions at their own counties (after build_metro_config.py)
 uv run python scripts/build_region_geometry.py   # regenerate config/regions/*.geo.json (§6.8) after regions.toml changes
+uv run python -m agents.listing_prep.worker      # the Desk's private worker (needs SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)
+uv run python scripts/backtest_valuation.py closed_sales.csv  # the comp engine's coverage/error by price band
 cd dashboard && npm ci && npm run fetch-data && npm run dev   # dashboard (see dashboard/README.md)
 cd dashboard && npm run lint && npm run typecheck && npm test && npm run build && npm run check:bundle && npm run e2e
 ```

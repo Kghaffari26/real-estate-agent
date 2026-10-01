@@ -92,3 +92,18 @@ def test_low_sample_areas_are_flagged_and_unranked():
     rich = next(z for z in out.zips if z.id == "92657")
     assert rich.low_sample and rich.ranks == {}
     assert next(z for z in out.zips if z.id == "92618").ranks["median_sale_price"] == 1  # the 3-sale ZIP doesn't outrank it
+
+
+def test_median_ppsf_is_published_per_zip_and_weighted_per_city():
+    data = [
+        *rows("92618", median_sale_price=1_000_000, homes_sold=30, median_ppsf=lambda i: 600 + i),
+        *rows("92602", median_sale_price=900_000, homes_sold=10, median_ppsf=500),
+    ]
+    geo = region.GeoInfo(zips={"92618": ("Irvine", 33.67, -117.73), "92602": ("Irvine", 33.74, -117.75)}, cities={"Irvine": ("0636770", 33.68, -117.77)})
+    out = region.build_region(data, CFG, {"Anaheim, CA metro area"}, geo, THROUGH)
+    assert out is not None
+    irv = next(z for z in out.zips if z.id == "92618")
+    assert irv.latest["median_ppsf"].value == 625 and irv.latest["median_ppsf"].yoy == round(625 / 613 - 1, 4)
+    [city] = out.cities
+    assert city.latest["median_ppsf"].value == round((625 * 30 + 500 * 10) / 40)
+    assert "median_ppsf" not in irv.series  # latest only: the valuation needs the level, not the history

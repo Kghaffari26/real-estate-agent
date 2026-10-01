@@ -19,6 +19,7 @@ real_estate = "agents.real_estate.agent:AGENT"
 dev = [
     "pytest>=8.3",
     "pytest-cov>=5.0",
+    "pytest-github-actions-annotate-failures>=0.4.2",
     "pyyaml>=6.0.3",
     "respx>=0.21",
     "ruff>=0.6",

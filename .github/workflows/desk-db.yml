@@ -12,11 +12,15 @@ on:
     paths:
       - "supabase/**"
       - "dashboard/src/backend/**"
+      - "agents/listing_prep/**"
+      - "tests/test_listing_prep*.py"
       - ".github/workflows/desk-db.yml"
   pull_request:
     paths:
       - "supabase/**"
       - "dashboard/src/backend/**"
+      - "agents/listing_prep/**"
+      - "tests/test_listing_prep*.py"
       - ".github/workflows/desk-db.yml"
   workflow_dispatch:
 
@@ -45,7 +49,7 @@ jobs:
         # What the suites use: Postgres, auth, the API gateway, Storage, the Edge Runtime.
         run: supabase start -x studio,imgproxy,logflare,vector,realtime,supavisor,postgres-meta
       - name: Row-level security suites on the real stack
-        run: npx vitest run src/backend/rls.test.ts src/backend/intake.rls.test.ts
+        run: npx vitest run src/backend/rls.test.ts src/backend/intake.rls.test.ts src/backend/findings.rls.test.ts
         working-directory: dashboard
         env:
           DESK_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
@@ -54,9 +58,19 @@ jobs:
           supabase status -o json > "$RUNNER_TEMP/status.json"
           echo "DESK_TEST_API_URL=$(jq -r '.API_URL' "$RUNNER_TEMP/status.json")" >> "$GITHUB_ENV"
           echo "DESK_TEST_ANON_KEY=$(jq -r '.ANON_KEY // .PUBLISHABLE_KEY' "$RUNNER_TEMP/status.json")" >> "$GITHUB_ENV"
+          echo "DESK_TEST_SERVICE_KEY=$(jq -r '.SERVICE_ROLE_KEY // .SECRET_KEY' "$RUNNER_TEMP/status.json")" >> "$GITHUB_ENV"
       - name: Intake end to end through the stack's APIs (PostgREST, Storage, Edge Function)
         run: npx vitest run src/backend/stack.integration.test.ts
         working-directory: dashboard
+        env:
+          DESK_REQUIRE_STACK: "1"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: The Listing Prep worker end to end on the stack (fake model client)
+        run: |
+          uv sync
+          uv run pytest tests/test_listing_prep_stack.py -v
         env:
           DESK_REQUIRE_STACK: "1"
       - name: The suite really ran against Supabase (not PGlite)

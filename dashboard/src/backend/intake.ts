@@ -13,12 +13,25 @@ import { DeskError, friendly } from './desk';
 export type { GeocodeMatch };
 
 export const PHOTO_BUCKET = 'property-photos';
+/** Signed photo URLs live five minutes: long enough to load a page, short enough not to travel. */
+export const PHOTO_URL_SECONDS = 300;
 
-/** The consent text sellers agree to (a default; the brokerage's counsel should review it). */
-export const CONSENT_VERSION = '2026-10';
-export const CONSENT_TEXT =
-  'The seller agrees that photos of the property may be uploaded to the brokerage’s private workspace and analyzed by an AI model, only to prepare a pre-listing market analysis for this property. Photos stay private to the brokerage team, are not used to train AI models, and are deleted on request.';
-
+/**
+ * The consent text sellers agree to: a DRAFT for counsel's review (docs/legal/CONSENT_DRAFT.md,
+ * kept in sync with it). Only consents under PROCESSING_VERSIONS allow AI analysis; the
+ * database enforces the same list (`processing_consent()`).
+ */
+export const CONSENT_VERSION = '2026-10b';
+export const PROCESSING_VERSIONS: readonly string[] = ['2026-10b'];
+export const CONSENT_TITLE = 'Consent to photograph and analyze the property';
+export const CONSENT_TEXT: readonly string[] = [
+  'I agree that my listing agent’s brokerage may upload photos of my property to the brokerage’s private online workspace, to prepare an analysis of what to repair or improve before listing. I understand that:',
+  'AI analysis by a third party. The photos are analyzed by an artificial intelligence model run by a third-party provider (currently Anthropic, PBC), acting for the brokerage. The provider processes the photos only to return the analysis. Under its commercial terms, it does not use them to train its models. It may keep them for a limited period under its own policies, for safety and abuse monitoring.',
+  'Condition only. The analysis covers the property’s condition and possible repairs and improvements. Photos that show people are skipped. The analysis does not describe occupants, their belongings, or the neighborhood’s residents.',
+  'Storage and retention. The photos are stored privately with a cloud provider in the United States. Only the brokerage team’s members can see them. They are deleted 12 months after upload, or within 30 days after I revoke this consent, whichever comes first. They are deleted sooner if I ask.',
+  'Revoking. I can revoke this consent at any time by telling my agent. From that moment, no photo is analyzed, the photos are hidden from the brokerage’s workspace, and any analysis based on them is withdrawn.',
+  'Not an appraisal. The analysis helps prepare the listing. It is not an appraisal, an inspection, or a guarantee of sale price.',
+];
 
 export interface PropertySummary {
   id: string;
@@ -113,7 +126,13 @@ export function intakeApi(c: SupabaseClient) {
       const { data, error } = await c.functions.invoke<{ matches: GeocodeMatch[] }>('geocode', { body: { address } });
       if (error) {
         const status = (error as { context?: { status?: number } }).context?.status;
-        throw new DeskError(status === 400 ? 'Enter a street address with a number, e.g. “1 Civic Center Plaza, Irvine, CA”.' : 'The address lookup isn’t answering right now. Enter the ZIP to continue without a map pin.');
+        throw new DeskError(
+          status === 400
+            ? 'Enter a street address with a number, e.g. “1 Civic Center Plaza, Irvine, CA”.'
+            : status === 429
+              ? 'That’s a lot of lookups in a short time. Wait a minute and try again, or enter the ZIP to continue without a map pin.'
+              : 'The address lookup isn’t answering right now. Enter the ZIP to continue without a map pin.',
+        );
       }
       return data?.matches ?? [];
     },
@@ -160,7 +179,7 @@ export function intakeApi(c: SupabaseClient) {
       if (!rows.length) return [];
       const { data } = await c.storage.from(PHOTO_BUCKET).createSignedUrls(
         rows.map((r) => r.storage_path),
-        3600,
+        PHOTO_URL_SECONDS,
       );
       const urls = new Map((data ?? []).map((d) => [d.path, d.signedUrl]));
       return rows.map((r) => ({ ...r, url: urls.get(r.storage_path) ?? null }));

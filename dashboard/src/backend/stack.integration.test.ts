@@ -14,6 +14,8 @@ import { intakeApi, PHOTO_BUCKET } from './intake';
 
 const URL_ = process.env.DESK_TEST_API_URL ?? '';
 const ANON = process.env.DESK_TEST_ANON_KEY ?? '';
+// The desk-db job sets DESK_REQUIRE_STACK so a missing URL or key fails instead of skipping.
+if (process.env.DESK_REQUIRE_STACK && !(URL_ && ANON)) throw new Error('DESK_TEST_API_URL and DESK_TEST_ANON_KEY are required here');
 
 // A real 1×1 JPEG.
 const JPEG = Buffer.from(

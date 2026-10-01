@@ -57,6 +57,8 @@ jobs:
       - name: Intake end to end through the stack's APIs (PostgREST, Storage, Edge Function)
         run: npx vitest run src/backend/stack.integration.test.ts
         working-directory: dashboard
+        env:
+          DESK_REQUIRE_STACK: "1"
       - name: The suite really ran against Supabase (not PGlite)
         run: |
           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -tAc "select count(*) from pg_policies where schemaname = 'public'" | grep -qx '[1-9][0-9]*'

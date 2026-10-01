@@ -61,5 +61,5 @@ describe('check-secrets.mjs on a built site', () => {
     writeFileSync(join(dir, 'desk-config.json'), JSON.stringify({ url: 'https://abc.supabase.co', anonKey: ANON }));
     writeFileSync(join(dir, 'assets/other.js'), 'const s="super-secret-opaque-value"');
     expect(run({ SUPABASE_SERVICE_ROLE_KEY: 'super-secret-opaque-value' })).toMatchObject({ code: 1, out: expect.stringMatching(/SUPABASE_SERVICE_ROLE_KEY value/) });
-  });
+  }, 30_000); // four node subprocesses; slow when the whole suite runs in parallel
 });

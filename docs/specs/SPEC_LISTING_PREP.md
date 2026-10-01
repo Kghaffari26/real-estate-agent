@@ -201,7 +201,7 @@ version, outputs JSON, cost), `report_items`, and a `jobs` queue.
 
 | Phase | Work | Done when |
 |---|---|---|
-| **P1 Intake** | Address → geocode and market context; facts form (MLS prefill later); photo upload by room; the cost book (import `cost_book.csv`) and quotes; consent. | e2e on a local backend. |
+| **P1 Intake** ✅ | Address → geocode and market context; facts form (MLS prefill later); photo upload by room; the cost book (import `cost_book.csv`) and quotes; consent. Built (2026-10-01): geocoding through the `geocode` Edge Function (the Census geocoder has no CORS), by ZIP when unmatched; facts validated and confirmed in the database; consent gates photos at the storage layer; photos re-encoded on the device (≤2048 px, no EXIF). | e2e on a local backend (`desk-db`: `stack.integration.test.ts`). |
 | **P2 Vision findings** | Photo → structured findings with evidence crops; agent confirm/edit/reject; coverage prompts for missing rooms. | Findings eval on a labelled photo set; agent confirmation required before use. |
 | **P3 Valuation and demand** | Pre-feed valuation (ZIP $/sq ft; add it to region data), ACS demand by need, schools and amenities; the MLS comp engine behind a flag. | Unit tests; backtest harness ready for the feed. |
 | **P4 Value and optimizer** | The improvement catalog, priors table (cited), premium estimator, confidence rules, the knapsack and scenarios. | Property tests of the optimizer (never exceeds budget, never selects negative risk-adjusted items, monotone in budget). |

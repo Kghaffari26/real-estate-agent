@@ -24,7 +24,23 @@ enabled = false
 enabled = false
 
 [storage]
-enabled = false
+enabled = true
+file_size_limit = "10MiB"
+
+# Listing Prep photos (private; the migration creates the bucket and its policies too,
+# so hosted projects get it from `supabase db push`).
+[storage.buckets.property-photos]
+public = false
+file_size_limit = "10MiB"
+allowed_mime_types = ["image/jpeg", "image/webp"]
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+
+# The address lookup (Census geocoder proxy). Signed-in callers only.
+[functions.geocode]
+verify_jwt = true
 
 [auth]
 enabled = true

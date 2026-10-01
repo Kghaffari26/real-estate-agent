@@ -1,4 +1,4 @@
-import { loadDataSource, loadEvents, loadIndex, loadManifest, loadMetro, loadPulse } from './api';
+import { loadDataSource, loadEvents, loadIndex, loadManifest, loadMetro, loadPulse, loadRegion } from './api';
 import { useResource } from './useResource';
 
 export const useIndex = () => useResource('index', () => loadIndex());
@@ -8,6 +8,18 @@ export const useDataSource = () => useResource('source', () => loadDataSource())
 /** §6.5 / §6.6: fetched only when the index lists the file (`listed`); null otherwise. */
 export const useEvents = (listed: boolean) => useResource(`events:${listed}`, () => (listed ? loadEvents() : Promise.resolve(null)));
 export const usePulse = (listed: boolean) => useResource(`pulse:${listed}`, () => (listed ? loadPulse() : Promise.resolve(null)));
+
+/** The published region whose ZIPs include `zip` (the Desk's market context), or null. */
+export const useRegionForZip = (zip: string | null) =>
+  useResource(`region-for-zip:${zip ?? ''}`, async () => {
+    if (!zip) return null;
+    const index = await loadIndex();
+    for (const ref of index.regions) {
+      const region = await loadRegion(ref.slug);
+      if (region?.zips.some((z) => z.id === zip)) return region;
+    }
+    return null;
+  });
 
 export type Settled<T> = { slug: string; ok: true; data: T } | { slug: string; ok: false; error: Error };
 

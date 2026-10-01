@@ -30,3 +30,17 @@ def test_evals_workflow_calls_run_evals_with_a_spend_cap_and_read_only_token():
     assert float(job["with"]["max_usd"]) <= 1.0
     assert float(job["with"]["total_max_usd"]) <= 1.0  # one cap across all suites (v0.3.1)
     assert "agents-evals run" in job["with"]["eval_command"]
+
+
+def test_listing_prep_worker_is_opt_in_read_only_and_keeps_its_secrets_server_side():
+    [job] = _jobs("listing-prep-worker.yml").values()
+    assert job["if"] == "${{ vars.DESK_WORKER_ENABLED == 'true' }}"
+    workflow = yaml.safe_load((WORKFLOWS / "listing-prep-worker.yml").read_text())
+    assert workflow["permissions"] == {"contents": "read"}
+    env = job["steps"][-1]["env"]
+    assert env["SUPABASE_SERVICE_ROLE_KEY"] == "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+    assert float(env["AGENTS_CORE_MAX_RUN_USD"]) <= 1.0
+    # The site's build gets the public URL and anon key, never the service key.
+    site = (WORKFLOWS / "dashboard.yml").read_text()
+    assert "SUPABASE_SERVICE_ROLE_KEY" not in site
+    assert "check:secrets" in site

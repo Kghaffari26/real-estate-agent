@@ -24,6 +24,12 @@ export const REAL_DATABASE_URL = process.env.DESK_TEST_DATABASE_URL ?? '';
 const AUTH_STUB = `
   create role anon nologin;
   create role authenticated nologin;
+  create role service_role nologin bypassrls;
+  -- Supabase's default privileges: every new table, sequence and function in public is
+  -- granted to the API roles directly (so a migration must revoke from them explicitly).
+  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+  alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+  alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
   create schema auth;
   create table auth.users (id uuid primary key, email text, aud text, role text);
   create function auth.uid() returns uuid language sql stable as $$
@@ -33,7 +39,8 @@ const AUTH_STUB = `
     select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
   $$;
   grant usage on schema auth to anon, authenticated;
-  grant usage on schema public to anon, authenticated;
+  grant usage on schema public to anon, authenticated, service_role;
+  grant usage on schema auth to service_role;
   -- Supabase Storage's tables and helper, as far as the policies use them.
   create schema storage;
   create table storage.buckets (id text primary key, name text not null, public boolean default false,
@@ -47,6 +54,8 @@ const AUTH_STUB = `
   grant usage on schema storage to anon, authenticated;
   grant all on storage.objects to anon, authenticated;
   grant select on storage.buckets to anon, authenticated;
+  grant usage on schema storage to service_role;
+  grant all on storage.objects, storage.buckets to service_role;
 `;
 
 export interface User {
@@ -116,6 +125,21 @@ export async function freshDb() {
       await conn.query(`select set_config('request.jwt.claims', '', false)`);
     }
   };
+  /** As the service role (the worker, the geocode function's cache writes): RLS bypassed, grants apply. */
+  const service = async <T>(fn: () => Promise<T>): Promise<T> => {
+    if (real) await conn.exec('savepoint as_service');
+    await conn.exec('set role service_role');
+    try {
+      const out = await fn();
+      if (real) await conn.exec('reset role; release savepoint as_service');
+      return out;
+    } catch (e) {
+      if (real) await conn.exec('rollback to savepoint as_service; release savepoint as_service');
+      throw e;
+    } finally {
+      await conn.exec('reset role');
+    }
+  };
   /** As the owner (the migrations' role): service-level actions outside RLS. */
   const admin = async (sql: string) => {
     if (real) await conn.exec('savepoint admin');
@@ -128,5 +152,5 @@ export async function freshDb() {
     }
   };
   const rows = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []) => (await conn.query<T>(sql, params)).rows;
-  return { real, user, as, rows, admin, close: () => conn.close() };
+  return { real, user, as, service, rows, admin, close: () => conn.close() };
 }

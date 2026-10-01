@@ -99,7 +99,7 @@ test('an agent adds a property by address, confirms its facts, records consent a
   await consent.getByLabel('Seller’s name').fill('Pat Seller');
   await consent.getByRole('button', { name: 'Record consent' }).click();
   await expect(page.getByTestId('desk-consent-active')).toContainText('Given by Pat Seller (signed form');
-  expect(s.tables.seller_consents![0]).toMatchObject({ seller_name: 'Pat Seller', method: 'signed_form', consent_version: '2026-10', recorded_by: ME.id });
+  expect(s.tables.seller_consents![0]).toMatchObject({ seller_name: 'Pat Seller', method: 'signed_form', consent_version: '2026-10b', recorded_by: ME.id });
 
   // A 4000 px PNG goes up as a ≤2048 px JPEG under <team>/<property>/.
   await photos.getByLabel('Room').selectOption('kitchen');

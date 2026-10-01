@@ -102,8 +102,31 @@ reads it with `env(SMTP_PASSWORD)`, so it's never committed.
 | `SUPABASE_ANON_KEY` | the **anon / publishable** key | same |
 
 That's all the site needs. Without them, the Desk says "not configured" and the rest of
-the site is unchanged. Don't add the service-role key: nothing here uses it, and the
-build fails if it's pasted into `SUPABASE_ANON_KEY` by mistake.
+the site is unchanged. The site never gets the service-role key: the build fails if it's
+pasted into `SUPABASE_ANON_KEY` by mistake, and `check:secrets` scans the built site for it.
+
+### The Listing Prep worker (photo findings and photo housekeeping)
+
+The worker (`agents/listing_prep/worker.py`, run by `.github/workflows/listing-prep-worker.yml`
+every 15 minutes) works on the backend with the **service role**: it reads queued
+analyses, writes findings, and deletes photo files through the Storage API. That key is a
+secret of this workflow only. The site's build never reads it. Add it in GitHub
+yourself, and never paste it into a chat.
+
+| Secret / variable | Value | Used by |
+| --- | --- | --- |
+| secret `SUPABASE_URL` | (already added above) | the worker |
+| secret `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API → `service_role` / secret key | the worker only |
+| secret `ANTHROPIC_API_KEY` | (already used by the market agent) | the worker's photo analysis |
+| **variable** `DESK_WORKER_ENABLED` | `true` | turns the scheduled worker on |
+
+Until the variable is set, the workflow doesn't run. Without the Anthropic key, it does
+housekeeping only (deleting removed and expired photos), and analyses stay queued.
+The repository is public, so its logs are too. The worker logs counts and ids only:
+no addresses, names, photos or findings.
+
+The Edge Function (`geocode`) gets its own service key from Supabase automatically. It
+uses that key only to write the shared address cache.
 
 ## 6. First team
 

@@ -25,7 +25,7 @@ Spec: `docs/specs/SPEC_DASHBOARD_V2.md`. v1 pages still serve `/`, `/metros`, `/
 - **Phase 8 merged to `main`.**
 - **Phase 9 (polish, performance, accessibility, trailer):** quality tiers (high/medium/low, `?tier=`), a pre-JS globe poster (applied-throttling mobile LCP 2.2 s), Lighthouse in CI (accessibility 100 on Arrival and Explore, enforced; performance reported: software WebGL in CI dominates it), an FPS smoke (60 fps on an integrated GPU), local visual regression (42 views), v1 pruned (38 modules, recharts), CSV export on the atlas table, a ~45 s trailer and a README hero GIF, and rewritten READMEs. On `dashboard-v2` awaiting **design gate D**.
 - **Phase 9 merged and live** (691f8ff).
-- **v3 Regional Desk** (`docs/specs/SPEC_REGIONAL_DESK.md`): **R0 done** on `regional-desk`: place names at every zoom in both themes (Dawn had none), a road hierarchy, metro divisions at their own counties (Orange County's column had stood in Los Angeles), and an Orange County region view. R0 merged. **R1 done** (schema 1.5.0): `regions/orange-county.json` (87 ZIPs, 37 cities, 36 months, agent-computed YoY and ranks) and its ZIP/city shapes. R1 merged. **R2 done** on `regional-desk`: the Orange County market view in the atlas (ZIP choropleth, city outlines and labels, county → city → ZIP panel with ranks and trends, region table with CSV, ZIPs in area search, low-sample handling). R2 merged (513f72d). **R3 done** on `regional-desk`: the Desk (`#/desk`): Supabase schema with row-level security (teams, members, invites, properties, favorites), PKCE email-link sign-in, team creation, invites and roles. RLS is tested on PGlite and, in the `desk-db` workflow, on a real local Supabase stack. The build refuses anything but the anon key, and `check:secrets` scans `dist/`. Supabase's email rate limit gets a clear message. **Blocked on the owner:** the hosted Supabase project and the `SUPABASE_URL`/`SUPABASE_ANON_KEY` secrets (`docs/DESK_SETUP.md`). Until then the live Desk says "not configured". R3 merged (0ad2798). **Listing Prep P1 (intake) done** on `regional-desk`: add a property by address (Census geocoder via the `geocode` Edge Function; by ZIP when unmatched), the ZIP/city market around it, facts validated and confirmed in the database, seller consent, room photos in a private bucket (consent-gated, resized and metadata-stripped on the device), coverage prompts, the team cost book (CSV import, managers edit) and quotes. Proven on PGlite, against the real local stack's APIs in `desk-db`, and in e2e. **Owner, before P2:** the consent text needs counsel's review, and the cost book needs prices (`docs/templates/cost_book.csv`). Next: P2 (vision findings).
+- **v3 Regional Desk** (`docs/specs/SPEC_REGIONAL_DESK.md`): **R0 done** on `regional-desk`: place names at every zoom in both themes (Dawn had none), a road hierarchy, metro divisions at their own counties (Orange County's column had stood in Los Angeles), and an Orange County region view. R0 merged. **R1 done** (schema 1.5.0): `regions/orange-county.json` (87 ZIPs, 37 cities, 36 months, agent-computed YoY and ranks) and its ZIP/city shapes. R1 merged. **R2 done** on `regional-desk`: the Orange County market view in the atlas (ZIP choropleth, city outlines and labels, county → city → ZIP panel with ranks and trends, region table with CSV, ZIPs in area search, low-sample handling). R2 merged (513f72d). **R3 done** on `regional-desk`: the Desk (`#/desk`): Supabase schema with row-level security (teams, members, invites, properties, favorites), PKCE email-link sign-in, team creation, invites and roles. RLS is tested on PGlite and, in the `desk-db` workflow, on a real local Supabase stack. The build refuses anything but the anon key, and `check:secrets` scans `dist/`. Supabase's email rate limit gets a clear message. **Blocked on the owner:** the hosted Supabase project and the `SUPABASE_URL`/`SUPABASE_ANON_KEY` secrets (`docs/DESK_SETUP.md`). Until then the live Desk says "not configured". R3 merged (0ad2798). **Listing Prep P1 (intake) done** on `regional-desk`: add a property by address (Census geocoder via the `geocode` Edge Function; by ZIP when unmatched), the ZIP/city market around it, facts validated and confirmed in the database, seller consent, room photos in a private bucket (consent-gated, resized and metadata-stripped on the device), coverage prompts, the team cost book (CSV import, managers edit) and quotes. Proven on PGlite, against the real local stack's APIs in `desk-db`, and in e2e. **Owner, before P2:** the consent text needs counsel's review, and the cost book needs prices (`docs/templates/cost_book.csv`). Listing Prep P1 merged (6c65fa0). **P2 (photo findings) in progress** on `regional-desk`: the owner's pre-P2 safeguards (consent enforced when photos are processed and shown, revocation withdraws findings, server-side EXIF/GPS rejection, 5-minute signed URLs, file deletion and retention, the fair-housing scope with a labelled case set, geocode rate limits and cache), the worker (`agents/listing_prep/`) and the review UI are done and tested, including the worker end to end on the real local stack. **Owner, before P2 goes live:** counsel's review of `docs/legal/CONSENT_DRAFT.md`; the worker's secrets and `DESK_WORKER_ENABLED` (`docs/DESK_SETUP.md`); and a small labelled photo set (consented) for the findings eval, which is P2's gate.
 
 ## Session 8 (2026-09-29): dashboard phase 3 polish + sparkline contract
 
@@ -350,7 +350,30 @@ covers the whole CBSA while the Redfin series covers the division.
 
 Nothing is blocked. Every gap listed in Session 3 was fixed in v0.2.0:
 `RunMeta.warnings`, `Http.download`, no cached error pages, and concurrent sync
-fallback. One observation for upstream:
+fallback.
+
+Found while building the Listing Prep worker (P2, 2026-10-02). Each has a workaround
+here:
+
+- **Images in `LLM.structured`.** `structured()` takes a text prompt only, so the photo
+  step uses `converse()` with a forced-by-instruction tool and validates the tool input
+  itself (`agents/listing_prep/findings.py`). An `images=` argument, or content blocks,
+  on `structured` would remove that code.
+- **Image-aware cost estimates.** `_estimate_usd` counts the request's JSON characters,
+  so a base64 photo is estimated at about 80K input tokens (≈ $0.09 on the fast tier)
+  while it bills about 1.6K. Budgets must clear the worst case (`PHOTO_BUDGET_USD` =
+  $0.12, against about $0.004 of real spend).
+- **Binary request bodies in `Http.request`.** Only `json_body` exists, so the worker
+  can't re-upload a cleaned photo. It rejects and deletes photos that still carry EXIF
+  instead (the owner allowed reject or re-encode).
+- **`apikey` in `SECRET_HEADERS`.** Supabase sends its key in an `apikey` header. The
+  worker calls with `ttl_seconds=0`, so nothing is cached, but the header isn't on the
+  redaction list.
+- **The response body on `HttpError`.** Only the status survives, so the worker reads
+  PostgREST's 403 as "consent revoked" (the only 403 a service-role write can hit
+  here) rather than checking the message.
+
+One older observation for upstream:
 
 - **The number guard matches values, not provenance.** A computed "4.3 times"
   passed because 4.3 appeared elsewhere in the facts (case study 3). This agent

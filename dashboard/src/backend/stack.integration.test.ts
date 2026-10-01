@@ -96,4 +96,25 @@ describe.runIf(Boolean(URL_ && ANON))('intake on the real local Supabase stack',
     await api.deletePhoto(photo!);
     expect((await alice.c.storage.from(PHOTO_BUCKET).download(path)).error).toBeTruthy();
   }, 60_000);
+
+  it('the geocode function caches answers and limits each person to 20 lookups a minute', async () => {
+    const dana = await person('dana');
+    const token = (await dana.c.auth.getSession()).data.session!.access_token;
+    const call = (address: string) =>
+      fetch(`${URL_}/functions/v1/geocode`, { method: 'POST', headers: { apikey: ANON, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ address }) });
+    const first = await call('1 Civic Center Plaza, Irvine, CA 92606');
+    expect(first.status).toBe(200);
+    const second = await call('1 civic center plaza, irvine, ca 92606.');
+    expect([second.status, second.headers.get('x-geocode-cache')]).toEqual([200, 'hit']);
+    expect(((await second.json()) as { matches: Array<{ zip: string }> }).matches[0]?.zip).toBe('92606');
+    let limited: Response | null = null;
+    for (let i = 0; i < 25 && !limited; i++) {
+      const r = await call('1 Civic Center Plaza, Irvine, CA 92606');
+      if (r.status === 429) limited = r;
+    }
+    expect(limited?.headers.get('retry-after')).toBe('60');
+    // Without a signed-in caller the gateway refuses before the function runs.
+    const anon = await fetch(`${URL_}/functions/v1/geocode`, { method: 'POST', headers: { apikey: ANON, 'Content-Type': 'application/json' }, body: JSON.stringify({ address: '1 Civic Center Plaza' }) });
+    expect(anon.status).toBe(401);
+  }, 60_000);
 });

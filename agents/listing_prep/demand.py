@@ -11,12 +11,21 @@ segment can become a proxy for a protected class. The segment texts are checked 
 `fair_housing.py` in the tests. Demand data sizes the needs to address in preparation;
 it is never used to target or exclude anyone in marketing.
 
+**Margins of error (owner review).** ACS estimates are samples; at ZIP level they are
+often noisy. Every share carries its 90% margin of error, derived with the Census
+Bureau's approximation formulas (sums: root-sum-of-squares; proportions and ratios: the
+ACS handbook formulas), and every ZIP-vs-county ratio its own. A need whose ratio isn't
+statistically different from 1, or whose ZIP share is too uncertain (coefficient of
+variation over 30%), gets a neutral weight (the county's level) and is marked as such.
+No segment is pushed up or down by sampling noise.
+
 Needs the Census API key (CENSUS_API_KEY); without it, `fetch_acs` returns None and the
 report says demand couldn't be sized.
 """
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field
 from typing import Any
@@ -44,10 +53,39 @@ VARIABLES = {
 
 
 def _codes() -> list[str]:
+    """Every estimate (…E) and its margin of error (…M)."""
     out: list[str] = []
     for v in VARIABLES.values():
         out += v if isinstance(v, list) else [v]
-    return out
+    return out + [c[:-1] + "M" for c in out]
+
+
+Z90 = 1.645  # ACS margins of error are at 90% confidence
+MAX_CV = 0.30  # a share whose standard error is over 30% of it is too uncertain to compare
+CONTROLLED = -555555555  # the ACS code for "controlled: no sampling error"
+
+
+def moe_sum(moes: list[float | None]) -> float | None:
+    return None if any(m is None for m in moes) else math.sqrt(sum(m * m for m in moes))  # type: ignore[operator]
+
+
+def moe_proportion(x: float, y: float, mx: float | None, my: float | None) -> float | None:
+    """MOE of x / y where x is a subset of y (ACS handbook); the ratio formula if the radicand goes negative."""
+    if mx is None or my is None or y <= 0:
+        return None
+    p = x / y
+    rad = mx * mx - p * p * my * my
+    if rad < 0:
+        rad = mx * mx + p * p * my * my
+    return math.sqrt(rad) / y
+
+
+def moe_ratio(a: float, c: float, ma: float | None, mc: float | None) -> float | None:
+    """MOE of a / c for two independent estimates (ACS handbook ratio formula)."""
+    if ma is None or mc is None or c <= 0:
+        return None
+    r = a / c
+    return math.sqrt(ma * ma + r * r * mc * mc) / c
 
 
 @dataclass(frozen=True)
@@ -61,6 +99,9 @@ class AreaStats:
     high_income: float  # share of households with $200K+
     median_rent: float | None
     median_value: float | None
+    # 90% margins of error of the shares above, by field name. A missing entry means
+    # unknown (treated as unreliable); built by stats_from_row from the …M variables.
+    moe: dict[str, float | None] = field(default_factory=dict)
 
 
 def stats_from_row(row: dict[str, Any]) -> AreaStats | None:
@@ -75,17 +116,39 @@ def stats_from_row(row: dict[str, Any]) -> AreaStats | None:
         v = VARIABLES[key]
         return sum(num(c) for c in v) if isinstance(v, list) else num(v)
 
+    def margin(code: str) -> float | None:
+        try:
+            m = float(row.get(code[:-1] + "M"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return None
+        if m == CONTROLLED:
+            return 0.0
+        return m if m >= 0 else None  # other negative codes: not available
+
+    def total_moe(*keys: str) -> float | None:
+        codes = [c for k in keys for c in (VARIABLES[k] if isinstance(VARIABLES[k], list) else [VARIABLES[k]])]
+        return moe_sum([margin(c) for c in codes])
+
     hh, workers, occupied, inc = total("households"), total("workers"), total("occupied"), total("income_households")
     if hh <= 0 or workers <= 0 or occupied <= 0 or inc <= 0:
         return None
+    small = total("one_person") + total("two_person")
+    mh, mw, mo, mi = total_moe("households"), total_moe("workers"), total_moe("occupied"), total_moe("income_households")
     return AreaStats(
-        small_households=(total("one_person") + total("two_person")) / hh,
+        small_households=small / hh,
         large_households=total("four_plus") / hh,
         work_from_home=total("work_from_home") / workers,
         renter=total("renter") / occupied,
         high_income=total("income_200k_plus") / inc,
         median_rent=total("median_rent") or None,
         median_value=total("median_value") or None,
+        moe={
+            "small_households": moe_proportion(small, hh, total_moe("one_person", "two_person"), mh),
+            "large_households": moe_proportion(total("four_plus"), hh, total_moe("four_plus"), mh),
+            "work_from_home": moe_proportion(total("work_from_home"), workers, total_moe("work_from_home"), mw),
+            "renter": moe_proportion(total("renter"), occupied, total_moe("renter"), mo),
+            "high_income": moe_proportion(total("income_200k_plus"), inc, total_moe("income_200k_plus"), mi),
+        },
     )
 
 
@@ -119,6 +182,35 @@ class Segment:
     weight: float
     priorities: list[str]
     evidence: list[str] = field(default_factory=list)
+    # False when the ZIP-vs-county comparison isn't statistically reliable; its weight
+    # then uses the county's level (index 1) and `reliability` says why.
+    reliable: bool = True
+    reliability: str | None = None
+
+
+@dataclass(frozen=True)
+class Comparison:
+    ratio: float
+    moe: float | None
+    reliable: bool
+    reason: str | None
+
+
+def compare(field_name: str, area: AreaStats, county: AreaStats) -> Comparison:
+    """The ZIP's share vs the county's, and whether the difference is real at 90%."""
+    here, there = getattr(area, field_name), getattr(county, field_name)
+    if there <= 0:
+        return Comparison(1.0, None, False, "No county figure to compare with.")
+    ratio = here / there
+    m_here = area.moe.get(field_name)
+    m_ratio = moe_ratio(here, there, m_here, county.moe.get(field_name))
+    if m_here is None or m_ratio is None:
+        return Comparison(ratio, None, False, "No margin of error published, so the difference can’t be tested.")
+    if here > 0 and (m_here / Z90) / here > MAX_CV:
+        return Comparison(ratio, m_ratio, False, f"Too uncertain at ZIP level (±{m_here:.0%} margin of error).")
+    if abs(ratio - 1) <= m_ratio:
+        return Comparison(ratio, m_ratio, False, "Not statistically different from the county (90% confidence).")
+    return Comparison(ratio, m_ratio, True, None)
 
 
 SEGMENTS: dict[str, tuple[str, list[str]]] = {
@@ -157,25 +249,28 @@ def segments(facts: dict[str, Any], price: float | None, area: AreaStats, county
     if price and county.median_value:
         fit["luxury"] = max(0.0, min(1.0, (price / county.median_value - 1.5) / 1.5))
         evidence["luxury"].append(f"this price is {price / county.median_value:.1f}× the county’s median home value")
-    idx = {
-        "more_space": _index(area.large_households, county.large_households),
-        "work_from_home": _index(area.work_from_home, county.work_from_home),
-        "low_maintenance": _index(area.small_households, county.small_households),
-        "investor": _index(area.renter, county.renter),
-        "luxury": _index(area.high_income, county.high_income),
-    }
     shares = {
-        "more_space": ("households of 4 or more", area.large_households, county.large_households),
-        "work_from_home": ("workers who work from home", area.work_from_home, county.work_from_home),
-        "low_maintenance": ("households of 1 or 2", area.small_households, county.small_households),
-        "investor": ("homes that are rented", area.renter, county.renter),
-        "luxury": ("households earning $200K or more", area.high_income, county.high_income),
+        "more_space": ("households of 4 or more", "large_households"),
+        "work_from_home": ("workers who work from home", "work_from_home"),
+        "low_maintenance": ("households of 1 or 2", "small_households"),
+        "investor": ("homes that are rented", "renter"),
+        "luxury": ("households earning $200K or more", "high_income"),
     }
-    for k, (what, here, there) in shares.items():
-        evidence[k].append(f"{here:.0%} of {what} in this ZIP vs {there:.0%} in the county")
+    idx: dict[str, float] = {}
+    checks: dict[str, Comparison] = {}
+    for k, (what, name) in shares.items():
+        cmp_ = checks[k] = compare(name, area, county)
+        idx[k] = _index(getattr(area, name), getattr(county, name)) if cmp_.reliable else 1.0
+        m = area.moe.get(name)
+        margin = f" (±{m:.0%})" if m is not None else ""
+        evidence[k].append(f"{getattr(area, name):.0%}{margin} of {what} in this ZIP vs {getattr(county, name):.0%} in the county")
     raw = {k: fit[k] * idx[k] for k in SEGMENTS}
     total = sum(raw.values())
     if total <= 0:
         return []
-    out = [Segment(k, SEGMENTS[k][0], round(raw[k] / total, 3), SEGMENTS[k][1], evidence[k]) for k in SEGMENTS if raw[k] > 0]
+    out = [
+        Segment(k, SEGMENTS[k][0], round(raw[k] / total, 3), SEGMENTS[k][1], evidence[k], checks[k].reliable, checks[k].reason)
+        for k in SEGMENTS
+        if raw[k] > 0
+    ]
     return sorted(out, key=lambda s: s.weight, reverse=True)

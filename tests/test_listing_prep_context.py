@@ -26,14 +26,30 @@ def acs_table(**overrides: float) -> list[list[str]]:
     base.update({"B11016_001E": 1000, "B11016_010E": 250, "B11016_003E": 200, "B11016_011E": 50, "B11016_005E": 150, "B11016_006E": 60,
                  "B08301_001E": 1200, "B08301_021E": 180, "B25003_001E": 1000, "B25003_003E": 400, "B25064_001E": 2900,
                  "B19001_001E": 1000, "B19001_017E": 250, "B25077_001E": 1_100_000})  # fmt: skip
+    # Margins of error: 30 on every count, the totals controlled (no sampling error).
+    base.update({c: 30.0 for c in codes if c.endswith("M")})
+    base.update({"B11016_001M": demand.CONTROLLED, "B25003_001M": demand.CONTROLLED})
     base.update(overrides)
     return [codes + ["zip code tabulation area"], [str(base[c]) for c in codes] + ["92606"]]
+
+
+def stats(small, large, wfh, renter, high, rent=2600, value=1_000_000, moe=0.01):
+    """AreaStats with the same margin of error on every share."""
+    return demand.AreaStats(small, large, wfh, renter, high, rent, value, moe={k: moe for k in ("small_households", "large_households", "work_from_home", "renter", "high_income")})
 
 
 def test_stats_read_shares_and_ignore_the_acs_not_available_code():
     s = demand.stats_from_row(dict(zip(*acs_table(B25064_001E=-666666666), strict=False)))
     assert s is not None
     assert (s.small_households, s.large_households, s.work_from_home, s.renter, s.high_income) == (0.5, 0.21, 0.15, 0.4, 0.25)
+    # Renters: 400 ± 30 of a controlled 1000 → ± 3 points.
+    assert s.moe["renter"] == pytest.approx(0.03)
+    # Large households: 8 counts at ± 30 each → ± 30·√8 of a controlled 1000.
+    assert s.moe["large_households"] == pytest.approx(30 * 8**0.5 / 1000)
+    # Working from home: 180 ± 30 of 1200 ± 30 (the proportion formula).
+    assert s.moe["work_from_home"] == pytest.approx((30**2 - 0.15**2 * 30**2) ** 0.5 / 1200)
+    # A margin the ACS doesn't publish (another negative code) is unknown, never zero.
+    assert demand.stats_from_row(dict(zip(*acs_table(B25003_003M=-222222222), strict=False))).moe["renter"] is None
     assert s.median_rent is None and s.median_value == 1_100_000
     assert demand.stats_from_row(dict(zip(*acs_table(B11016_001E=0), strict=False))) is None
 
@@ -41,24 +57,57 @@ def test_stats_read_shares_and_ignore_the_acs_not_available_code():
 def test_no_census_variable_touches_a_protected_class():
     # Household size (B11016 totals), commuting from home, tenure, rent, income, value: nothing else.
     assert {c[:6] for c in demand._codes()} == {"B11016", "B08301", "B25003", "B25064", "B19001", "B25077"}
+    assert all(c.endswith(("E", "M")) for c in demand._codes())
+
+
+def test_the_acs_handbook_formulas():
+    assert demand.moe_sum([3.0, 4.0]) == 5.0 and demand.moe_sum([3.0, None]) is None
+    # Proportion: falls back to the ratio formula when the radicand is negative.
+    assert demand.moe_proportion(50, 100, 10, 10) == pytest.approx((100 - 25) ** 0.5 / 100)
+    assert demand.moe_proportion(90, 100, 1, 20) == pytest.approx((1 + 0.81 * 400) ** 0.5 / 100)
+    assert demand.moe_ratio(0.3, 0.2, 0.03, 0.01) == pytest.approx((0.03**2 + 1.5**2 * 0.01**2) ** 0.5 / 0.2)
+
+
+def test_a_difference_within_the_margin_of_error_is_neutral_and_marked():
+    county = stats(0.50, 0.20, 0.12, 0.43, 0.20, moe=0.002)
+    real = demand.compare("large_households", stats(0.45, 0.30, 0.12, 0.43, 0.20, moe=0.02), county)
+    assert real.reliable and real.ratio == pytest.approx(1.5)
+    noise = demand.compare("large_households", stats(0.45, 0.22, 0.12, 0.43, 0.20, moe=0.05), county)
+    assert not noise.reliable and "Not statistically different" in noise.reason
+    shaky = demand.compare("high_income", stats(0.45, 0.2, 0.12, 0.43, 0.04, moe=0.03), county)  # SE 0.018 is 46% of 0.04
+    assert not shaky.reliable and "Too uncertain" in shaky.reason
+    unknown = demand.compare("renter", demand.AreaStats(0.45, 0.2, 0.12, 0.6, 0.2, 2600, 1e6), county)
+    assert not unknown.reliable and "No margin of error" in unknown.reason
 
 
 def test_segments_are_needs_based_weighted_and_fair_housing_clean():
-    area = demand.AreaStats(0.45, 0.30, 0.14, 0.35, 0.30, 3000, 1_200_000)
-    county = demand.AreaStats(0.50, 0.20, 0.12, 0.43, 0.20, 2600, 1_000_000)
+    area = stats(0.45, 0.30, 0.14, 0.35, 0.30, 3000, 1_200_000, moe=0.01)
+    county = stats(0.50, 0.20, 0.12, 0.43, 0.20, 2600, 1_000_000, moe=0.002)
     facts = {"beds": 4, "baths": 2.5, "sqft": 2200, "property_type": "single_family", "lot_sqft": 6000, "stories": 2}
     segs = demand.segments(facts, 1_450_000, area, county)
     assert segs[0].key == "more_space"  # 4 beds, big lot, and 50% more large households than the county
     assert sum(s.weight for s in segs) == pytest.approx(1, abs=0.01)
     assert segs == sorted(segs, key=lambda s: s.weight, reverse=True)
     wfh = next(s for s in segs if s.key == "work_from_home")
-    assert "14% of workers who work from home in this ZIP vs 12% in the county" in wfh.evidence
+    assert "14% (±1%) of workers who work from home in this ZIP vs 12% in the county" in wfh.evidence
+    assert all(s.reliable for s in segs)
     texts = [t for key, (label, needs) in demand.SEGMENTS.items() for t in (key, label, *needs)] + [e for s in segs for e in s.evidence]
     assert [t for t in texts if fair_housing.violations(t)] == []
 
 
+def test_an_unreliable_comparison_falls_back_to_the_countys_level():
+    county = stats(0.50, 0.20, 0.12, 0.43, 0.20, moe=0.002)
+    facts = {"beds": 4, "baths": 2.5, "sqft": 2200, "property_type": "single_family", "lot_sqft": 6000, "stories": 2}
+    # The ZIP looks like it has 50% more large households, but its margin is ±10 points.
+    noisy = demand.segments(facts, 1_000_000, stats(0.45, 0.30, 0.12, 0.43, 0.20, moe=0.10), county)
+    space = next(s for s in noisy if s.key == "more_space")
+    assert not space.reliable and space.reliability
+    flat = demand.segments(facts, 1_000_000, stats(0.50, 0.20, 0.12, 0.43, 0.20, moe=0.10), county)
+    assert next(s for s in flat if s.key == "more_space").weight == space.weight  # weighted as if equal to the county
+
+
 def test_a_small_single_level_condo_leans_low_maintenance():
-    area = county = demand.AreaStats(0.5, 0.2, 0.12, 0.43, 0.2, 2600, 1_000_000)
+    area = county = stats(0.5, 0.2, 0.12, 0.43, 0.2)
     segs = demand.segments({"beds": 2, "sqft": 1100, "property_type": "condo", "stories": 1}, 650_000, area, county)
     assert segs[0].key == "low_maintenance"
     assert next((s for s in segs if s.key == "more_space"), None) is None  # 2 bedrooms: no fit
@@ -71,6 +120,8 @@ def test_fetch_acs_needs_a_key_and_reads_zip_and_county(tmp_path):
         route = respx.get(demand.ACS_URL).mock(side_effect=[httpx.Response(200, json=acs_table()), httpx.Response(200, json=acs_table(B08301_021E=100))])
         got = demand.fetch_acs(http, "92606", api_key="test-key")
     assert got is not None and got[0].work_from_home == 0.15 and round(got[1].work_from_home, 4) == round(100 / 1200, 4)
+    assert got[0].moe["work_from_home"] is not None
+    assert "B08301_021M" in route.calls[0].request.url.params["get"]
     assert route.calls[0].request.url.params["for"] == "zip code tabulation area:92606"
     assert route.calls[1].request.url.params["in"] == "state:06"
 
@@ -111,7 +162,7 @@ def test_amenities_count_and_nearest_from_a_real_overpass_answer():
 @respx.mock
 def test_amenities_query_and_failure(tmp_path):
     q = places.overpass_query(*IRVINE)
-    assert q.count("nwr(around:1600,33.687500,-117.826300)") == len(places.AMENITIES)
+    assert q.count("nwr(around:1600,33.68750,-117.82630)") == len(places.AMENITIES)
     respx.get(places.OVERPASS_URL).mock(return_value=httpx.Response(400))
     with Http(cache_dir=tmp_path) as http:
         assert places.amenities(http, *IRVINE) is None
@@ -137,7 +188,10 @@ def test_build_insights_values_the_home_and_says_what_is_missing():
     row = insights.build_insights(PROP, region=REGION, findings=[(2, "cosmetic")], acs=None, schools=[], amenities=None)
     v = row["valuation"]
     assert v["method"] == "zip_ppsf" and v["confidence"] == "low" and v["inputs"]["condition_adjustment"] == 0.97
-    assert v["mid"] == round(650 * 2000 * 0.97 / 5000) * 5000
+    assert v["mid"] is None and v["interval"] == "rough"
+    spread = v["inputs"]["spread"]
+    assert spread == pytest.approx(0.15 + abs(650 / 700 - 1) / 2, abs=1e-4)  # the ZIP sits below its city
+    assert (v["low"], v["high"]) == (round(650 * 2000 * 0.97 * (1 - spread) / 5000) * 5000, round(650 * 2000 * 0.97 * (1 + spread) / 5000) * 5000)
     assert row["segments"] is None and any("CENSUS_API_KEY" in n for n in row["notes"])
     assert any("amenities service was unavailable" in n for n in row["notes"])
     assert any(s.startswith("Redfin") and "2026-08-31" in s for s in row["sources"])
@@ -186,3 +240,63 @@ def test_insights_pass_fetches_once_and_stores_a_row_per_property(tmp_path, monk
     assert {a["kind"] for a in first["amenities"]} == set(places.AMENITIES)
     assert second["schools"] is None and second["amenities"] is None
     assert insights.insights_pass(InsightsBackend([]), Http(cache_dir=tmp_path / "h2")) == 0
+
+
+
+@respx.mock
+def test_overpass_is_a_polite_client_and_fails_gracefully(tmp_path):
+    data = json.loads((FIX / "overpass_irvine_800m.json").read_text())
+    route = respx.get(places.OVERPASS_URL).mock(side_effect=[httpx.Response(504), httpx.Response(504), httpx.Response(200, json=data)])
+    sleeps: list[float] = []
+    with Http(cache_dir=tmp_path, sleep=sleeps.append) as http:
+        got = places.amenities(http, *IRVINE)
+        assert got is not None and route.call_count == 3  # two 504s retried with backoff, then the answer
+        assert http.policies[places.OVERPASS_HOST] == places.OVERPASS_POLICY
+        assert route.calls[0].request.headers["user-agent"] == places.OVERPASS_USER_AGENT
+        assert sleeps and all(s > 0 for s in sleeps)
+        # Still busy after its 3 attempts: None, never an exception.
+        route.side_effect = [httpx.Response(504)] * 3
+        assert places.amenities(http, *IRVINE) is None
+        # Overpass reports its own timeouts inside a 200.
+        route.side_effect = [httpx.Response(200, json={"elements": [], "remark": "runtime error: Query timed out"})]
+        assert places.amenities(http, *IRVINE) is None
+    assert places.OVERPASS_POLICY.min_interval_seconds >= 1 and places.OVERPASS_POLICY.daily_budget
+
+
+def test_amenities_are_cached_per_property_and_survive_a_busy_server():
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime(2026, 10, 2, 12, tzinfo=UTC)
+    calls: list[tuple] = []
+
+    def ok(lat, lon):
+        calls.append((lat, lon))
+        return [places.AmenityCount("park", 3, 0.2)]
+
+    def busy(lat, lon):
+        calls.append((lat, lon))
+        return None
+
+    prop = {"id": "p", "lat": IRVINE[0], "lon": IRVINE[1]}
+    key = places.point_key(*IRVINE)
+    stored = [{"kind": "park", "count": 2, "nearest_miles": 0.3}]
+    fresh = insights.resolve_amenities({**prop, "prev_amenities": stored, "prev_amenities_point": key, "prev_amenities_fetched_at": (now - timedelta(days=5)).isoformat()}, ok, now)
+    assert (fresh.amenities, fresh.fetched, calls) == (stored, False, [])  # reused: no request
+    moved = insights.resolve_amenities({**prop, "prev_amenities": stored, "prev_amenities_point": "0.00000,0.00000", "prev_amenities_fetched_at": now.isoformat()}, ok, now)
+    assert moved.fetched and moved.amenities == [{"kind": "park", "count": 3, "nearest_miles": 0.2}] and moved.point == key
+    stale = {**prop, "prev_amenities": stored, "prev_amenities_point": key, "prev_amenities_fetched_at": (now - timedelta(days=45)).isoformat()}
+    kept = insights.resolve_amenities(stale, busy, now)
+    assert kept.amenities == stored and "busy" in kept.note and "Aug 18, 2026" in kept.note
+    gone = insights.resolve_amenities({**prop, "prev_amenities": None}, busy, now)
+    assert gone.amenities is None and "tries again within the hour" in gone.note
+    assert insights.resolve_amenities({"id": "x", "lat": None, "lon": None}, ok, now).amenities is None
+
+
+def test_schools_link_to_the_official_dashboard_and_carry_no_ratings():
+    from datetime import date
+
+    assert places.dashboard_url("30736500000000", date(2026, 10, 2)) == "https://www.caschooldashboard.org/reports/30736500000000/2025"
+    schools = places.parse_directory((FIX / "cde_schools_sample.tsv").read_text(encoding="latin-1"))
+    near = places.nearest_schools(*IRVINE, schools)
+    assert all(n.dashboard_url.startswith("https://www.caschooldashboard.org/reports/" + n.cds + "/") for n in near)
+    assert set(near[0].__dataclass_fields__) == {"name", "level", "grades", "charter", "miles", "cds", "dashboard_url"}

@@ -131,15 +131,20 @@ export interface PhotoResult {
 export interface Insights {
   valuation: {
     low: number;
-    mid: number;
     high: number;
+    /** Only with comparable sales; a rough range has none. */
+    mid: number | null;
     method: 'zip_ppsf' | 'comps';
     confidence: 'high' | 'moderate' | 'low';
+    /** rough: area medians, not calibrated; calibrated: an interval with measured coverage. */
+    interval: 'rough' | 'calibrated' | 'uncalibrated';
+    coverage_target: number | null;
+    measured_coverage: number | null;
     notes: string[];
     inputs: Record<string, number | string | null>;
   } | null;
-  segments: Array<{ key: string; label: string; weight: number; priorities: string[]; evidence: string[] }> | null;
-  schools: Array<{ name: string; level: string; grades: string; charter: boolean; miles: number }> | null;
+  segments: Array<{ key: string; label: string; weight: number; priorities: string[]; evidence: string[]; reliable: boolean; reliability: string | null }> | null;
+  schools: Array<{ name: string; level: string; grades: string; charter: boolean; miles: number; cds: string; dashboard_url: string }> | null;
   amenities: Array<{ kind: string; count: number; nearest_miles: number | null }> | null;
   sources: string[];
   notes: string[];

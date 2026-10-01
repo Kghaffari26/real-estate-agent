@@ -234,4 +234,20 @@ describe('property insights (P3): the worker writes, members read', () => {
     await t.admin(`update public.property_insights set computed_at = now() - interval '31 days'`);
     expect(await queue()).toEqual([{ id: home }]);
   });
+
+  it('a pinned property whose amenities failed is retried within the hour, with its previous answer', async () => {
+    await confirm();
+    await t.admin(`update public.properties set lat = 33.6875, lon = -117.8263, facts_confirmed_at = now() - interval '3 hours' where id = '${home}'`);
+    await t.service(() => t.rows(`insert into public.property_insights (property_id, amenities, computed_at) values ($1, null, now() - interval '30 minutes')`, [home]));
+    expect(await queue()).toEqual([]);
+    await t.admin(`update public.property_insights set computed_at = now() - interval '2 hours'`);
+    expect(await queue()).toEqual([{ id: home }]);
+    await t.admin(`update public.property_insights set amenities = '[{"kind":"park","count":2}]', amenities_point = '33.68750,-117.82630', amenities_fetched_at = now() - interval '2 days'`);
+    expect(await queue()).toEqual([]);
+    // Due again (30 days): the worker gets the stored answer to reuse.
+    await t.admin(`update public.property_insights set computed_at = now() - interval '31 days'`);
+    expect(await t.service(() => t.rows('select prev_amenities, prev_amenities_point from public.properties_needing_insights(5)'))).toEqual([
+      { prev_amenities: [{ kind: 'park', count: 2 }], prev_amenities_point: '33.68750,-117.82630' },
+    ]);
+  });
 });

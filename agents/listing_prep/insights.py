@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from agents_core.http import Http, HttpError
@@ -23,6 +24,46 @@ log = logging.getLogger("listing_prep.insights")
 
 REGION_DATA_URL = os.environ.get("DESK_REGION_DATA_URL", "https://kghaffari26.github.io/real-estate-agent/data/regions/orange-county.json")
 PER_RUN = 20
+AMENITIES_FRESH = timedelta(days=30)  # reuse a property's amenities this long without asking again
+AMENITIES_FALLBACK = timedelta(days=90)  # if a refresh fails, keep an answer this old
+
+
+@dataclass
+class AmenityResult:
+    amenities: list[dict[str, Any]] | None
+    point: str | None
+    fetched_at: str | None
+    note: str | None = None
+    fetched: bool = False  # True when this run asked OpenStreetMap
+
+
+def _when(v: Any) -> datetime | None:
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=UTC)
+
+
+def resolve_amenities(prop: dict[str, Any], fetch: Any, now: datetime | None = None) -> AmenityResult:
+    """The property's amenities: the stored answer if it's for the same point and under
+    30 days old; otherwise a new request (`fetch(lat, lon)`); if that fails, the stored
+    answer up to 90 days old, with a note; else none, and the queue retries within the hour."""
+    lat, lon = prop.get("lat"), prop.get("lon")
+    if lat is None or lon is None:
+        return AmenityResult(None, None, None)
+    now = now or datetime.now(UTC)
+    key = places.point_key(lat, lon)
+    prev, prev_at = prop.get("prev_amenities"), _when(prop.get("prev_amenities_fetched_at"))
+    same = prev is not None and prop.get("prev_amenities_point") == key and prev_at is not None
+    if same and now - prev_at < AMENITIES_FRESH:  # type: ignore[operator]
+        return AmenityResult(prev, key, prev_at.isoformat())  # type: ignore[union-attr]
+    fresh = fetch(lat, lon)
+    if fresh is not None:
+        return AmenityResult([asdict(a) for a in fresh], key, now.isoformat(), fetched=True)
+    if same and now - prev_at < AMENITIES_FALLBACK:  # type: ignore[operator]
+        return AmenityResult(prev, key, prev_at.isoformat(), f"OpenStreetMap’s server was busy; amenities are from {prev_at:%b} {prev_at.day}, {prev_at.year}.")  # type: ignore[union-attr]
+    return AmenityResult(None, None, None, "OpenStreetMap’s server was busy, so amenities aren’t listed yet; the worker tries again within the hour.")
 
 
 def _latest(area: dict[str, Any] | None, key: str) -> float | None:
@@ -49,8 +90,10 @@ def build_insights(
     findings: list[tuple[int, str]],
     acs: tuple[demand.AreaStats, demand.AreaStats] | None,
     schools: list[places.NearbySchool] | None,
-    amenities: list[places.AmenityCount] | None,
+    amenities: AmenityResult | list[places.AmenityCount] | None,
 ) -> dict[str, Any]:
+    if not isinstance(amenities, AmenityResult):  # a plain list (tests, or a fresh fetch)
+        amenities = AmenityResult([asdict(a) for a in amenities], None, None) if amenities is not None else AmenityResult(None, None, None)
     facts = prop.get("facts") or {}
     notes: list[str] = []
     sources: list[str] = []
@@ -79,7 +122,7 @@ def build_insights(
     if acs is None:
         notes.append("Buyer demand needs the Census key (CENSUS_API_KEY) or the Census service was unavailable.")
     else:
-        segs = demand.segments(facts, value.mid if value else _latest(z, "median_sale_price"), *acs)
+        segs = demand.segments(facts, valuation.center(value) if value else _latest(z, "median_sale_price"), *acs)
         sources.append(f"U.S. Census Bureau, American Community Survey {demand.ACS_YEAR} 5-year estimates")
 
     if prop.get("lat") is None:
@@ -89,9 +132,11 @@ def build_insights(
             sources.append("California Department of Education, public school directory (nearest by distance; not attendance boundaries)")
         else:
             notes.append("The school directory was unavailable.")
-        if amenities is not None:
+        if amenities.amenities is not None:
             sources.append("© OpenStreetMap contributors (ODbL)")
-        else:
+        if amenities.note:
+            notes.append(amenities.note)
+        elif amenities.amenities is None:
             notes.append("The amenities service was unavailable.")
 
     return {
@@ -99,7 +144,9 @@ def build_insights(
         "valuation": asdict(value) if value else None,
         "segments": [asdict(s) for s in segs] if segs is not None else None,
         "schools": [asdict(s) for s in schools] if schools is not None and prop.get("lat") is not None else None,
-        "amenities": [asdict(a) for a in amenities] if amenities is not None and prop.get("lat") is not None else None,
+        "amenities": amenities.amenities if prop.get("lat") is not None else None,
+        "amenities_point": amenities.point,
+        "amenities_fetched_at": amenities.fetched_at,
         "sources": sources,
         "notes": notes,
     }
@@ -129,7 +176,7 @@ def insights_pass(backend: Any, http: Http) -> int:
             findings=backend.reviewed_findings(prop["id"]),
             acs=demand.fetch_acs(http, prop["zip"]) if prop.get("zip") else None,
             schools=places.nearest_schools(lat, lon, school_list) if (school_list is not None and lat is not None) else None,
-            amenities=places.amenities(http, lat, lon) if lat is not None else None,
+            amenities=resolve_amenities(prop, lambda la, lo: places.amenities(http, la, lo)),
         )
         backend.upsert_insights(row)
         done += 1

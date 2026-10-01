@@ -36,20 +36,23 @@ function state(withInsights: boolean, confirmed = true): State {
         property_id: PID,
         valuation: {
           low: 1_070_000,
-          mid: 1_260_000,
+          mid: null,
           high: 1_450_000,
           method: 'zip_ppsf',
           confidence: 'low',
+          interval: 'rough',
+          coverage_target: null,
+          measured_coverage: null,
           notes: ['A wide range from area medians: comparable sales from the MLS feed will narrow it.'],
           inputs: { sqft: 2000, ppsf: 650, ppsf_source: 'zip', typical_sqft: 2000, size_adjustment: 1, condition_score: 2, condition_adjustment: 0.97, spread: 0.15 },
         },
         segments: [
-          { key: 'more_space', label: 'More space', weight: 0.42, priorities: ['bedroom count and size', 'storage and closets'], evidence: ['30% of households of 4 or more in this ZIP vs 20% in the county'] },
-          { key: 'work_from_home', label: 'Work from home', weight: 0.33, priorities: ['a quiet room that works as an office'], evidence: [] },
+          { key: 'more_space', label: 'More space', weight: 0.42, priorities: ['bedroom count and size', 'storage and closets'], evidence: ['30% (±3%) of households of 4 or more in this ZIP vs 20% in the county'], reliable: true, reliability: null },
+          { key: 'work_from_home', label: 'Work from home', weight: 0.33, priorities: ['a quiet room that works as an office'], evidence: [], reliable: false, reliability: 'Not statistically different from the county (90% confidence).' },
         ],
         schools: [
-          { name: 'Plaza Vista', level: 'elementary', grades: 'K-8', charter: false, miles: 0.6 },
-          { name: 'University High', level: 'high', grades: '9-12', charter: false, miles: 2.1 },
+          { name: 'Plaza Vista', level: 'elementary', grades: 'K-8', charter: false, miles: 0.6, cds: '30736500129999', dashboard_url: 'https://www.caschooldashboard.org/reports/30736500129999/2025' },
+          { name: 'University High', level: 'high', grades: '9-12', charter: false, miles: 2.1, cds: '30736503033883', dashboard_url: 'https://www.caschooldashboard.org/reports/30736503033883/2025' },
         ],
         amenities: [
           { kind: 'grocery', count: 1, nearest_miles: 0.4 },
@@ -69,15 +72,21 @@ test('the early read shows the worker’s numbers with confidence, inputs, sourc
   await gotoView(page, `/desk/property/${PID}`);
   const card = page.getByTestId('desk-insights');
   const value = page.getByTestId('desk-valuation');
-  await expect(value).toContainText('Value range · Low confidence');
+  await expect(value).toContainText('Rough range, not calibrated · Low confidence');
   await expect(value).toContainText('$1,070,000 – $1,450,000');
-  await expect(value).toContainText('Midpoint $1,260,000.');
+  await expect(value).not.toContainText('Midpoint');
+  await expect(page.getByTestId('desk-coverage')).toHaveCount(0);
   await expect(value).toContainText('$650/sq ft (the ZIP’s median) × 2,000 sq ft, × 0.97 for condition, ± 15%.');
   await expect(value).toContainText('not an appraisal');
   await expect(page.getByTestId('desk-segments')).toContainText('More space · 42%');
-  await expect(page.getByTestId('desk-segments')).toContainText('30% of households of 4 or more in this ZIP vs 20% in the county');
+  await expect(page.getByTestId('desk-segments')).toContainText('30% (±3%) of households of 4 or more in this ZIP vs 20% in the county');
+  await expect(page.getByTestId('desk-segment-unreliable')).toHaveText('weighted at the county’s level: not statistically different from the county (90% confidence)');
   await expect(card).toContainText('never who to market to');
   await expect(page.getByTestId('desk-schools')).toContainText('Plaza Vista · Elementary (K-8) · 0.6 mi');
+  const link = page.getByRole('link', { name: 'Plaza Vista on the California School Dashboard (opens in a new tab)' });
+  await expect(link).toHaveAttribute('href', 'https://www.caschooldashboard.org/reports/30736500129999/2025');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(card).toContainText('the Desk doesn’t rate schools');
   await expect(card).toContainText('not attendance boundaries');
   await expect(page.getByTestId('desk-amenities')).toContainText('Groceries: 1 · nearest 0.4 mi');
   await expect(page.getByTestId('desk-amenities')).toContainText('Rail stations: 0');
@@ -101,4 +110,27 @@ test('without confirmed facts, the card asks for them', async ({ page }) => {
   await signedIn(page);
   await gotoView(page, `/desk/property/${PID}`);
   await expect(page.getByTestId('desk-insights-empty')).toContainText('Confirm the facts to get an early value range');
+});
+
+test('a calibrated comp interval shows its target and measured coverage', async ({ page }) => {
+  const s = state(true);
+  const ins = s.tables.property_insights![0]!;
+  ins.valuation = {
+    low: 1_190_000,
+    mid: 1_280_000,
+    high: 1_390_000,
+    method: 'comps',
+    confidence: 'moderate',
+    interval: 'calibrated',
+    coverage_target: 0.8,
+    measured_coverage: 0.81,
+    notes: ['12 comparable sales within 0.6 miles, adjusted to this home and to today.'],
+    inputs: { comps: 12, calibration_train_n: 420, calibration_holdout_n: 180 },
+  };
+  await fakeBackend(page, s);
+  await signedIn(page);
+  await gotoView(page, `/desk/property/${PID}`);
+  const value = page.getByTestId('desk-valuation');
+  await expect(value).toContainText('80% interval · Moderate confidence');
+  await expect(page.getByTestId('desk-coverage')).toHaveText('Measured coverage: 81% of 180 later sales fell inside this kind of interval. Comparable-sales estimate $1,280,000.');
 });

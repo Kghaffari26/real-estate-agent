@@ -19,6 +19,7 @@ const AMENITY_LABELS: Record<string, string> = {
 };
 const LEVEL_LABELS: Record<string, string> = { elementary: 'Elementary', middle: 'Middle', high: 'High' };
 const CONFIDENCE: Record<string, string> = { high: 'High confidence', moderate: 'Moderate confidence', low: 'Low confidence' };
+const pct = (v: number) => `${Math.round(v * 100)}%`;
 
 export function InsightsCard({ insights, factsConfirmed }: { insights: Insights | null; factsConfirmed: boolean }) {
   return (
@@ -37,16 +38,23 @@ export function InsightsCard({ insights, factsConfirmed }: { insights: Insights 
               <h3 className="text-[11px] uppercase tracking-[.06em] text-mp-ink-3">Buyer needs, sized from Census data</h3>
               <ul className="mt-2 space-y-2" data-testid="desk-segments">
                 {insights.segments.map((s) => (
-                  <li key={s.key} className="text-sm">
+                  <li key={s.key} className="text-sm" data-reliable={s.reliable}>
                     <span className="text-mp-ink">
                       <b>{s.label}</b> · {Math.round(s.weight * 100)}%
                     </span>
+                    {!s.reliable && (
+                      <span className="ml-2 text-xs text-mp-warn" data-testid="desk-segment-unreliable">
+                        weighted at the county’s level: {s.reliability?.replace(/\.$/, '').toLowerCase()}
+                      </span>
+                    )}
                     <span className="block text-mp-ink-2">Priorities: {s.priorities.join(', ')}.</span>
                     {s.evidence.length > 0 && <span className="block text-xs text-mp-ink-3">{s.evidence.join('; ')}.</span>}
                   </li>
                 ))}
               </ul>
-              <p className="mt-1 text-xs text-mp-ink-3">Needs describe the home, not the people who’d buy it. They guide preparation, never who to market to.</p>
+              <p className="mt-1 text-xs text-mp-ink-3">
+                Needs describe the home, not the people who’d buy it. They guide preparation, never who to market to. ZIP figures are survey estimates (± margins of error); a need is only weighted up or down when its difference from the county is statistically reliable.
+              </p>
             </section>
           )}
           {insights.schools && insights.schools.length > 0 && (
@@ -55,10 +63,14 @@ export function InsightsCard({ insights, factsConfirmed }: { insights: Insights 
               <ul className="mt-2 grid gap-1 text-sm sm:grid-cols-2" data-testid="desk-schools">
                 {insights.schools.map((s) => (
                   <li key={`${s.level}-${s.name}`} className="text-mp-ink-2">
-                    <span className="text-mp-ink">{s.name}</span> · {LEVEL_LABELS[s.level] ?? s.level} ({s.grades}) · {s.miles.toFixed(1)} mi
+                    <span className="text-mp-ink">{s.name}</span> · {LEVEL_LABELS[s.level] ?? s.level} ({s.grades}) · {s.miles.toFixed(1)} mi ·{' '}
+                    <a href={s.dashboard_url} target="_blank" rel="noopener noreferrer" className="text-mp-accent underline-offset-4 hover:underline" aria-label={`${s.name} on the California School Dashboard (opens in a new tab)`}>
+                      School Dashboard
+                    </a>
                   </li>
                 ))}
               </ul>
+              <p className="mt-1 text-xs text-mp-ink-3">For performance, follow each school’s link to the official California School Dashboard; the Desk doesn’t rate schools.</p>
             </section>
           )}
           {insights.amenities && (
@@ -95,11 +107,18 @@ function Valuation({ v }: { v: Insights['valuation'] }) {
   const inputs = v.inputs;
   return (
     <section aria-label="Value range" data-testid="desk-valuation">
-      <h3 className="text-[11px] uppercase tracking-[.06em] text-mp-ink-3">Value range · {CONFIDENCE[v.confidence]}</h3>
+      <h3 className="text-[11px] uppercase tracking-[.06em] text-mp-ink-3">
+        {v.interval === 'calibrated' && v.coverage_target !== null ? `${pct(v.coverage_target)} interval` : 'Rough range, not calibrated'} · {CONFIDENCE[v.confidence]}
+      </h3>
       <p className="mt-1 text-[22px] font-medium tabular-nums text-mp-ink">
         {formatDollars(v.low)} – {formatDollars(v.high)}
       </p>
-      <p className="text-sm text-mp-ink-2">Midpoint {formatDollars(v.mid)}.</p>
+      {v.interval === 'calibrated' && v.measured_coverage !== null && (
+        <p className="text-sm text-mp-ink-2" data-testid="desk-coverage">
+          Measured coverage: {pct(v.measured_coverage)} of {String(v.inputs.calibration_holdout_n ?? '')} later sales fell inside this kind of interval.
+          {v.mid !== null && <> Comparable-sales estimate {formatDollars(v.mid)}.</>}
+        </p>
+      )}
       {v.method === 'zip_ppsf' && (
         <p className="mt-1 text-xs text-mp-ink-3">
           {formatDollars(Number(inputs.ppsf))}/sq ft ({inputs.ppsf_source === 'city' ? 'the city’s' : 'the ZIP’s'} median) × {Number(inputs.sqft).toLocaleString('en-US')} sq ft

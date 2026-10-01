@@ -50,7 +50,7 @@ from __future__ import annotations
 
 import gzip
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -574,10 +574,19 @@ def _numeric(mapping: dict[str, str]) -> list[pl.Expr]:
 
 
 def _fetch_extension(
-    http: Http, url: str, csv_path: Path, out_path: Path, build: Callable[[pl.LazyFrame], pl.LazyFrame], force: bool
+    http: Http,
+    url: str,
+    csv_path: Path,
+    out_path: Path,
+    build: Callable[[pl.LazyFrame], pl.LazyFrame],
+    force: bool,
+    expected: Iterable[str] = (),
 ) -> ExtensionFetch:
+    """Download (conditional GET) and filter into `out_path`. An unchanged file reuses the
+    filtered parquet, unless that parquet lacks a column the code now expects (a metric
+    added since it was built): then it's rebuilt from the cached CSV."""
     dl = http.download(url, csv_path, force=force)
-    if not dl.modified and out_path.exists():
+    if not dl.modified and out_path.exists() and set(expected) <= set(pl.read_parquet_schema(out_path)):
         return ExtensionFetch(False, out_path, url)
     frame = build(pl.scan_csv(csv_path, infer_schema_length=0, null_values=["NA", ""])).collect()
     if frame.is_empty():
@@ -672,4 +681,4 @@ def fetch_zips(
             & (end >= cutoff)
         ).select(end.alias("period_end"), pl.col("METRO").alias("metro"), pl.col("REGION NAME").alias("zip"), *_numeric(columns))
 
-    return _fetch_extension(http, ZIP_URL, DC_ZIP_CSV_PATH, DC_ZIP_PARQUET_PATH, build, force)
+    return _fetch_extension(http, ZIP_URL, DC_ZIP_CSV_PATH, DC_ZIP_PARQUET_PATH, build, force, expected=columns)

@@ -118,6 +118,7 @@ yourself, and never paste it into a chat.
 | secret `SUPABASE_URL` | (already added above) | the worker |
 | secret `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API → `service_role` / secret key | the worker only |
 | secret `ANTHROPIC_API_KEY` | (already used by the market agent) | the worker's photo analysis |
+| secret `CENSUS_API_KEY` (optional) | a free key from api.census.gov | buyer demand in the property insights |
 | **variable** `DESK_WORKER_ENABLED` | `true` | turns the scheduled worker on |
 
 Until the variable is set, the workflow doesn't run. Without the Anthropic key, it does

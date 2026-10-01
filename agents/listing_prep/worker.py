@@ -1,6 +1,6 @@
 """The Listing Prep worker: photo findings (P2) and photo housekeeping.
 
-    python -m agents.listing_prep.worker            # janitor, then queued vision jobs
+    python -m agents.listing_prep.worker            # janitor, property insights, then queued vision jobs
     python -m agents.listing_prep.worker --janitor  # housekeeping only
 
 Run by `.github/workflows/listing-prep-worker.yml` (on a schedule and on demand). Needs
@@ -40,6 +40,7 @@ from agents_core.llm import LLMError
 
 from agents.listing_prep import findings as vision
 from agents.listing_prep.backend import Backend, ConsentRevoked, Job, SupabaseBackend
+from agents.listing_prep.insights import insights_pass
 from agents.listing_prep.photo_check import for_model, inspect
 
 log = logging.getLogger("listing_prep.worker")
@@ -163,9 +164,14 @@ def janitor(backend: Backend) -> dict[str, int]:
     return {"expired": expired, "orphans": orphans, "files_deleted": deleted}
 
 
-def run(backend: Backend, llm: Any | None, *, janitor_only: bool = False, scope_factory: Any = None) -> dict[str, Any]:
-    summary: dict[str, Any] = {"janitor": janitor(backend), "jobs": []}
-    if janitor_only or llm is None:
+def run(backend: Backend, llm: Any | None, *, janitor_only: bool = False, scope_factory: Any = None, http: Any = None) -> dict[str, Any]:
+    summary: dict[str, Any] = {"janitor": janitor(backend), "jobs": [], "insights": 0}
+    if janitor_only:
+        return summary
+    if http is not None:
+        # Value ranges, demand, schools and amenities: no model calls (P3).
+        summary["insights"] = insights_pass(backend, http)
+    if llm is None:
         return summary
     for _ in range(MAX_JOBS_PER_RUN):
         job = backend.claim_job()
@@ -207,11 +213,12 @@ def main(argv: list[str] | None = None) -> int:
         scope_factory = lambda usd, label: SpendScope(tracker, usd, label=label)  # noqa: E731
     elif not args.janitor:
         print("listing-prep worker: no Anthropic key; housekeeping only, jobs stay queued.")
-    summary = run(backend, llm, janitor_only=args.janitor, scope_factory=scope_factory)
+    summary = run(backend, llm, janitor_only=args.janitor, scope_factory=scope_factory, http=http)
     jobs = summary["jobs"]
     print(
         "listing-prep worker:",
         summary["janitor"],
+        f"insights={summary['insights']}",
         f"jobs={len(jobs)}",
         {k: sum(j[k] for j in jobs) for k in ("analyzed", "skipped", "rejected", "findings", "dropped_fair_housing")} if jobs else {},
         f"usd={sum(j['usd'] for j in jobs):.4f}",

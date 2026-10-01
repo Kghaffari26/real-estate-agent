@@ -140,6 +140,7 @@ def county_csv(counties: list[tuple[str, str, dict[str, object]]], month_ends: l
 ZIP_COLUMNS = [
     "HOMES SOLD", "MEDIAN SALE PRICE NSA ($)", "NEW LISTINGS", "INVENTORY", "MEDIAN DAYS ON MARKET (DAYS)",
     "AVERAGE SALE TO LIST RATIO (%)", "SHARE SOLD ABOVE ORIGINAL LIST (%)", "PERCENT OFF MARKET IN TWO WEEKS (%)", "MONTHS OF SUPPLY",
+    "MEDIAN SALE PRICE PER SQ.FT. ($)",
 ]  # fmt: skip
 
 

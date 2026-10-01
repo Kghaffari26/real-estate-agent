@@ -61,6 +61,12 @@ division, our `anaheim-ca`) is the first market; others follow the same pattern.
   county. Source: Redfin's `zips_in_top_50_metros.csv` (rolling 3 months, filtered while
   streaming to the region's ZIPs), neighborhoods from `nbhds_in_top_50_metros.csv` if
   the coverage holds up.
+- **1.6.0 (additive):** each ZIP's and city's `latest` also has `median_ppsf`, Redfin's
+  median sale price per square foot (`MEDIAN SALE PRICE PER SQ.FT. ($)`), with YoY as a
+  ratio; cities homes-sold-weighted like the other medians. Latest only, no series. It's
+  a region-only metric, not in the site-wide metric registry, and the Listing Prep
+  pre-feed valuation multiplies it by a home's confirmed square footage
+  (SPEC_LISTING_PREP.md §5.2).
 - `regions/orange-county.geo.json`: simplified ZCTA and city (Census place) boundaries,
   built once by a script from Census cartographic boundary files and committed, like
   the county centroids. ZIP→city assignment from Census ZCTA-place relationships.

@@ -286,7 +286,7 @@ def test_real_run_publishes_the_data_branch_contract_then_reuses_briefs(workdir)
     assert index.national.brief.narrative_source == "llm"
     assert index.national.brief.model == "claude-sonnet-5"
     assert [m.slug for m in index.metros] == ["alpha-tx", "beta-tx"]
-    assert index.meta.schema_version == "1.5.0"
+    assert index.meta.schema_version == "1.6.0"
     # v3 §4.2 regions: ZIPs from the metro's rows, cities rolled up from them, the geometry copied.
     [region_ref] = index.regions
     assert (region_ref.slug, region_ref.zips, region_ref.cities, region_ref.through) == ("alpha-county", 2, 1, index.data_through)

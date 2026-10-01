@@ -15,18 +15,23 @@ goes through agents_core.http like everything else.
 from __future__ import annotations
 
 import io
+import json
 import os
 import uuid
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+import respx
 from agents_core.http import Http
 from PIL import Image
 
+from agents.listing_prep import insights, places
 from agents.listing_prep.backend import BUCKET, SupabaseBackend
 from agents.listing_prep.worker import run
 from tests.test_listing_prep import finding, jpeg, llm_with
+from tests.test_listing_prep_context import REGION
 
 URL = os.environ.get("DESK_TEST_API_URL", "")
 ANON = os.environ.get("DESK_TEST_ANON_KEY", "")
@@ -91,6 +96,7 @@ def test_worker_on_the_real_stack(tmp_path):
         agent = Agent(c)
         team = agent.rpc("create_team", {"team_name": "Coastline Realty"})
         prop = agent.insert("properties", {"team_id": team, "created_by": agent.id, "address": "1 Civic Center Plaza, Irvine, CA", "zip": "92606",
+                                            "place_id": "0636770", "lat": 33.6875, "lon": -117.8263,
                                             "facts": {"beds": 3, "baths": 2.5, "sqft": 1850, "year_built": 1978, "property_type": "single_family"}})["id"]
         agent.rpc("confirm_facts", {"property": prop})
         agent.insert("cost_book", {"team_id": team, "item": "cabinet_refinish", "category": "kitchen", "unit": "linear_ft", "low_usd": 90, "high_usd": 160, "updated_by": agent.id})
@@ -121,6 +127,20 @@ def test_worker_on_the_real_stack(tmp_path):
         [f] = agent.select("findings", property_id=f"eq.{prop}")
         assert (f["issue"], f["fix_item"], f["status"]) == ("Cabinet doors are worn at the edges", "cabinet_refinish", "proposed")
         assert not stored(c, paths["bath"]) and stored(c, paths["kitchen"])
+
+        # P3 insights through the real PostgREST (outside sources from fixtures).
+        fix = Path(__file__).parent / "fixtures" / "listing_prep"
+        with respx.mock(assert_all_called=False) as mock:
+            mock.route(host="127.0.0.1").pass_through()
+            mock.get(insights.REGION_DATA_URL).mock(return_value=httpx.Response(200, json=REGION))
+            mock.get(places.CDE_URL).mock(return_value=httpx.Response(200, content=(fix / "cde_schools_sample.tsv").read_bytes()))
+            mock.get(places.OVERPASS_URL).mock(return_value=httpx.Response(200, json=json.loads((fix / "overpass_irvine_800m.json").read_text())))
+            done = insights.insights_pass(SupabaseBackend(Http(cache_dir=tmp_path / "http"), URL, SERVICE), Http(cache_dir=tmp_path / "http2"))
+        assert done >= 1
+        [ins] = agent.select("property_insights", property_id=f"eq.{prop}")
+        assert ins["valuation"]["method"] == "zip_ppsf" and ins["valuation"]["confidence"] == "low"
+        assert ins["schools"] and ins["amenities"]
+        assert c.post(f"{URL}/rest/v1/property_insights", headers=agent.h, json={"property_id": prop}).status_code >= 400
 
         # The agent reviews; then the seller revokes.
         r = c.patch(f"{URL}/rest/v1/findings", headers=agent.h, params={"id": f"eq.{f['id']}"}, json={"status": "confirmed"})

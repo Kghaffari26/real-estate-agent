@@ -49,7 +49,12 @@ REGION_METRICS: dict[str, tuple[str, bool]] = {
     "sold_above_list": ("SHARE SOLD ABOVE ORIGINAL LIST (%)", True),
     "off_market_in_two_weeks": ("PERCENT OFF MARKET IN TWO WEEKS (%)", True),
     "months_of_supply": ("MONTHS OF SUPPLY", False),
+    # Region-only (not in the site-wide metric registry): Listing Prep's pre-feed valuation
+    # multiplies it by a home's confirmed square footage (SPEC_LISTING_PREP.md §5.2).
+    "median_ppsf": ("MEDIAN SALE PRICE PER SQ.FT. ($)", False),
 }
+# Change kinds of the region-only metrics (the rest come from the metric registry).
+REGION_ONLY_KINDS: dict[str, str] = {"median_ppsf": "ratio"}
 FETCH_COLUMNS: dict[str, str] = {k: col for k, (col, _) in REGION_METRICS.items()}
 SUMMED = ("homes_sold", "new_listings", "inventory")
 SERIES_METRICS = ("median_sale_price", "homes_sold", "inventory", "median_dom")
@@ -105,7 +110,11 @@ def _round(key: str, v: float | None) -> float | int | None:
 
 
 def _change_round(key: str, v: float | None) -> float | None:
-    return None if v is None else round(v, 4 if metric_registry.get(key).change_kind != "diff" else 1)
+    return None if v is None else round(v, 4 if _kind(key) != "diff" else 1)
+
+
+def _kind(key: str) -> str:
+    return REGION_ONLY_KINDS.get(key) or metric_registry.get(key).change_kind
 
 
 def aggregate(values_by_zip: dict[str, dict[str, float | None]]) -> dict[str, float | None]:
@@ -138,7 +147,7 @@ def _area(
     latest: dict[str, RegionMetric] = {}
     for key in REGION_METRICS:
         pairs = [(d, row.get(key)) for d, row in monthly.items()]
-        ch = compute.compute_metric_series(pairs, metric_registry.get(key).change_kind, as_of=through)
+        ch = compute.compute_metric_series(pairs, _kind(key), as_of=through)  # type: ignore[arg-type]
         latest[key] = RegionMetric(value=_round(key, ch.value), yoy=_change_round(key, ch.yoy))
     series = {key: [_round(key, monthly.get(d, {}).get(key)) for d in dates] for key in SERIES_METRICS}
     sold = latest["homes_sold"].value

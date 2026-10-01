@@ -335,7 +335,7 @@ class RealEstateAgent(Agent):
     id = AGENT_NAME
     name = "Real Estate Market Agent"
     route = "/real-estate"
-    schema_version = "1.5.0"  # 1.1.0: §6.3 investigations, alert figures; 1.2.0: metros[].spark; 1.3.0: §6.4 timelines; 1.4.0: §6.5-6.7 events, pulse, areas; 1.5.0: v3 §4.2 regions (additive)
+    schema_version = "1.6.0"  # 1.1.0: §6.3 investigations, alert figures; 1.2.0: metros[].spark; 1.3.0: §6.4 timelines; 1.4.0: §6.5-6.7 events, pulse, areas; 1.5.0: v3 §4.2 regions (additive); 1.6.0: regions' median_ppsf (Listing Prep §5.2)
     expected_interval_hours = 168
     next_run_hint = "Fridays 08:00 PT"
     history_keep = 52

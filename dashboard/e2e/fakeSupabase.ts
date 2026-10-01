@@ -31,7 +31,7 @@ export interface State {
 }
 
 export type Row = Record<string, unknown>;
-const TABLES = ['properties', 'seller_consents', 'photos', 'cost_book', 'quotes', 'vision_jobs', 'photo_results', 'findings'];
+const TABLES = ['properties', 'seller_consents', 'photos', 'cost_book', 'quotes', 'vision_jobs', 'photo_results', 'findings', 'property_insights'];
 const DEFAULTS: Record<string, () => Row> = {
   properties: () => ({ status: 'watching', facts: {}, facts_confirmed_at: null, facts_confirmed_by: null, notes: null, matched_address: null, lat: null, lon: null, zip: null, city: null, place_id: null, tract: null, county_fips: null }),
   seller_consents: () => ({ revoked_at: null }),

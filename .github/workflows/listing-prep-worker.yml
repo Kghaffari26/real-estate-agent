@@ -1,7 +1,8 @@
 name: listing-prep-worker
 
 # The Desk's private worker (agents/listing_prep/worker.py): photo housekeeping
-# (retention, orphaned and deleted files) and queued photo-findings jobs (P2).
+# (retention, orphaned and deleted files), property insights (P3: value range, buyer
+# needs, schools, amenities) and queued photo-findings jobs (P2).
 #
 # It talks to the Desk's backend with the service role, a server-side secret of this
 # workflow only (the site's build never sees it; dashboard.yml's check:secrets scans
@@ -40,4 +41,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Optional: buyer demand by need (P3). Without it the insights say demand couldn't be sized.
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
           AGENTS_CORE_MAX_RUN_USD: "1.00"

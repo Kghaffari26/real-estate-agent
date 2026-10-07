@@ -1,0 +1,6 @@
+{"id": "full", "input": {"world": "full"}, "expected": {"mention_any": [["confidence"], ["staging"]]}, "tags": ["complete"]}
+{"id": "condo-small", "input": {"world": "condo-small"}, "expected": {"mention_any": [["$5,000", "$5K", "5,000"]]}, "tags": ["small_budget"]}
+{"id": "no-priors", "input": {"world": "no-priors"}, "expected": {"mention_any": [["not enough evidence", "no value prior", "value priors"]]}, "tags": ["missing_data"]}
+{"id": "no-demand", "input": {"world": "no-demand"}, "expected": {"mention_any": [["census", "couldn't be sized", "could not be sized", "isn't sized", "not sized"]]}, "tags": ["missing_data"]}
+{"id": "rushed", "input": {"world": "rushed"}, "expected": {"mention_any": [["before listing", "can't finish", "cannot finish", "timeline", "days"]]}, "tags": ["timeline"]}
+{"id": "no-value", "input": {"world": "no-value"}, "expected": {"mention_any": [["no value range", "living area", "isn't enough data", "not enough data"]]}, "tags": ["missing_data"]}

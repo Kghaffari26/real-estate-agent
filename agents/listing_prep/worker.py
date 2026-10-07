@@ -1,6 +1,6 @@
-"""The Listing Prep worker: photo findings (P2) and photo housekeeping.
+"""The Listing Prep worker: photo findings (P2), reports (P5) and photo housekeeping.
 
-    python -m agents.listing_prep.worker            # janitor, property insights, then queued vision jobs
+    python -m agents.listing_prep.worker            # janitor, property insights, queued vision jobs, then queued reports
     python -m agents.listing_prep.worker --janitor  # housekeeping only
 
 Run by `.github/workflows/listing-prep-worker.yml` (on a schedule and on demand). Needs
@@ -16,6 +16,11 @@ Per job, per photo, in order:
      and deleted, one that can't be read is skipped (photo_check.py);
   3. the model sees only re-encoded pixels and answers through a tool (findings.py);
   4. people visible → skipped; findings screened for fair housing; then stored.
+
+Reports (`report.py`): per claimed report, the worker reads the property's confirmed facts,
+insights, confirmed findings, the team's cost book and value priors and the quotes (no
+names, no street address), runs the report agent, and stores the assembled report. A
+report is claimed only while the run's spend cap leaves room for a whole one.
 
 The janitor applies retention (`expire_photos`), queues orphaned files, and deletes every
 queued file through the Storage API (a photo or property deleted on the Desk queues its
@@ -39,13 +44,15 @@ from agents_core.costs import BudgetExceeded
 from agents_core.llm import LLMError
 
 from agents.listing_prep import findings as vision
-from agents.listing_prep.backend import Backend, ConsentRevoked, Job, SupabaseBackend
-from agents.listing_prep.insights import insights_pass
+from agents.listing_prep import report as reports
+from agents.listing_prep.backend import Backend, ConsentRevoked, Job, ReportJob, SupabaseBackend
+from agents.listing_prep.insights import REGION_DATA_URL, insights_pass
 from agents.listing_prep.photo_check import for_model, inspect
 
 log = logging.getLogger("listing_prep.worker")
 
 MAX_JOBS_PER_RUN = 10
+MAX_REPORTS_PER_RUN = 2  # each up to ~7 minutes and reports.BUDGET
 DELETIONS_PER_RUN = 1000
 # agents-core estimates a request's cost from its JSON size, so a base64 photo is costed
 # as ~80K input tokens (≈ $0.09 on the fast tier) though it bills ~1.6K. Each photo's
@@ -136,18 +143,55 @@ def process_job(backend: Backend, llm: Any, job: Job, *, scope_factory: Any = No
         report.status = "cancelled"
         return report
     except Exception as e:  # noqa: BLE001 - any failure ends the job, never the run
-        if isinstance(e, BudgetExceeded):
-            error = "budget"
-        elif isinstance(e, LLMError) or type(e).__module__.split(".")[0] == "anthropic":
-            error = "model_error"
-        else:
-            error = "worker_error"
+        error = _error_code(e)
         log.warning("job %s failed: %s", job.id, type(e).__name__)
         backend.update_job(job.id, status="failed", error=error, finished_at=_now(), usd=round(report.usd, 4))
         report.status = "failed"
         return report
     backend.update_job(job.id, status="done", finished_at=_now(), usd=round(report.usd, 4))
     return report
+
+
+def _error_code(e: Exception) -> str:
+    if isinstance(e, BudgetExceeded):
+        return "budget"
+    if isinstance(e, LLMError) or type(e).__module__.split(".")[0] == "anthropic":
+        return "model_error"
+    return "worker_error"
+
+
+def process_report(backend: Backend, llm: Any, job: ReportJob, region: dict[str, Any] | None) -> dict[str, Any]:
+    """Run one claimed report to an end state (done / cancelled / failed)."""
+    inputs = backend.report_inputs(job.property_id)
+    if inputs is None or not inputs["property"].get("facts_confirmed_at"):
+        # The facts were edited (un-confirming them) after the report was asked for.
+        backend.update_report(job.id, status="cancelled", error="facts_unconfirmed", finished_at=_now())
+        return {"id": job.id, "status": "cancelled", "usd": 0.0}
+    goal = reports.Goal(target_price=job.target_price, budget=int(job.budget) if job.budget is not None else None, days_to_list=job.days_to_list)
+    try:
+        out = reports.run_report(llm, reports.build_world(inputs, region, goal))
+    except Exception as e:  # noqa: BLE001 - a failure ends the report, never the run
+        log.warning("report %s failed: %s", job.id, type(e).__name__)
+        backend.update_report(job.id, status="failed", error=_error_code(e), finished_at=_now())
+        return {"id": job.id, "status": "failed", "usd": 0.0}
+    backend.update_report(
+        job.id,
+        status="done",
+        output=out,
+        narrative_source=out["narrative_source"],
+        prompt_version=out["prompt_version"],
+        usd=round(out["cost_usd"], 4),
+        finished_at=_now(),
+    )
+    return {"id": job.id, "status": "done", "narrative_source": out["narrative_source"], "usd": out["cost_usd"]}
+
+
+def room_for_a_report(llm: Any) -> bool:
+    """True while the run's cap can still pay for a whole report (loop and review)."""
+    tracker = getattr(llm, "tracker", None)
+    if tracker is None:
+        return True
+    return tracker.total_usd + reports.BUDGET.max_usd + reports.REVIEW_BUDGET_USD <= tracker.max_usd
 
 
 def janitor(backend: Backend) -> dict[str, int]:
@@ -165,7 +209,7 @@ def janitor(backend: Backend) -> dict[str, int]:
 
 
 def run(backend: Backend, llm: Any | None, *, janitor_only: bool = False, scope_factory: Any = None, http: Any = None) -> dict[str, Any]:
-    summary: dict[str, Any] = {"janitor": janitor(backend), "jobs": [], "insights": 0}
+    summary: dict[str, Any] = {"janitor": janitor(backend), "jobs": [], "insights": 0, "reports": []}
     if janitor_only:
         return summary
     if http is not None:
@@ -179,6 +223,19 @@ def run(backend: Backend, llm: Any | None, *, janitor_only: bool = False, scope_
             break
         r = process_job(backend, llm, job, scope_factory=scope_factory)
         summary["jobs"].append({"id": job.id, **vars(r)})
+    region: dict[str, Any] | None = None
+    for i in range(MAX_REPORTS_PER_RUN):
+        if not room_for_a_report(llm):
+            break
+        rjob = backend.claim_report_job()
+        if rjob is None:
+            break
+        if i == 0 and http is not None:
+            try:
+                region = http.get_json(REGION_DATA_URL, ttl_seconds=3600)
+            except Exception:  # noqa: BLE001 - the report says the market data is missing
+                region = None
+        summary["reports"].append(process_report(backend, llm, rjob, region))
     return summary
 
 
@@ -222,8 +279,11 @@ def main(argv: list[str] | None = None) -> int:
         f"jobs={len(jobs)}",
         {k: sum(j[k] for j in jobs) for k in ("analyzed", "skipped", "rejected", "findings", "dropped_fair_housing")} if jobs else {},
         f"usd={sum(j['usd'] for j in jobs):.4f}",
+        f"reports={len(summary['reports'])}",
+        {s: sum(1 for r in summary["reports"] if r["status"] == s) for s in ("done", "failed", "cancelled")} if summary["reports"] else {},
+        f"report_usd={sum(r['usd'] for r in summary['reports']):.4f}",
     )
-    return 1 if any(j["status"] == "failed" for j in jobs) else 0
+    return 1 if any(j["status"] == "failed" for j in jobs) or any(r["status"] == "failed" for r in summary["reports"]) else 0
 
 
 if __name__ == "__main__":

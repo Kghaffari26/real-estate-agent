@@ -35,6 +35,15 @@ class PhotoRow:
     storage_path: str
 
 
+@dataclass(frozen=True)
+class ReportJob:
+    id: str
+    property_id: str
+    target_price: int | None = None
+    budget: float | None = None
+    days_to_list: int | None = None
+
+
 class ConsentRevoked(RuntimeError):
     """The database refused a write because the property no longer has a processing consent."""
 
@@ -56,6 +65,9 @@ class Backend(Protocol):
     def needing_insights(self, limit: int) -> list[dict[str, Any]]: ...
     def reviewed_findings(self, property_id: str) -> list[tuple[int, str]]: ...
     def upsert_insights(self, row: dict[str, Any]) -> None: ...
+    def claim_report_job(self) -> ReportJob | None: ...
+    def report_inputs(self, property_id: str) -> dict[str, Any] | None: ...
+    def update_report(self, report_id: str, **fields: Any) -> None: ...
 
 
 class SupabaseBackend:
@@ -167,3 +179,48 @@ class SupabaseBackend:
         body = {**row, "computed_at": datetime.now(UTC).isoformat()}
         self._rest("POST", "property_insights", params={"on_conflict": "property_id"}, body=body, prefer="resolution=merge-duplicates")
 
+    # ---- reports (P5) ----
+
+    def claim_report_job(self) -> ReportJob | None:
+        rows = self._rpc("claim_report_job") or []
+        if not rows:
+            return None
+        r = rows[0]
+        budget = r.get("budget")
+        return ReportJob(r["id"], r["property_id"], r.get("target_price"), float(budget) if budget is not None else None, r.get("days_to_list"))
+
+    def report_inputs(self, property_id: str) -> dict[str, Any] | None:
+        """Everything the report reads, as stored: no names, no address beyond ZIP and city."""
+        prop = self._rest("GET", "properties", params={"select": "id,team_id,zip,city,place_id,facts,facts_confirmed_at", "id": f"eq.{property_id}"})
+        if not prop:
+            return None
+        p = prop[0]
+        team = p["team_id"]
+        insights = self._rest("GET", "property_insights", params={"select": "valuation,segments,schools,amenities,sources,notes", "property_id": f"eq.{property_id}"})
+        consent = self.processing_consent(property_id)
+        findings = self._rest(
+            "GET",
+            "findings",
+            params={"select": "room,category,condition,issue,suggested_fix,fix_item,quantity,severity,status", "property_id": f"eq.{property_id}", "status": "in.(confirmed,edited)"},
+        ) if consent else []
+        photos = self._rest("GET", "photos", params={"select": "room,photo_results(outcome)", "property_id": f"eq.{property_id}"}) if consent else []
+        rooms = sorted({r["room"] for r in photos if any(x.get("outcome") == "analyzed" for x in _as_list(r.get("photo_results")))})
+        return {
+            "property": {k: p.get(k) for k in ("zip", "city", "place_id", "facts", "facts_confirmed_at")},
+            "insights": insights[0] if insights else None,
+            "findings": findings,
+            "rooms_photographed": rooms,
+            "cost_book": self._rest("GET", "cost_book", params={"select": "item,unit,low_usd,high_usd", "team_id": f"eq.{team}"}),
+            "quotes": self._rest("GET", "quotes", params={"select": "item,low_usd,high_usd", "property_id": f"eq.{property_id}"}),
+            "priors": self._rest("GET", "value_priors", params={"select": "item,recovery_low,recovery_high,source", "team_id": f"eq.{team}"}),
+        }
+
+    def update_report(self, report_id: str, **fields: Any) -> None:
+        self._rest("PATCH", "reports", params={"id": f"eq.{report_id}"}, body=fields)
+
+
+def _as_list(v: Any) -> list[dict[str, Any]]:
+    """PostgREST embeds a one-to-one relation as an object, one-to-many as a list."""
+    if v is None:
+        return []
+    return v if isinstance(v, list) else [v]

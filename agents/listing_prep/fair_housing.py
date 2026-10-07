@@ -1,4 +1,4 @@
-"""The fair-housing screen for photo findings (SPEC_LISTING_PREP.md §3; owner review).
+"""The fair-housing screen for photo findings and report narratives (SPEC_LISTING_PREP.md §3; owner review).
 
 Findings describe the property's condition and fixes, nothing else. Every finding's text
 (`issue`, `suggested_fix`) is screened here before it is stored; one that touches a
@@ -21,6 +21,9 @@ Forbidden topics:
 The rules are deliberately conservative: a false alarm costs one finding the agent can
 add back by hand; a miss puts a fair-housing problem into a report. The labelled cases
 in `evals/listing_prep/fair_housing_cases.jsonl` pin both directions (pytest runs them).
+
+The report (P5) uses the same rules with `scope="report"` (see REPORT_RULES below), and
+a second model reviews its narrative for what rules can't see (`report.Reviewer`).
 """
 
 from __future__ import annotations
@@ -121,12 +124,57 @@ RULES: dict[str, re.Pattern[str]] = {
 }
 
 
-def violations(text: str) -> list[str]:
+# The report (P5) screens its narrative with the same rules, scoped to what a listing
+# report legitimately says. Two differences, both narrower than the findings scope only
+# where the report needs it:
+#   * it may name nearby public schools and their distance (the Desk lists the nearest
+#     ones, §5.1), but never rate them or claim an attendance area: "good schools",
+#     "top-rated schools" and "school district" are still caught;
+#   * it may mention documents and photos generically ("clear personal items"), so the
+#     `personal` topic (keepsakes seen in a photo) doesn't apply.
+# Everything else (people, family status, religion, origin, sex, disability, politics,
+# the neighborhood's residents or character, steering) is caught exactly as in findings.
+REPORT_RULES: dict[str, re.Pattern[str]] = {
+    **{t: r for t, r in RULES.items() if t not in ("personal", "neighborhood")},
+    "neighborhood": re.compile(
+        _words(
+            r"neighbou?rhoods?", r"neighbou?rs?", r"demographics?", r"crime",
+            r"safe (?:area|street|place|for)", r"safety", r"good area", r"bad area", r"up[- ]and[- ]coming",
+            r"gentrif\w*", r"exclusive", r"diverse", r"diversity", r"integrated",
+            r"(?:quiet|nice|good|bad|rough|desirable|undesirable) (?:area|street|block|part of town)",
+            r"(?:good|great|top|best|excellent|highly[- ]rated|top[- ]rated|award[- ]winning|rated|ranked) schools?",
+            r"school districts?", r"school boundar(?:y|ies)", r"attendance (?:area|zone|boundar(?:y|ies))",
+        ),
+        re.I,
+    ),
+}
+REPORT_RULES = {t: REPORT_RULES[t] for t in RULES if t in REPORT_RULES}  # RULES order
+
+Scope = str  # "findings" | "report"
+
+
+def _rules(scope: Scope) -> dict[str, re.Pattern[str]]:
+    return REPORT_RULES if scope == "report" else RULES
+
+
+def violations(text: str, scope: Scope = "findings") -> list[str]:
     """The forbidden topics a text touches (empty when it's fine)."""
-    return [topic for topic, rule in RULES.items() if rule.search(text or "")]
+    return [topic for topic, rule in _rules(scope).items() if rule.search(text or "")]
 
 
-def screen(texts: Iterable[str]) -> list[str]:
+def screen(texts: Iterable[str], scope: Scope = "findings") -> list[str]:
     """Topics touched by any of several texts, in RULES order, without repeats."""
-    found = {t for text in texts for t in violations(text)}
-    return [t for t in RULES if t in found]
+    rules = _rules(scope)
+    found = {t for text in texts for t in violations(text, scope)}
+    return [t for t in rules if t in found]
+
+
+def explain(texts: Iterable[str], scope: Scope = "findings") -> list[tuple[str, str]]:
+    """(topic, the matched words) for each hit, so a writer can be told what to change."""
+    out: list[tuple[str, str]] = []
+    for text in texts:
+        for topic, rule in _rules(scope).items():
+            m = rule.search(text or "")
+            if m and (topic, m.group(0)) not in out:
+                out.append((topic, m.group(0)))
+    return out

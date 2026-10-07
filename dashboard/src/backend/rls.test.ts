@@ -163,6 +163,7 @@ describe('anonymous callers and coverage', () => {
       ).map((r) => r.proname);
     expect(await callable('authenticated')).toEqual([
       'accept_invite',
+      'cancel_report',
       'confirm_facts',
       'create_team',
       'facts_confirmed',
@@ -176,6 +177,7 @@ describe('anonymous callers and coverage', () => {
       'processing_consent',
       'property_team',
       'purge_property_photos',
+      'request_report',
       'save_cost_rows',
       'save_value_priors',
       'valid_facts',

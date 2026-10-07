@@ -39,7 +39,8 @@ def test_listing_prep_worker_is_opt_in_read_only_and_keeps_its_secrets_server_si
     assert workflow["permissions"] == {"contents": "read"}
     env = job["steps"][-1]["env"]
     assert env["SUPABASE_SERVICE_ROLE_KEY"] == "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
-    assert float(env["AGENTS_CORE_MAX_RUN_USD"]) <= 1.0
+    # Photo findings plus at most two reports ($0.80 each, claimed only while the cap covers one).
+    assert float(env["AGENTS_CORE_MAX_RUN_USD"]) <= 2.5
     # The site's build gets the public URL and anon key, never the service key.
     site = (WORKFLOWS / "dashboard.yml").read_text()
     assert "SUPABASE_SERVICE_ROLE_KEY" not in site

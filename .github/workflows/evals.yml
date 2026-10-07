@@ -1,7 +1,9 @@
 name: Evals
 
 # The eval gate on pull requests (agents-core's run-evals.yml@v0.3.1): runs the
-# suites in evals/real_estate/suites.py, appends to evals/history.jsonl, compares
+# suites in evals/real_estate/suites.py and the Listing Prep report template suite
+# (evals/listing_prep/suites.py, free; its live REPORT_AGENT suite costs ~$2 and is
+# run by hand after report prompt or tool changes), appends to evals/history.jsonl, compares
 # each suite with the committed baseline (the previous history line) and fails on a
 # score drop of more than regression_threshold. max_usd caps each suite's spend
 # (AGENTS_CORE_EVAL_MAX_USD) and total_max_usd the whole run across suites
@@ -27,6 +29,7 @@ jobs:
         evals.real_estate.suites:TEMPLATE_BRIEFS
         evals.real_estate.suites:LLM_BRIEFS
         evals.real_estate.suites:INVESTIGATOR
+        evals.listing_prep.suites:TEMPLATE_REPORTS
       max_usd: "0.25"
       total_max_usd: "0.40"
       regression_threshold: "0.10"

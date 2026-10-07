@@ -2,7 +2,7 @@ name: listing-prep-worker
 
 # The Desk's private worker (agents/listing_prep/worker.py): photo housekeeping
 # (retention, orphaned and deleted files), property insights (P3: value range, buyer
-# needs, schools, amenities) and queued photo-findings jobs (P2).
+# needs, schools, amenities), queued photo-findings jobs (P2) and queued reports (P5).
 #
 # It talks to the Desk's backend with the service role, a server-side secret of this
 # workflow only (the site's build never sees it; dashboard.yml's check:secrets scans
@@ -28,14 +28,14 @@ jobs:
   work:
     if: ${{ vars.DESK_WORKER_ENABLED == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
       - run: uv sync --no-dev
-      - name: Housekeeping, then queued photo findings
+      - name: Housekeeping, then queued photo findings and reports
         run: uv run python -m agents.listing_prep.worker
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -43,4 +43,6 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Optional: buyer demand by need (P3). Without it the insights say demand couldn't be sized.
           CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
-          AGENTS_CORE_MAX_RUN_USD: "1.00"
+          # Photo findings cost about $0.004 a photo; a report is capped at $0.80 (report.BUDGET
+          # + the fair-housing review) and is only claimed while the cap has room for a whole one.
+          AGENTS_CORE_MAX_RUN_USD: "2.50"

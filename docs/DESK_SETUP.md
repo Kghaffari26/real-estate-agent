@@ -105,7 +105,7 @@ That's all the site needs. Without them, the Desk says "not configured" and the 
 the site is unchanged. The site never gets the service-role key: the build fails if it's
 pasted into `SUPABASE_ANON_KEY` by mistake, and `check:secrets` scans the built site for it.
 
-### The Listing Prep worker (photo findings and photo housekeeping)
+### The Listing Prep worker (photo findings, reports and photo housekeeping)
 
 The worker (`agents/listing_prep/worker.py`, run by `.github/workflows/listing-prep-worker.yml`
 every 15 minutes) works on the backend with the **service role**: it reads queued
@@ -117,12 +117,19 @@ yourself, and never paste it into a chat.
 | --- | --- | --- |
 | secret `SUPABASE_URL` | (already added above) | the worker |
 | secret `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API → `service_role` / secret key | the worker only |
-| secret `ANTHROPIC_API_KEY` | (already used by the market agent) | the worker's photo analysis |
+| secret `ANTHROPIC_API_KEY` | (already used by the market agent) | the worker's photo analysis and reports |
 | secret `CENSUS_API_KEY` (optional) | a free key from api.census.gov | buyer demand in the property insights |
 | **variable** `DESK_WORKER_ENABLED` | `true` | turns the scheduled worker on |
 
 Until the variable is set, the workflow doesn't run. Without the Anthropic key, it does
-housekeeping only (deleting removed and expired photos), and analyses stay queued.
+housekeeping only (deleting removed and expired photos), and analyses and reports stay
+queued.
+
+**What it costs.** Photo findings are about $0.004 a photo (fast tier). A report is a
+research loop on the smart tier plus a fast-tier fair-housing review, capped at $0.80
+and typically $0.30–0.50. The workflow caps each run at $2.50
+(`AGENTS_CORE_MAX_RUN_USD`) and takes at most two reports a run; a report is claimed
+only when the remaining cap covers a whole one, so the rest wait for the next run.
 The repository is public, so its logs are too. The worker logs counts and ids only:
 no addresses, names, photos or findings.
 

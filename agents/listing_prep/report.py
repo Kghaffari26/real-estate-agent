@@ -748,24 +748,30 @@ class Reviewer:
         self.usd = 0.0
         self.calls = 0
         self.last_ok: bool | None = None
+        self.failure: str | None = None  # why the last review couldn't answer (REVIEW_FAILURES key)
         self.recorded: list[dict[str, Any]] = []  # each response, for replayable eval recordings
 
     def __call__(self, draft: Any) -> list[ReviewIssue] | None:
         text = "\n".join(f"- {t}" for t in narrative_texts(draft))
         messages = [{"role": "user", "content": f"Report narrative to review:\n{text}"}]
-        self.last_ok = None
+        self.last_ok, self.failure = None, None
         for _ in range(2):
             # A scope counts everything the tracker spends while it's open (the loop's calls
             # too), so each review call gets its own, sized to what's left of the review budget.
             scope = SpendScope(self.llm.tracker, max(self.budget_usd - self.usd, 0.0), label="listing_prep.report_review")
             try:
                 turn = self.llm.converse(REVIEW_TIER, messages, system=REVIEW_SYSTEM, tools=[REVIEW_TOOL], max_tokens=REVIEW_MAX_TOKENS, purpose="listing_prep.report_review", temperature=0, budget=scope)
-            except (BudgetExceeded, LLMError):
+            except BudgetExceeded:
+                self.failure = "budget"
+                return None
+            except LLMError:
+                self.failure = "model_error"
                 return None
             self.calls += 1
             self.usd += turn.usd
             self.recorded.append({"content": turn.content, "stop_reason": turn.stop_reason, "usage": {"input_tokens": turn.usage.input_tokens, "output_tokens": turn.usage.output_tokens}})
             if turn.stop_reason == "refusal":
+                self.failure = "refusal"
                 return None
             for use in turn.tool_uses:
                 if use.get("name") == REVIEW_TOOL["name"]:
@@ -778,6 +784,7 @@ class Reviewer:
                         issues = [ReviewIssue(quote="", reason="The reviewer marked the narrative non-compliant without quoting it.")]
                     self.last_ok = not issues
                     return issues
+        self.failure = "no_answer"
         return None
 
 
@@ -992,27 +999,60 @@ def template_draft(world: ReportWorld) -> ReportDraft:
 # ---- running and assembling ---------------------------------------------------------------------
 
 
+# Why a report fell back to the plain template, in words the agent sees on the Desk
+# (`notice`, stored in `reports.note` too). The figures never change; only the wording does.
+REVIEW_FAILURES = {
+    "refusal": "the reviewing model declined to review it",
+    "budget": "the review reached its spending limit",
+    "model_error": "the AI service returned an error",
+    "no_answer": "the reviewer didn’t return a usable answer",
+}
+STOP_REASONS = {
+    "max_steps": "the research reached its step limit",
+    "max_usd": "the research reached its spending limit",
+    "max_seconds": "the research reached its time limit",
+    "run_budget": "the worker’s spending limit for this run was reached",
+    "refusal": "the model declined to finish it",
+    "end_turn_without_finish": "the model stopped without finishing",
+    "max_tokens": "a response was cut off",
+    "guard_failed": "the narrative’s figures didn’t match the computed ones",
+}
+AGAIN = "The figures are the same either way. Request the report again for the full written narrative."
+
+
+def notice(kind: str, reason: str | None = None) -> dict[str, str]:
+    """{kind, reason, text}: the note shown at the top of a template report."""
+    if kind == "review_unavailable":
+        why = REVIEW_FAILURES.get(reason or "", "for an unknown reason")
+        text = f"Plain wording: the fair-housing review of the written narrative couldn’t run ({why}), so this report uses fixed template text instead. {AGAIN}"
+    elif kind == "guard_failed":
+        text = f"Plain wording: the written narrative cited figures that didn’t match the computed ones, twice, so this report uses fixed template text instead. {AGAIN}"
+    elif kind == "stopped_early":
+        why = STOP_REASONS.get(reason or "", "the research stopped early")
+        text = f"Plain wording: {why}, so this report uses fixed template text instead. {AGAIN}"
+    else:
+        text = "Plain wording: no AI model was available, so this report uses fixed template text."
+    return {"kind": kind, "reason": reason or "", "text": text}
+
+
 def run_report(llm: LLM | None, world: ReportWorld, *, budget: LoopBudget = BUDGET) -> dict[str, Any]:
     """The finished report (`assemble`). Without a model, the template narrative."""
     if llm is None:
-        return assemble(world, template_draft(world), source="template", warnings=["No Anthropic key: the narrative is the plain template."])
+        return assemble(world, template_draft(world), source="template", note=notice("no_model"))
     loop, box, reviewer = build_loop(llm, world, budget=budget)
     result: LoopResult[ReportDraft] = loop.run(task_prompt(world))
-    warnings: list[str] = []
+    note: dict[str, str] | None = None
     draft: ReportDraft
     if result.ok and result.result is not None and result.narrative_source == "llm":
         if reviewer is not None and reviewer.last_ok is not True:
             draft, source = template_draft(world), "template"
-            warnings.append("The fair-housing review couldn't run, so the narrative is the plain template.")
+            note = notice("review_unavailable", reviewer.failure)
         else:
             draft, source = result.result, "llm"
     else:
         draft, source = template_draft(world), "template"
-        if result.ok:
-            warnings.append("The narrative didn't pass the number check twice, so it's the plain template.")
-        else:
-            warnings.append(f"The research stopped early ({result.stop_reason}), so the narrative is the plain template.")
-    return assemble(world, draft, source=source, result=result, warnings=warnings, review_calls=reviewer.calls if reviewer else 0, usd=result.usd + (reviewer.usd if reviewer else 0.0))
+        note = notice("guard_failed") if result.ok else notice("stopped_early", result.stop_reason)
+    return assemble(world, draft, source=source, result=result, note=note, review_calls=reviewer.calls if reviewer else 0, usd=result.usd + (reviewer.usd if reviewer else 0.0))
 
 
 def assemble(
@@ -1021,7 +1061,7 @@ def assemble(
     *,
     source: str,
     result: LoopResult[Any] | None = None,
-    warnings: list[str] | None = None,
+    note: dict[str, str] | None = None,
     review_calls: int = 0,
     usd: float = 0.0,
 ) -> dict[str, Any]:
@@ -1053,7 +1093,8 @@ def assemble(
         "tools_called": result.tools_called() if result is not None else [],
         "review_calls": review_calls,
         "cost_usd": round(usd, 6),
-        "warnings": warnings or [],
+        "notice": note,
+        "warnings": [note["text"]] if note else [],
         "goal": world.goal.model_dump(),
         "sections": {
             "snapshot": {"valuation": v, "target_price": world.goal.target_price, "strengths": strong, "weaknesses": [{"room": room_label(f.get("room")), "issue": f.get("issue"), "condition": f.get("condition")} for f in weak], "narrative": draft.snapshot},

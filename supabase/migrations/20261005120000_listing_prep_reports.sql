@@ -7,6 +7,14 @@
 -- fair-housing screened before it's stored. Members read; only the service role writes
 -- output. Versions count up per property; P6 adds locking and sharing.
 --
+-- Spend is capped three ways: per report (the agent's loop budget), per worker run
+-- (AGENTS_CORE_MAX_RUN_USD) and per day, per team and across all teams. The daily caps are
+-- enforced here, when a report is claimed: the worker records what every report and photo
+-- analysis spent in `ai_spend`, and `claim_report_job` skips a team whose spend today plus
+-- a whole report's worst case would pass its cap (and claims nothing when the global cap
+-- would be passed). A skipped report stays queued for the next day. "Today" is the
+-- Pacific day.
+--
 -- The report's line items live inside `output` (sections.improvements.items) rather than
 -- a separate report_items table (§8): they're written once, with the report, and read
 -- with it (DECISIONS.md, P5).
@@ -24,6 +32,8 @@ create table public.reports (
   prompt_version text,
   usd numeric(10, 4) not null default 0,
   error text check (error is null or error ~ '^[a-z_]{2,40}$'),
+  -- Shown to the agent at the top of the report: why it uses the plain template, if it does.
+  note text check (note is null or char_length(note) <= 600),
   requested_by uuid not null default auth.uid() references auth.users (id),
   requested_at timestamptz not null default now(),
   started_at timestamptz,
@@ -76,24 +86,67 @@ begin
 end;
 $$;
 
--- The worker claims the oldest queued report (one at a time, safely under concurrency).
-create function public.claim_report_job() returns setof public.reports
+-- ---------- daily AI spend ----------
+
+-- What the worker spent, per team: one row per finished report or photo analysis. Kept
+-- apart from reports and jobs so deleting a property doesn't give its spend back.
+create table public.ai_spend (
+  id bigint generated always as identity primary key,
+  team_id uuid not null references public.teams (id) on delete cascade,
+  kind text not null check (kind in ('report', 'vision')),
+  ref uuid,
+  usd numeric(10, 4) not null check (usd >= 0),
+  at timestamptz not null default now()
+);
+create index ai_spend_team_at on public.ai_spend (team_id, at);
+
+alter table public.ai_spend enable row level security;
+create policy ai_spend_read on public.ai_spend for select to authenticated using (public.is_manager(team_id));
+
+create function public.record_ai_spend(property uuid, kind text, ref uuid, usd numeric) returns void
+language sql security definer set search_path = public as $$
+  insert into public.ai_spend (team_id, kind, ref, usd) values (public.property_team(property), kind, ref, usd)
+$$;
+
+-- Spend today (the Pacific day) for one team, or all teams when `team` is null, plus
+-- `reserve` for each report still running (started in the last day; older ones are stale).
+create function public.ai_spend_today(team uuid default null, reserve numeric default 0) returns numeric
+language sql stable security definer set search_path = public as $$
+  select coalesce((select sum(s.usd) from public.ai_spend s
+                   where (team is null or s.team_id = team)
+                     and (s.at at time zone 'America/Los_Angeles')::date = (now() at time zone 'America/Los_Angeles')::date), 0)
+       + reserve * (select count(*) from public.reports r join public.properties p on p.id = r.property_id
+                    where r.status = 'running' and r.started_at > now() - interval '1 day'
+                      and (team is null or p.team_id = team))
+$$;
+
+-- The worker claims the oldest queued report whose team can afford a whole one today
+-- (one at a time, safely under concurrency). `reserve` is a report's worst case.
+create function public.claim_report_job(team_cap numeric, global_cap numeric, reserve numeric) returns setof public.reports
 language plpgsql security definer set search_path = public as $$
 begin
+  if public.ai_spend_today(null, reserve) + reserve > global_cap then
+    return;
+  end if;
   return query
     update public.reports set status = 'running', started_at = now()
-    where id = (select id from public.reports where status = 'queued' order by requested_at for update skip locked limit 1)
+    where id = (select r.id from public.reports r join public.properties p on p.id = r.property_id
+                where r.status = 'queued' and public.ai_spend_today(p.team_id, reserve) + reserve <= team_cap
+                order by r.requested_at for update of r skip locked limit 1)
     returning *;
 end;
 $$;
 
-revoke all on public.reports from anon, authenticated;
-grant select on public.reports to authenticated;
-grant all on public.reports to service_role;
+revoke all on public.reports, public.ai_spend from anon, authenticated;
+grant select on public.reports, public.ai_spend to authenticated;
+grant all on public.reports, public.ai_spend to service_role;
 grant select on public.value_priors, public.cost_book, public.quotes, public.property_insights, public.photos,
   public.photo_results, public.properties to service_role;
 
-revoke all on function public.request_report(uuid, bigint, numeric, int), public.cancel_report(uuid), public.claim_report_job()
+revoke all on function public.request_report(uuid, bigint, numeric, int), public.cancel_report(uuid),
+  public.claim_report_job(numeric, numeric, numeric), public.record_ai_spend(uuid, text, uuid, numeric),
+  public.ai_spend_today(uuid, numeric)
   from public, anon, authenticated;
 grant execute on function public.request_report(uuid, bigint, numeric, int), public.cancel_report(uuid) to authenticated;
-grant execute on function public.claim_report_job() to service_role;
+grant execute on function public.claim_report_job(numeric, numeric, numeric), public.record_ai_spend(uuid, text, uuid, numeric),
+  public.ai_spend_today(uuid, numeric) to service_role;

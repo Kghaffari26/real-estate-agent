@@ -121,6 +121,28 @@ export interface VisionJob {
   finished_at: string | null;
 }
 
+/** A listing-prep report (P5): queued by an agent, written by the worker (agents/listing_prep/report.py). */
+export interface Report {
+  id: string;
+  version: number;
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+  target_price: number | null;
+  budget: number | null;
+  days_to_list: number | null;
+  narrative_source: 'llm' | 'template' | null;
+  /** Why the report uses the plain template, when it does: shown to the agent as is. */
+  note: string | null;
+  error: string | null;
+  requested_at: string;
+  finished_at: string | null;
+}
+
+export interface ReportRequest {
+  target_price: number | null;
+  budget: number | null;
+  days_to_list: number | null;
+}
+
 export interface PhotoResult {
   photo_id: string;
   outcome: 'analyzed' | 'skipped_people' | 'skipped_unusable' | 'rejected_metadata';
@@ -175,6 +197,9 @@ export function intakeMessage(message: string): string {
   if (/only a manager can delete all photos/.test(message)) return 'Only a manager can delete all of a property’s photos.';
   if (/withdrawn finding/.test(message)) return 'This finding was withdrawn when consent was revoked. Run the analysis again under a new consent.';
   if (/vision_jobs_one_active|duplicate key.*vision_jobs/.test(message)) return 'An analysis is already queued or running for this property.';
+  if (/report for this property is already queued or running|reports_one_active/.test(message)) return 'A report is already queued or running for this property.';
+  if (/confirm the property's facts first/.test(message)) return 'Confirm the facts before asking for a report.';
+  if (/reports_(target_price|budget|days_to_list)_check/.test(message)) return 'Check the target price (at least $10,000), the budget and the days until listing (0 to 365).';
   return friendly(message);
 }
 
@@ -286,6 +311,22 @@ export function intakeApi(c: SupabaseClient) {
     async latestJob(property: string): Promise<VisionJob | null> {
       const rows = check(await c.from('vision_jobs').select('id, status, photos_total, photos_done, error, created_at, finished_at').eq('property_id', property).order('created_at', { ascending: false }).limit(1)) as VisionJob[];
       return rows[0] ?? null;
+    },
+
+    async latestReport(property: string): Promise<Report | null> {
+      const rows = check(
+        await c.from('reports').select('id, version, status, target_price, budget, days_to_list, narrative_source, note, error, requested_at, finished_at').eq('property_id', property).order('version', { ascending: false }).limit(1),
+      ) as Report[];
+      const r = rows[0];
+      return r ? { ...r, target_price: num(r.target_price), budget: num(r.budget) } : null;
+    },
+
+    async requestReport(property: string, r: ReportRequest): Promise<void> {
+      check(await c.rpc('request_report', { property, target_price: r.target_price, budget: r.budget, days_to_list: r.days_to_list }));
+    },
+
+    async cancelReport(report: string): Promise<void> {
+      check(await c.rpc('cancel_report', { report }));
     },
 
     async requestAnalysis(property: string, me: string): Promise<void> {

@@ -31,7 +31,7 @@ export interface State {
 }
 
 export type Row = Record<string, unknown>;
-const TABLES = ['properties', 'seller_consents', 'photos', 'cost_book', 'quotes', 'vision_jobs', 'photo_results', 'findings', 'property_insights', 'value_priors'];
+const TABLES = ['properties', 'seller_consents', 'photos', 'cost_book', 'quotes', 'vision_jobs', 'photo_results', 'findings', 'property_insights', 'value_priors', 'reports'];
 const DEFAULTS: Record<string, () => Row> = {
   properties: () => ({ status: 'watching', facts: {}, facts_confirmed_at: null, facts_confirmed_by: null, notes: null, matched_address: null, lat: null, lon: null, zip: null, city: null, place_id: null, tract: null, county_fips: null }),
   seller_consents: () => ({ revoked_at: null }),
@@ -179,6 +179,33 @@ export async function fakeBackend(page: Page, s: State) {
       p.facts_confirmed_at = new Date().toISOString();
       p.facts_confirmed_by = ME.id;
       return json(route, p.facts_confirmed_at);
+    }
+    if (path === '/rest/v1/rpc/request_report') {
+      const p = s.tables.properties?.find((r) => r.id === body.property);
+      if (!p?.facts_confirmed_at) return json(route, { code: '22023', message: "confirm the property's facts first" }, 400);
+      const mine = (s.tables.reports ??= []).filter((r) => r.property_id === body.property);
+      if (mine.some((r) => r.status === 'queued' || r.status === 'running')) return json(route, { code: '23505', message: 'a report for this property is already queued or running' }, 409);
+      const id = uuid();
+      s.tables.reports.push({
+        id,
+        property_id: body.property,
+        version: mine.length + 1,
+        status: 'queued',
+        target_price: body.target_price,
+        budget: body.budget,
+        days_to_list: body.days_to_list,
+        narrative_source: null,
+        note: null,
+        error: null,
+        requested_at: new Date().toISOString(),
+        finished_at: null,
+      });
+      return json(route, id);
+    }
+    if (path === '/rest/v1/rpc/cancel_report') {
+      const r = (s.tables.reports ?? []).find((x) => x.id === body.report && x.status === 'queued');
+      if (r) Object.assign(r, { status: 'cancelled', error: 'cancelled_by_agent', finished_at: new Date().toISOString() });
+      return json(route, Boolean(r));
     }
     if (path === '/rest/v1/rpc/purge_property_photos') {
       const gone = (s.tables.photos ?? []).filter((p) => p.property_id === body.property);

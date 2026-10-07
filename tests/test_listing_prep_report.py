@@ -190,7 +190,7 @@ def test_the_loop_researches_then_finishes_and_the_review_passes(tmp_path, monke
     world = WORLDS["full"]
     llm, client = llm_with([*research_turns(), [("finish", draft_input(world))], REVIEW_OK], tmp_path, monkeypatch)
     rep = R.run_report(llm, world)
-    assert rep["narrative_source"] == "llm" and rep["stop_reason"] == "finished" and rep["warnings"] == []
+    assert rep["narrative_source"] == "llm" and rep["stop_reason"] == "finished" and rep["warnings"] == [] and rep["notice"] is None
     assert rep["tools_called"] == [*RESEARCH, "evidence_gaps"]
     assert rep["review_calls"] == 1 and rep["cost_usd"] > 0 and rep["model"] == tier_config("smart").model
     # The loop runs on the smart tier; the review on the fast tier, with the narrative only.
@@ -231,7 +231,8 @@ def test_an_invented_number_twice_falls_back_to_the_template(tmp_path, monkeypat
     bad = draft_input(world, outcome="The work adds about $61,000 to the price, at Low confidence, from the team's priors.")
     llm, _ = llm_with([*research_turns(), [("finish", bad)], REVIEW_OK, [("finish", bad)], REVIEW_OK], tmp_path, monkeypatch)
     rep = R.run_report(llm, world)
-    assert rep["narrative_source"] == "template" and "number check" in rep["warnings"][0]
+    assert rep["narrative_source"] == "template" and rep["notice"]["kind"] == "guard_failed"
+    assert "didn’t match the computed ones" in rep["warnings"][0]
     assert rep["sections"]["outcome"]["narrative"] == R.template_draft(world).outcome
 
 
@@ -239,7 +240,31 @@ def test_no_review_answer_means_the_template_is_published(tmp_path, monkeypatch)
     world = WORLDS["condo-small"]
     llm, _ = llm_with([*research_turns(), [("finish", draft_input(world))], ("refusal",)], tmp_path, monkeypatch)
     rep = R.run_report(llm, world)
-    assert rep["narrative_source"] == "template" and "fair-housing review couldn't run" in rep["warnings"][0]
+    assert rep["narrative_source"] == "template"
+    assert (rep["notice"]["kind"], rep["notice"]["reason"]) == ("review_unavailable", "refusal")
+    assert "fair-housing review of the written narrative couldn’t run (the reviewing model declined to review it)" in rep["notice"]["text"]
+    assert rep["warnings"] == [rep["notice"]["text"]]
+
+
+@pytest.mark.parametrize(
+    "turns,reason,words",
+    [
+        ([("refusal",)], "refusal", "declined"),
+        ([[("not_the_review_tool", {})], [("not_the_review_tool", {})]], "no_answer", "usable answer"),
+    ],
+)
+def test_the_notice_says_why_the_review_failed(turns, reason, words, tmp_path, monkeypatch):
+    world = WORLDS["condo-small"]
+    llm, _ = llm_with([*research_turns(), [("finish", draft_input(world))], *turns], tmp_path, monkeypatch)
+    rep = R.run_report(llm, world)
+    assert (rep["notice"]["kind"], rep["notice"]["reason"]) == ("review_unavailable", reason) and words in rep["notice"]["text"]
+
+
+def test_the_notice_names_a_review_budget_failure(tmp_path, monkeypatch):
+    llm, client = llm_with([], tmp_path, monkeypatch)
+    rv = R.Reviewer(llm, budget_usd=0.0)  # can't afford a call
+    assert rv(R.template_draft(WORLDS["condo-small"])) is None and rv.failure == "budget" and client.requests == []
+    assert "spending limit" in R.notice("review_unavailable", rv.failure)["text"]
 
 
 def test_a_loop_that_stops_early_publishes_the_template(tmp_path, monkeypatch):
@@ -247,7 +272,7 @@ def test_a_loop_that_stops_early_publishes_the_template(tmp_path, monkeypatch):
     llm, _ = llm_with(["I think the home is fine."], tmp_path, monkeypatch)
     rep = R.run_report(llm, world)
     assert rep["narrative_source"] == "template" and rep["stop_reason"] == "end_turn_without_finish"
-    assert "stopped early" in rep["warnings"][0]
+    assert rep["notice"]["kind"] == "stopped_early" and "stopped without finishing" in rep["notice"]["text"]
     llm, _ = llm_with([[("get_property", {})]] * 3, tmp_path, monkeypatch)
     rep = R.run_report(llm, world, budget=LoopBudget(max_steps=3, max_usd=0.75, max_seconds=60))
     assert rep["stop_reason"] == "max_steps" and rep["narrative_source"] == "template"
@@ -359,9 +384,15 @@ class ReportBackend:
         self.jobs = list(jobs)
         self.data = data
         self.updates: list[tuple[str, dict[str, Any]]] = []
+        self.claims: list[tuple[float, float, float]] = []
+        self.spend: list[tuple[str, str, str, float]] = []
 
-    def claim_report_job(self):
+    def claim_report_job(self, team_cap, global_cap, reserve):
+        self.claims.append((team_cap, global_cap, reserve))
         return self.jobs.pop(0) if self.jobs else None
+
+    def record_spend(self, property_id, kind, ref, usd):
+        self.spend.append((property_id, kind, ref, usd))
 
     def report_inputs(self, property_id):
         return self.data
@@ -397,6 +428,9 @@ def test_a_report_job_runs_the_agent_and_stores_the_report(tmp_path, monkeypatch
     assert rid == "r1" and fields["status"] == "done" and fields["prompt_version"] == R.PROMPT_VERSION
     assert fields["output"]["goal"] == {"target_price": 1200000, "budget": 5000, "days_to_list": 10}
     assert fields["usd"] > 0 and json.dumps(fields["output"])  # JSON-serializable for PostgREST
+    assert fields["note"] is None  # a written narrative: no notice
+    assert set(backend.claims) == {(5.0, 15.0, worker.REPORT_RESERVE_USD)}  # the default daily caps, checked at every claim
+    assert backend.spend == [("p1", "report", "r1", round(fields["usd"], 4))]
 
 
 def test_report_jobs_cancel_when_facts_were_unconfirmed_and_fail_cleanly(tmp_path, monkeypatch):
@@ -409,7 +443,8 @@ def test_report_jobs_cancel_when_facts_were_unconfirmed_and_fail_cleanly(tmp_pat
     backend = ReportBackend([ReportJob("r2", "p1")], inputs())
     monkeypatch.setattr(R, "run_report", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     assert worker.run(backend, llm)["reports"][0]["status"] == "failed"
-    assert backend.updates[-1][1]["error"] == "worker_error"
+    assert backend.updates[-1][1]["error"] == "worker_error" and backend.updates[-1][1]["usd"] == 0.0
+    assert backend.spend == []  # nothing spent, nothing recorded
 
 
 def test_reports_are_claimed_only_while_the_run_can_pay_for_one(tmp_path, monkeypatch):
@@ -419,3 +454,90 @@ def test_reports_are_claimed_only_while_the_run_can_pay_for_one(tmp_path, monkey
     backend = ReportBackend([ReportJob("r1", "p1")], inputs())
     assert worker.run(backend, llm)["reports"] == [] and backend.jobs  # left queued for the next run
     assert worker.run(backend, None)["reports"] == []  # no key: reports stay queued
+
+
+def test_a_template_report_stores_its_notice_where_the_desk_shows_it(tmp_path, monkeypatch):
+    world = R.build_world(inputs(), REGION, R.Goal())
+    llm, _ = llm_with([*research_turns(), [("finish", draft_input(world))], ("refusal",)], tmp_path, monkeypatch)
+    backend = ReportBackend([ReportJob("r1", "p1")], inputs())
+    worker.run(backend, llm, http=SimpleNamespace(get_json=lambda url, ttl_seconds=0: REGION))
+    fields = backend.updates[-1][1]
+    assert fields["narrative_source"] == "template"
+    assert fields["note"] == fields["output"]["notice"]["text"] and "fair-housing review" in fields["note"]
+    assert len(fields["note"]) <= 600  # the column's limit
+
+
+def test_daily_caps_come_from_the_environment_with_safe_defaults(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("DESK_DAILY_USD_PER_TEAM", "3")
+    monkeypatch.setenv("DESK_DAILY_USD_GLOBAL", "12.5")
+    assert worker.DailyCaps.from_env() == worker.DailyCaps(3.0, 12.5)
+    monkeypatch.setenv("DESK_DAILY_USD_PER_TEAM", "lots")
+    monkeypatch.setenv("DESK_DAILY_USD_GLOBAL", "-1")
+    assert worker.DailyCaps.from_env() == worker.DailyCaps()
+    assert capsys.readouterr().out.count("::warning") == 2
+    backend = ReportBackend([], inputs())
+    llm, _ = llm_with([], tmp_path, monkeypatch)
+    worker.run(backend, llm, caps=worker.DailyCaps(1.0, 2.0))
+    assert backend.claims == [(1.0, 2.0, worker.REPORT_RESERVE_USD)]
+
+
+# ---- configuration: exit cleanly until the backend is set up ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "url,key,words",
+    [
+        ("", "", "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY aren’t set"),
+        ("https://abc.supabase.co", "", "SUPABASE_SERVICE_ROLE_KEY isn’t set"),
+        ("", "secret", "SUPABASE_URL isn’t set"),
+        ("abc.supabase.co", "secret", "isn’t an https URL"),
+        ("http://abc.supabase.co", "secret", "isn’t an https URL"),
+    ],
+)
+def test_the_worker_exits_cleanly_without_a_usable_configuration(url, key, words, monkeypatch, capsys):
+    monkeypatch.setenv("SUPABASE_URL", url)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", key)
+    assert worker.main([]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("::warning title=Listing Prep worker not configured::") and words in out
+    assert key not in out or not key  # never echoes the key
+
+
+def test_a_local_stack_url_is_fine():
+    assert worker.config_problem("http://127.0.0.1:54321", "k") is None
+    assert worker.config_problem("https://abc.supabase.co", "k") is None
+
+
+@pytest.mark.parametrize(
+    "status,words",
+    [(401, "rejected SUPABASE_SERVICE_ROLE_KEY"), (403, "rejected"), (404, "migrations"), (None, "can't be reached")],
+)
+def test_a_backend_that_rejects_or_cant_answer_is_a_warning_not_a_failure(status, words, monkeypatch, capsys):
+    from agents_core.http import HttpError
+
+    from agents.listing_prep import backend as backend_mod
+
+    def ping(self):
+        raise HttpError("GET /rest/v1/reports", status)
+
+    monkeypatch.setattr(backend_mod.SupabaseBackend, "ping", ping)
+    monkeypatch.setenv("SUPABASE_URL", "https://abc.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "secret-key")
+    assert worker.main([]) == 0
+    out = capsys.readouterr().out
+    assert "::warning" in out and words in out and "secret-key" not in out
+
+
+def test_other_backend_errors_still_fail_the_run(monkeypatch):
+    from agents_core.http import HttpError
+
+    from agents.listing_prep import backend as backend_mod
+
+    def ping(self):
+        raise HttpError("GET /rest/v1/reports -> 500", 500)
+
+    monkeypatch.setattr(backend_mod.SupabaseBackend, "ping", ping)
+    monkeypatch.setenv("SUPABASE_URL", "https://abc.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "k")
+    with pytest.raises(HttpError):
+        worker.main([])

@@ -235,6 +235,9 @@ class MemoryBackend:
     def clear_deletions(self, ids):
         pass
 
+    def record_spend(self, property_id, kind, ref, usd):
+        self.spend = [*getattr(self, "spend", []), (kind, ref, usd)]
+
 
 def scoped(tracker):
     return lambda usd, label: SpendScope(tracker, usd, label=label)

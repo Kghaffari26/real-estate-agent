@@ -39,7 +39,9 @@ afterEach(async () => {
 const confirm = () => t.as(bob, () => t.rows('select public.confirm_facts($1)', [home]));
 const request = (u: User, price: number | null = 1_450_000, budget: number | null = 25_000, days: number | null = 30) =>
   t.as(u, async () => (await one(t.rows<{ id: string }>('select public.request_report($1, $2, $3, $4) as id', [home, price, budget, days]))).id);
-const claim = () => t.service(() => t.rows<{ id: string; status: string; version: number }>('select id, status, version from public.claim_report_job()'));
+const claim = (teamCap = 5, globalCap = 15, reserve = 0.8) =>
+  t.service(() => t.rows<{ id: string; status: string; version: number }>('select id, status, version from public.claim_report_job($1, $2, $3)', [teamCap, globalCap, reserve]));
+const spend = (usd: number, property = home, kind = 'report') => t.service(() => t.rows('select public.record_ai_spend($1, $2, null, $3)', [property, kind, usd]));
 
 describe('report requests', () => {
   it('needs confirmed facts, then queues one report at a time with versions counting up', async () => {
@@ -98,7 +100,8 @@ describe('report visibility and writes', () => {
     await expect(t.as(bob, () => t.rows(`insert into public.reports (property_id, version) values ($1, 9)`, [home]))).rejects.toThrow();
     await expect(t.as(alice, () => t.rows(`update public.reports set output = '{}'::jsonb where id = $1`, [id]))).rejects.toThrow();
     await expect(t.as(alice, () => t.rows('delete from public.reports where id = $1', [id]))).rejects.toThrow();
-    await expect(t.as(bob, () => t.rows('select * from public.claim_report_job()'))).rejects.toThrow();
+    await expect(t.as(bob, () => t.rows('select * from public.claim_report_job(100, 100, 0)'))).rejects.toThrow();
+    await expect(t.as(alice, () => t.rows('select public.record_ai_spend($1, $2, null, 0)', [home, 'report']))).rejects.toThrow();
   });
 
   it('deleting the property deletes its reports', async () => {
@@ -106,5 +109,49 @@ describe('report visibility and writes', () => {
     await request(bob);
     await t.as(alice, () => t.rows('delete from public.properties where id = $1', [home]));
     expect(await t.service(() => t.rows('select id from public.reports'))).toEqual([]);
+  });
+});
+
+describe('daily spend caps', () => {
+  it('skips a team whose spend today plus a whole report would pass its cap; the report waits', async () => {
+    await confirm();
+    await spend(3.7); // a report
+    await spend(0.6, home, 'vision'); // photo analyses count too
+    const id = await request(bob);
+    expect(await claim(5, 15, 0.8)).toEqual([]); // 4.30 + 0.80 > 5
+    expect(await t.as(bob, () => t.rows('select status from public.reports where id = $1', [id]))).toEqual([{ status: 'queued' }]);
+    expect(await claim(6, 15, 0.8)).toMatchObject([{ id, status: 'running' }]); // 5.10 <= 6
+  });
+
+  it('a running report reserves its worst case, and the global cap covers every team', async () => {
+    await confirm();
+    const carolTeam = await t.as(carol, async () => (await one(t.rows<{ id: string }>('select id from public.teams'))).id);
+    const other = await t.as(carol, async () => (await one(t.rows<{ id: string }>(`insert into public.properties (team_id, address, created_by, facts) values ($1, '2 Main St, Tustin', $2, $3::jsonb) returning id`, [carolTeam, carol.id, JSON.stringify(CORE)]))).id);
+    await t.as(carol, () => t.rows('select public.confirm_facts($1)', [other]));
+    await spend(2, other);
+    await request(bob);
+    const [first] = await claim(5, 3.5, 0.8); // global: 2 + 0.8 <= 3.5
+    expect(first).toMatchObject({ status: 'running' });
+    await t.as(carol, () => t.rows('select public.request_report($1)', [other]));
+    expect(await claim(5, 3.5, 0.8)).toEqual([]); // global: 2 + 0.8 (running) + 0.8 > 3.5
+    expect(await claim(5, 4, 0.8)).toMatchObject([{ status: 'running' }]); // 3.6 <= 4
+  });
+
+  it('spend from another day or another team does not count; managers can read their team spend', async () => {
+    await confirm();
+    await spend(4.9);
+    await t.admin(`update public.ai_spend set at = now() - interval '2 days'`);
+    await request(bob);
+    expect(await claim(1, 15, 0.8)).toHaveLength(1);
+    expect(await t.as(alice, () => t.rows('select kind from public.ai_spend'))).toEqual([{ kind: 'report' }]);
+    expect(await t.as(bob, () => t.rows('select kind from public.ai_spend'))).toEqual([]); // agents don't
+    expect(await t.as(carol, () => t.rows('select kind from public.ai_spend'))).toEqual([]);
+  });
+
+  it('deleting the property keeps the spend', async () => {
+    await confirm();
+    await spend(4.5);
+    await t.as(alice, () => t.rows('delete from public.properties where id = $1', [home]));
+    expect(await t.service(() => t.rows('select usd::text from public.ai_spend'))).toEqual([{ usd: '4.5000' }]);
   });
 });

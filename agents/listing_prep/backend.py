@@ -65,7 +65,8 @@ class Backend(Protocol):
     def needing_insights(self, limit: int) -> list[dict[str, Any]]: ...
     def reviewed_findings(self, property_id: str) -> list[tuple[int, str]]: ...
     def upsert_insights(self, row: dict[str, Any]) -> None: ...
-    def claim_report_job(self) -> ReportJob | None: ...
+    def claim_report_job(self, team_cap: float, global_cap: float, reserve: float) -> ReportJob | None: ...
+    def record_spend(self, property_id: str, kind: str, ref: str, usd: float) -> None: ...
     def report_inputs(self, property_id: str) -> dict[str, Any] | None: ...
     def update_report(self, report_id: str, **fields: Any) -> None: ...
 
@@ -181,8 +182,12 @@ class SupabaseBackend:
 
     # ---- reports (P5) ----
 
-    def claim_report_job(self) -> ReportJob | None:
-        rows = self._rpc("claim_report_job") or []
+    def ping(self) -> None:
+        """A request that reads nothing, to check the URL, the key and the migrations."""
+        self._rest("GET", "reports", params={"select": "id", "limit": "0"})
+
+    def claim_report_job(self, team_cap: float, global_cap: float, reserve: float) -> ReportJob | None:
+        rows = self._rpc("claim_report_job", {"team_cap": team_cap, "global_cap": global_cap, "reserve": reserve}) or []
         if not rows:
             return None
         r = rows[0]
@@ -217,6 +222,9 @@ class SupabaseBackend:
 
     def update_report(self, report_id: str, **fields: Any) -> None:
         self._rest("PATCH", "reports", params={"id": f"eq.{report_id}"}, body=fields)
+
+    def record_spend(self, property_id: str, kind: str, ref: str, usd: float) -> None:
+        self._rpc("record_ai_spend", {"property": property_id, "kind": kind, "ref": ref, "usd": usd})
 
 
 def _as_list(v: Any) -> list[dict[str, Any]]:

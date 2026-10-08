@@ -176,3 +176,4 @@
 {"ts": "2026-09-27T00:45:34Z", "agent": "real_estate", "run_id": "2026-09-27T00-45-22Z-a3d78f", "tier": "fast", "model": "claude-haiku-4-5-20251001", "purpose": "investigate:pittsburgh-pa:step3", "batch": false, "input_tokens": 7, "output_tokens": 163, "cache_write_tokens": 856, "cache_read_tokens": 4577, "usd": 0.00235}
 {"ts": "2026-09-27T00:45:45Z", "agent": "real_estate", "run_id": "2026-09-27T00-45-22Z-a3d78f", "tier": "fast", "model": "claude-haiku-4-5-20251001", "purpose": "investigate:pittsburgh-pa:step4", "batch": false, "input_tokens": 7, "output_tokens": 901, "cache_write_tokens": 924, "cache_read_tokens": 5433, "usd": 0.00621}
 {"ts": "2026-09-27T00:45:45Z", "kind": "run", "agent": "real_estate", "run_id": "2026-09-27T00-45-22Z-a3d78f", "status": "ok", "calls": 4, "run_usd": 0.01919}
+{"ts": "2026-10-02T19:43:25Z", "kind": "run", "agent": "real_estate", "run_id": "2026-10-02T19-43-13Z-730724", "status": "failed", "calls": 0, "run_usd": 0.0}

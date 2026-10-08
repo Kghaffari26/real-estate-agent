@@ -121,6 +121,10 @@ NO_KEY_WARNING = (
     "No Anthropic API key (ANTHROPIC_API_KEY or AGENTS_ANTHROPIC_API_KEY): new briefs and"
     " investigations use deterministic templates"
 )
+REJECTED_KEY_WARNING = (
+    "The Anthropic API rejected the configured key (HTTP {status}); check the"
+    " ANTHROPIC_API_KEY secret. New briefs and investigations use deterministic templates"
+)
 # latest.json is measured with a representative meta block before the runner adds
 # the real one (whose timestamps/cost digits can differ slightly): keep this margin.
 INDEX_SIZE_MARGIN_BYTES = 512
@@ -149,14 +153,32 @@ class PublishSizeError(RuntimeError):
     after the §10 trimming steps. Fails the run (the previous data stays)."""
 
 
-def llm_available(llm: LLM) -> bool:
-    """False when there's no Anthropic key (and no injected client, as in tests):
-    the run then publishes templates instead of failing."""
+def llm_unavailable_reason(llm: LLM) -> str | None:
+    """Why the LLM can't be used this run (the warning to publish), or None if it can.
+
+    No key: agents-core raises RuntimeError building the client. A key the API rejects
+    (revoked, or a mistyped secret) would instead fail every call with a 401/403, which
+    isn't an LLMError, so the run would fail and publish nothing; it's checked once up
+    front with a free `models.list` request (real SDK clients only, not injected fakes).
+    Either way the run then publishes templates instead of failing."""
     try:
-        llm.client  # noqa: B018 - builds the SDK client; raises without a key
+        client = llm.client
     except RuntimeError:
-        return False
-    return True
+        return NO_KEY_WARNING
+    if type(client).__module__.split(".")[0] != "anthropic":
+        return None
+    try:
+        client.models.list(limit=1)
+    except Exception as exc:  # the SDK's error types, without importing the SDK here
+        status = getattr(exc, "status_code", None)
+        if status in (401, 403):
+            return REJECTED_KEY_WARNING.format(status=status)
+        # Network trouble or a 5xx: let the real calls try (and retry) as usual.
+    return None
+
+
+def llm_available(llm: LLM) -> bool:
+    return llm_unavailable_reason(llm) is None
 
 
 def fit_index(
@@ -992,9 +1014,10 @@ class RealEstateAgent(Agent):
         state = state_mod.State.load()
         previous = state_mod.Previous.load()
         any_changed = raw.any_source_changed
-        llm_ok = llm_available(ctx.llm)
-        if not llm_ok:
-            ctx.warn(NO_KEY_WARNING)
+        llm_problem = llm_unavailable_reason(ctx.llm)
+        llm_ok = llm_problem is None
+        if llm_problem:
+            ctx.warn(llm_problem)
 
         # -- metro briefs: reuse the previous output on an unchanged facts hash --------
         briefs: dict[str, Brief] = {}

@@ -438,6 +438,56 @@ def test_without_an_api_key_the_run_publishes_templates_with_a_warning(workdir, 
     assert client.requests == 5
 
 
+class RejectedKeyClient(FakeClient):
+    """Stands in for a real SDK client whose key the API rejects (a revoked or
+    mistyped secret): the module name marks it as the SDK's, `models.list` answers
+    401, and every request is counted so the test can show none was sent."""
+
+    __module__ = "anthropic._client"
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        def list_models(**_kw):
+            self.requests += 1
+            raise type("AuthenticationError", (Exception,), {"status_code": 401})("invalid x-api-key")
+
+        self.models = SimpleNamespace(list=list_models)
+
+
+@respx.mock
+def test_a_rejected_api_key_publishes_templates_with_a_warning(workdir):
+    """agents-hub: a 401 from Anthropic (the 2026-10-02 run: a bad secret) failed the
+    whole run and the site showed sample data for a week. Now one free models.list
+    call catches it up front and the run degrades like a missing key."""
+    _mock_redfin()
+    client = RejectedKeyClient()
+    assert _run(workdir, client) == 0
+    assert client.requests == 1  # the preflight only: no brief or investigator calls
+    index = IndexOutput.model_validate_json((workdir / "public-data" / "latest.json").read_text())
+    assert index.meta.status == "ok"
+    assert any("rejected the configured key (HTTP 401)" in w for w in index.meta.warnings)
+    assert index.national.brief.narrative_source == "template"
+    state = json.loads((workdir / "data" / "real_estate" / "state.json").read_text())
+    assert state["brief_hashes"] == {}  # regenerated once the key is fixed
+
+
+def test_llm_unavailable_reason_only_preflights_real_sdk_clients():
+    from agents.real_estate.agent import llm_unavailable_reason
+
+    fake = FakeClient()
+    assert llm_unavailable_reason(SimpleNamespace(client=fake)) is None and fake.requests == 0
+
+    class Flaky(FakeClient):
+        __module__ = "anthropic._client"
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.models = SimpleNamespace(list=lambda **_kw: (_ for _ in ()).throw(ConnectionError("reset")))
+
+    assert llm_unavailable_reason(SimpleNamespace(client=Flaky())) is None  # transient: let calls retry
+
+
 @respx.mock
 def test_dry_run_makes_no_llm_calls_and_publishes_nothing(workdir, capsys):
     _mock_redfin()

@@ -277,3 +277,4 @@
 {"ts": "2026-10-08T02:59:59Z", "agent": "real_estate", "run_id": "2026-10-08T02-44-31Z-0a8132", "tier": "fast", "model": "claude-haiku-4-5-20251001", "purpose": "investigate:west-palm-beach-fl:step2", "batch": false, "input_tokens": 7, "output_tokens": 101, "cache_write_tokens": 4587, "cache_read_tokens": 0, "usd": 0.006246}
 {"ts": "2026-10-08T03:00:07Z", "agent": "real_estate", "run_id": "2026-10-08T02-44-31Z-0a8132", "tier": "fast", "model": "claude-haiku-4-5-20251001", "purpose": "investigate:west-palm-beach-fl:step3", "batch": false, "input_tokens": 5, "output_tokens": 686, "cache_write_tokens": 304, "cache_read_tokens": 4587, "usd": 0.004274}
 {"ts": "2026-10-08T03:00:07Z", "kind": "run", "agent": "real_estate", "run_id": "2026-10-08T02-44-31Z-0a8132", "status": "ok", "calls": 43, "run_usd": 0.050253}
+{"ts": "2026-10-08T03:05:13Z", "kind": "run", "agent": "real_estate", "run_id": "2026-10-08T03-05-07Z-7d1af5", "status": "ok", "calls": 0, "run_usd": 0.0}

@@ -148,6 +148,63 @@ def test_guard_failure_twice_uses_template(tmp_path, monkeypatch):
     assert briefs["austin-tx"].narrative_source == "template"
 
 
+# Case study 3 for briefs: "2 times" passes the value check (2.0 is the price-drop
+# share's pp change), but the model computed it from 18.2 and 9.4.
+MULTIPLE_AUSTIN = {
+    "text": "Austin's median sale price rose 9.4% from a year earlier. "
+    "Inventory fell 18.2%, about 2 times the pace of the price gain. "
+    "Homes sold in a median 12 days.",
+    "key_points": ["Median price +9.4% YoY", "Inventory -18.2% YoY"],
+}
+
+
+def test_brief_guard_rejects_computed_multiples_whose_number_is_a_fact():
+    from agents_core.guards import verify_numbers
+
+    guard = analyze.brief_guard(AUSTIN)
+    facts = analyze.guard_facts(AUSTIN)
+    text = MULTIPLE_AUSTIN["text"]
+    assert verify_numbers(text, facts, allow=analyze.GUARD_ALLOW).ok  # values alone pass
+    result = guard(analyze.BriefDraft(**MULTIPLE_AUSTIN))
+    assert not result.ok and result.derived == ["2 times"]
+    for bad in ("twice as fast as prices", "doubled", "a 2:1 ratio", "half as many homes"):
+        draft = analyze.BriefDraft(text="Inventory fell 18.2%.", key_points=[f"Sales {bad}"])
+        assert guard(draft).derived, bad  # key points are checked too
+    # a metric whose name contains "ratio" quotes a fact; it isn't a computed ratio
+    ok = analyze.BriefDraft(text="The sale-to-list ratio of 103.2% rose 1.5 pp.", key_points=[])
+    assert guard(ok).ok, guard(ok).unsupported
+
+
+def test_computed_multiple_in_a_batch_brief_is_retried_with_both_figures(tmp_path, monkeypatch):
+    llm, messages, _ = _llm(tmp_path, monkeypatch, {"austin-tx": MULTIPLE_AUSTIN}, [GOOD_AUSTIN])
+    briefs, _ = analyze.llm_metro_briefs(llm, {"austin-tx": AUSTIN}, batch_timeout_seconds=60)
+
+    assert briefs["austin-tx"].narrative_source == "llm"
+    assert briefs["austin-tx"].text == GOOD_AUSTIN["text"]
+    (retry,) = messages.parse_calls
+    instruction = retry["messages"][-1]["content"]
+    assert "2 times" in instruction and "state both figures instead" in instruction
+    failures = (tmp_path / "guard_failures.jsonl").read_text().splitlines()
+    assert json.loads(failures[0])["unsupported"] == ["2 times"]
+
+
+def test_computed_multiple_twice_falls_back_to_the_template(tmp_path, monkeypatch):
+    llm, _, _ = _llm(tmp_path, monkeypatch, {"austin-tx": MULTIPLE_AUSTIN}, [MULTIPLE_AUSTIN])
+    briefs, _ = analyze.llm_metro_briefs(llm, {"austin-tx": AUSTIN}, batch_timeout_seconds=60)
+    assert briefs["austin-tx"].narrative_source == "template"
+    assert briefs["austin-tx"].text == analyze.template_metro_draft(AUSTIN).text
+
+
+def test_templates_contain_no_multiples():
+    from agents_core.guards import find_derived
+
+    from evals.real_estate.fixtures import METRO_FACTS as ALL_METROS
+
+    for facts in ALL_METROS:
+        draft = analyze.template_metro_draft(facts)
+        assert not find_derived("\n".join([draft.text, *draft.key_points]), allow=analyze.GUARD_ALLOW)
+
+
 def test_batch_timeout_cancels_and_runs_synchronously(tmp_path, monkeypatch):
     llm, messages, _ = _llm(tmp_path, monkeypatch, {}, [GOOD_AUSTIN], ends=False)
     briefs, batch_fallback = analyze.llm_metro_briefs(
@@ -205,3 +262,19 @@ def test_national_brief_unusable_output_falls_back_to_template(tmp_path, monkeyp
     )
     assert brief.narrative_source == "template"
     assert brief.text == "template text"
+
+
+def test_national_brief_with_a_computed_multiple_is_retried(tmp_path, monkeypatch):
+    national_input = _national_input()
+    top = national_input["top_alerts"][0]
+    good = f"{top['label']} in {top['metros']} of 50 tracked metros. Austin, TX leads gains at 9.4%."
+    bad = good + " That is twice the national pace."
+    llm, messages, _ = _llm(
+        tmp_path,
+        monkeypatch,
+        {},
+        [{"text": bad, "key_points": ["a", "b", "c"]}, {"text": good, "key_points": ["a", "b", "c"]}],
+    )
+    brief = analyze.llm_national_brief(llm, national_input, lambda: analyze.BriefDraft(text="t", key_points=[]))
+    assert brief.narrative_source == "llm" and brief.text == good
+    assert "twice" in messages.parse_calls[1]["messages"][-1]["content"]

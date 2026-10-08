@@ -1,5 +1,6 @@
-"""The GitHub workflows' contract with agents-core's reusable workflows (v0.3.1):
-they declare no permissions of their own, so each calling job must grant them."""
+"""The GitHub workflows' contract with agents-core's reusable workflows (v0.3.2,
+pinned by commit SHA until the tag exists): they declare no permissions of their
+own, so each calling job must grant them."""
 
 from __future__ import annotations
 
@@ -8,15 +9,17 @@ from pathlib import Path
 import yaml
 
 WORKFLOWS = Path(__file__).parent.parent / ".github" / "workflows"
+# agents-core v0.3.2 (commit 9e4f342); switch to "v0.3.2" once a human tags it.
+AGENTS_CORE_REF = "9e4f342a06b4e74bb27d73cf759e931033fa97bf"
 
 
 def _jobs(name: str) -> dict:
     return yaml.safe_load((WORKFLOWS / name).read_text())["jobs"]
 
 
-def test_agent_workflow_pins_v0_3_1_and_grants_contents_write_only():
+def test_agent_workflow_pins_v0_3_2_and_grants_contents_write_only():
     [job] = _jobs("agent-real-estate.yml").values()
-    assert job["uses"] == "Kghaffari26/agents-core/.github/workflows/run-agent.yml@v0.3.1"
+    assert job["uses"] == "Kghaffari26/agents-core/.github/workflows/run-agent.yml@" + AGENTS_CORE_REF
     # contents: write pushes data/ and the data branch; this agent opens no issues.
     assert job["permissions"] == {"contents": "write"}
     assert job["with"]["agent"] == "real_estate"
@@ -25,7 +28,7 @@ def test_agent_workflow_pins_v0_3_1_and_grants_contents_write_only():
 
 def test_evals_workflow_calls_run_evals_with_a_spend_cap_and_read_only_token():
     [job] = _jobs("evals.yml").values()
-    assert job["uses"] == "Kghaffari26/agents-core/.github/workflows/run-evals.yml@v0.3.1"
+    assert job["uses"] == "Kghaffari26/agents-core/.github/workflows/run-evals.yml@" + AGENTS_CORE_REF
     assert job["permissions"] == {"contents": "read"}
     assert float(job["with"]["max_usd"]) <= 1.0
     assert float(job["with"]["total_max_usd"]) <= 1.0  # one cap across all suites (v0.3.1)

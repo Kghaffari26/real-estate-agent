@@ -7,7 +7,8 @@ in Python. Claude writes the narrative (a brief per metro, a national summary,
 and a tool-using **metro investigator** that explains *why* a market is moving),
 and every sentence it writes is checked number-by-number against the computed
 facts before it's published. Built on
-[`agents-core`](https://github.com/Kghaffari26/agents-core) **v0.3.1**, publishing
+[`agents-core`](https://github.com/Kghaffari26/agents-core) **v0.3.2** (pinned by commit
+`9e4f342` until its tag exists), publishing
 to its data-branch contract for a portfolio site.
 
 ## Highlights
@@ -24,10 +25,14 @@ to its data-branch contract for a portfolio site.
 - **Guards.** The number guard (`agents_core.guards`) checks every brief and every
   investigation against the facts the model was given: for the investigator, that's
   everything its tools returned in that run. A failure gets one retry naming the bad
-  numbers, then a deterministic template (`narrative_source: "template"`). `finish`
-  also rejects anything but 4–6 sentences, unknown metric keys, and computed
-  multiples ("4.3 times"), which the number guard can't catch
-  ([case study 3](docs/case-studies.md#3-the-investigator-computed-43-times-and-the-number-guard-passed-it-by-coincidence)).
+  numbers, then a deterministic template (`narrative_source: "template"`). Both
+  guards also reject multiples and ratios the model computed ("4.3 times",
+  "tripling", "3:1"), which a value check passes whenever the number happens to be
+  another fact
+  ([case study 3](docs/case-studies.md#3-the-investigator-computed-43-times-and-the-number-guard-passed-it-by-coincidence);
+  agents-core v0.3.2's `no_multiples=True`). `finish` also rejects anything but 4–6
+  sentences, unknown metric keys, and those same multiples, so the model fixes them
+  in-step.
   In live runs the guard has caught 4 mis-rounded or invented figures out of 150
   metro briefs, and all 4 were fixed on the retry.
 - **Evals** (`agents_core.evals`, `evals/real_estate/suites.py`), latest scores from
@@ -40,7 +45,7 @@ to its data-branch contract for a portfolio site.
   | investigator (trajectory) | 6 | 1.000 | required/forbidden tools, max steps, stop reason, guard, 4–6 sentences, cites trigger: all 1.000; **LLM-judge quality 0.833** | $0.123 |
 
   A PR workflow (`.github/workflows/evals.yml` → agents-core's
-  `run-evals.yml@v0.3.1`, $0.25 cap per suite, $0.40 total) fails on a score drop over 0.10.
+  `run-evals.yml`, $0.25 cap per suite, $0.40 total) fails on a score drop over 0.10.
   The 6 investigator trajectories are recorded and replay offline in `pytest`.
 - **Tracing.** Every run publishes `trace.json` (`agents_core.tracing`): spans for
   each phase, this agent's `fetch:redfin` / `metro_briefs` / `national_brief` /
@@ -175,8 +180,9 @@ fetch (conditional GET) → filter/normalize → compute (YoY/MoM/trend/
   affordability calculator are deterministic and unit-tested.
 - **Briefs**: metro briefs use the fast tier through Anthropic's Batch API
   (half price); the national brief uses the smart tier. Both go through
-  `agents_core.llm` with `fields_guard(facts, ["text", "key_points"])`: a
-  number that isn't in the facts gets one retry, then the deterministic
+  `agents_core.llm` with `fields_guard(facts, ["text", "key_points"],
+  no_multiples=True)`: a number that isn't in the facts, or a multiple or ratio
+  the model computed, gets one retry, then the deterministic
   template from `templates.py` (`narrative_source: "template"`).
 - **Investigations**: see Highlights and spec §6.3. The loop's tools read a
   snapshot (`investigate.World`) of the same computed series the metro files
@@ -191,7 +197,7 @@ fetch (conditional GET) → filter/normalize → compute (YoY/MoM/trend/
 ## Setup
 
 ```bash
-uv sync                 # Python 3.12; installs agents-core v0.3.1 from git
+uv sync                 # Python 3.12; installs agents-core v0.3.2 from git (by commit)
 cp .env.example .env    # ANTHROPIC_API_KEY (or AGENTS_ANTHROPIC_API_KEY), FRED_API_KEY, CENSUS_API_KEY
 ```
 
@@ -220,7 +226,7 @@ public-data/
 ```
 
 In CI, `.github/workflows/agent-real-estate.yml` runs this weekly (Fridays
-08:00 PT) through agents-core's reusable `run-agent.yml@v0.3.1`. That workflow
+08:00 PT) through agents-core's reusable `run-agent.yml` (v0.3.2, pinned by commit SHA). That workflow
 declares no permissions of its own, so the calling job grants
 `contents: write`; no `issues: write`, because this agent opens no issues. It
 restores the `data` branch into `public-data/`, runs the agent, commits `data/`

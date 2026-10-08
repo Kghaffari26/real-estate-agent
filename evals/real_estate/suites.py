@@ -51,7 +51,8 @@ from agents.real_estate import analyze, investigate
 from evals.real_estate import checks, fixtures
 
 HERE = Path(__file__).resolve().parent
-BRIEF_PROMPT_VERSION = "metro-brief-2026-09-26"
+# The prompt is unchanged since 2026-09-26; 2026-10-08 adds no_multiples to the brief guard.
+BRIEF_PROMPT_VERSION = "metro-brief-2026-10-08"
 SAVE_TRAJECTORIES = os.environ.get("RE_SAVE_TRAJECTORIES")  # a dir: write each loop's trajectory
 
 

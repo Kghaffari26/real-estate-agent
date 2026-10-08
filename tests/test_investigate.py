@@ -138,9 +138,14 @@ def test_finish_requires_4_to_6_sentences_and_known_metric_keys():
     with pytest.raises(ValidationError):
         inv.InvestigationDraft(explanation=ok, cited_metrics=["mortgage_vibes"])
     # computed multiples are rejected even when the number matches some fact
-    for bad in ("4.3 times", "3x", "twice", "three times"):
+    # (agents-core's find_derived since v0.3.2; "tripling" slipped past the old local
+    # regex in the recorded price-gainer trajectory)
+    for bad in ("4.3 times", "3x", "twice", "three times", "more than tripling", "nearly double", "a 2:1 ratio of"):
         with pytest.raises(ValidationError, match="multiples"):
             inv.InvestigationDraft(explanation=f"Prices grew {bad} the peers. B. C. D.", cited_metrics=["inventory"])
+    # a metric named "... ratio" isn't a computed ratio
+    fine = "The sale-to-list ratio of 99.3% held. B. C. D."
+    assert inv.InvestigationDraft(explanation=fine, cited_metrics=["avg_sale_to_list"]).explanation == fine
     # decimals and "U.S." don't end sentences
     assert inv.count_sentences("Prices fell 3.1% in the U.S. market. Inventory rose. A. B.") == 4
     assert inv.count_sentences("St. Louis prices rose. Ft. Myers too. Supply fell. Sales held.") == 4
@@ -156,7 +161,8 @@ def test_template_is_4_to_6_sentences_and_passes_the_number_guard(world):
     box.peers(inv.PeerQuery(slug="austin-tx", metric=target.trigger_metric))
     box.rates(inv.RateQuery(weeks=52))
     facts = guard_facts({"task": inv.task_facts(target, world), "seen": box.seen})
-    assert verify_numbers(draft.explanation, facts).ok, verify_numbers(draft.explanation, facts).unsupported
+    check = verify_numbers(draft.explanation, facts, allow=inv.GUARD_ALLOW_LOOP, no_multiples=True)
+    assert check.ok, check.unsupported
 
 
 def test_select_targets_prefers_new_major_flags_largest_first_then_top_mover(world):

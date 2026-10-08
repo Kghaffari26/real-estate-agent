@@ -16,7 +16,7 @@ YoY). The model gets read-only tools over numbers Python already computed:
 Numbers still come from Python: every tool returns values computed from the same
 `World` snapshot the agent publishes, and the final explanation goes through the
 number guard against *everything the tools returned* in that run (plus the task
-facts). A failing explanation is retried once, then replaced by
+facts), with `no_multiples=True`: no multiples or ratios the model computed. A failing explanation is retried once, then replaced by
 `template_investigation` (`narrative_source: "template"`). Budgets: 8 model calls
 and $0.05 per investigation (`LoopBudget`), inside the run's MAX_RUN_USD.
 
@@ -33,7 +33,7 @@ from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from agents_core.agent_loop import AgentLoop, LoopBudget, LoopResult, ToolError, tool
-from agents_core.guards import GuardResult, fields_guard
+from agents_core.guards import GuardResult, fields_guard, find_derived
 from agents_core.llm import LLM, tier_config
 from pydantic import BaseModel, Field, field_validator
 
@@ -41,7 +41,7 @@ from agents.real_estate import compute
 from agents.real_estate import metrics as metric_registry
 from agents.real_estate.analyze import GUARD_ALLOW, guard_facts
 
-PROMPT_VERSION = "investigator-2026-09-27.4"
+PROMPT_VERSION = "investigator-2026-10-08.5"
 MAX_TARGETS = 3
 TIER = "fast"
 MAX_TOKENS = 1200
@@ -442,11 +442,6 @@ _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"(])")
 _ABBREV = re.compile(r"\b(St|Ft|Mt|Jr|Sr|vs|U\.S)\.(?=\s)")
 
 
-_MULTIPLE = re.compile(
-    r"\b\d+(?:\.\d+)?\s*(?:x|times)\b|\b(?:twice|double|triple|(?:two|three|four|five|ten)\s+times)\b",
-    re.IGNORECASE,
-)
-
 
 def _sentences(text: str) -> list[str]:
     protected = _ABBREV.sub(lambda m: m.group(1) + "\x00", text.strip())
@@ -477,12 +472,14 @@ class InvestigationDraft(BaseModel):
         n = count_sentences(v)
         if not MIN_SENTENCES <= n <= MAX_SENTENCES:
             raise ValueError(f"explanation must be {MIN_SENTENCES}-{MAX_SENTENCES} sentences, got {n}")
-        multiple = _MULTIPLE.search(v)
-        if multiple:
+        derived = find_derived(v, allow=GUARD_ALLOW_LOOP)
+        if derived:
             # No tool returns a multiple, so "4.3 times" is arithmetic, even when 4.3
-            # happens to match some other number the number guard knows.
+            # happens to match some other number the number guard knows. agents-core's
+            # definition (v0.3.2), the same one the guard applies; rejecting it here
+            # sends it back in-step instead of spending the guard's one retry.
             raise ValueError(
-                f"don't compute multiples ({multiple.group(0)!r}); state both figures instead"
+                f"don't compute multiples or ratios ({', '.join(map(repr, derived))}); state both figures instead"
             )
         return v.strip()
 
@@ -530,7 +527,7 @@ def build_loop(
 
     def guard(draft: InvestigationDraft) -> GuardResult:
         # Rebuilt per call: the facts are everything the tools have returned so far.
-        return fields_guard(guard_facts({"task": facts, "seen": box.seen}), ["explanation"], allow=GUARD_ALLOW_LOOP)(
+        return fields_guard(guard_facts({"task": facts, "seen": box.seen}), ["explanation"], allow=GUARD_ALLOW_LOOP, no_multiples=True)(
             draft
         )
 

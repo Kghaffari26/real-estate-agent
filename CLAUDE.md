@@ -1,7 +1,8 @@
 # real-estate-agent
 
 A single scheduled data agent (`real_estate`) built on the external
-[`agents-core`](https://github.com/Kghaffari26/agents-core) framework (v0.3.1).
+[`agents-core`](https://github.com/Kghaffari26/agents-core) framework (v0.3.2, pinned by
+commit SHA `9e4f342` until the v0.3.2 tag exists).
 Full design: `docs/specs/SPEC_REAL_ESTATE.md` (§6.3 covers the investigator
 and the other additive fields; `docs/specs/BUILD_PLAN.md` shows how this fits a
 larger multi-agent plan). Current status against the spec, including what's
@@ -37,8 +38,10 @@ real-estate-agent/
 └── tests/                  # HTTP mocked (respx), fake or replayed Anthropic client, fixtures in tests/fixtures/
 ```
 
-The framework is **`agents-core` v0.3.1**, installed from git by tag
-(`pyproject.toml`; it requires Python 3.12). Its README/CHANGELOG define the
+The framework is **`agents-core` v0.3.2**, installed from git by commit
+(`rev = "9e4f342a06b4e74bb27d73cf759e931033fa97bf"` in `pyproject.toml`, because the
+`v0.3.2` tag doesn't exist yet; switch to `tag = "v0.3.2"` once a human creates it;
+it requires Python 3.12). Its README/CHANGELOG define the
 agent contract. Don't modify or vendor it here; if it's missing something,
 list it in `STATUS.md`'s "Needed from agents-core".
 
@@ -53,10 +56,10 @@ publishes to `public-data/`: `latest.json`, `metros/<slug>.json`,
 `costs-summary.json`, `schema.json`, `trace.json`, `trace.schema.json`.
 
 `.github/workflows/agent-real-estate.yml` calls agents-core's reusable
-`run-agent.yml@v0.3.1`. That workflow restores the `data` branch into
+`run-agent.yml` at the same commit. That workflow restores the `data` branch into
 `public-data/`, runs the agent, commits `data/` back to the branch and
 force-pushes `public-data/` to the `data` branch. `.github/workflows/evals.yml`
-calls `run-evals.yml@v0.3.1` on pull requests. **The reusable workflows declare
+calls `run-evals.yml` at that commit on pull requests. **The reusable workflows declare
 no permissions**; each calling job must grant exactly what it needs:
 - `contents: write` for the agent;
 - `issues: write` only if the agent ever calls `ctx.alert` (it doesn't);
@@ -69,14 +72,16 @@ no permissions**; each calling job must grant exactly what it needs:
   threshold, the headline, key stats and the affordability calculator are
   deterministic and unit-tested. The LLM only narrates the facts dicts
   `analyze.py` builds, and every LLM brief goes through
-  `fields_guard(facts, ["text", "key_points"])` with the `templates.py`
+  `fields_guard(facts, ["text", "key_points"], no_multiples=True)` (no
+  multiples or ratios the model computed, agents-core v0.3.2) with the `templates.py`
   brief as the fallback (`narrative_source: "template"`).
 - **The investigator gets no looser rules.**
   - Its tools only serve numbers Python computed, in the facts dicts' units.
   - Its `finish` explanation is number-guarded against everything the tools
-    returned in that run.
+    returned in that run, with `no_multiples=True`.
   - `finish` also enforces 4–6 sentences, known metric keys and no computed
-    multiples.
+    multiples or ratios (agents-core's `guards.find_derived`, so the model fixes
+    them in-step without spending the guard's one retry).
   - Its fallback is `investigate.template_investigation`.
   - Bump `investigate.PROMPT_VERSION` whenever you change its prompt, tools or
     guards.
@@ -167,7 +172,7 @@ no permissions**; each calling job must grant exactly what it needs:
 ## Commands
 
 ```bash
-uv sync                                        # install (agents-core v0.3.1 from git)
+uv sync                                        # install (agents-core v0.3.2 from git, by commit)
 uv run agents-run real_estate --dry-run        # fetch + compute, per-metro table + investigation targets, zero LLM calls
 uv run agents-run real_estate                  # real run (briefs + investigations), publishes to public-data/
 uv run agents-run real_estate --force-briefs   # regenerate every brief and investigation regardless of hashes

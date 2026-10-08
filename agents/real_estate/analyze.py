@@ -7,9 +7,11 @@ paths through `agents_core.llm`, and the deterministic template fallbacks.
   the requests synchronously, 5 at a time (`on_timeout="sync"`, §7.4 step 5).
 - National brief: smart tier, synchronous (`ctx.llm.structured`).
 
-Every LLM result goes through `fields_guard(facts, ["text", "key_points"])`: a
-number that isn't in the facts triggers one retry naming it, then the template
-from `templates.py` (`narrative_source: "template"`). Numbers are never
+Every LLM result goes through `fields_guard(facts, ["text", "key_points"],
+no_multiples=True)`: a number that isn't in the facts, or a multiple or ratio the
+model computed ("4.3 times", "doubled", "3:1"; agents-core v0.3.2), triggers one
+retry naming it, then the template from `templates.py`
+(`narrative_source: "template"`). Numbers are never
 computed here — the facts dicts carry values `compute.py` already produced,
 pre-formatted into human units (§7.2).
 """
@@ -50,8 +52,19 @@ FRED_CITATION = Citation(
 # move with it (§10 "Redfin 304, rate changed").
 RATE_DEPENDENT_KEYS = ("rates", "affordability")
 BRIEF_FIELDS = ["text", "key_points"]
-# Numbers that appear in fixed phrases rather than in the facts.
-GUARD_ALLOW = ("50 largest metros", "50 tracked metros", "of 50 metros")
+# Numbers that appear in fixed phrases rather than in the facts, and metric names that
+# contain "ratio": "sale-to-list ratio of 99.3%" quotes a fact, it isn't a computed
+# ratio, so `no_multiples` must not read it as "a ratio of 99.3".
+GUARD_ALLOW = (
+    "50 largest metros",
+    "50 tracked metros",
+    "of 50 metros",
+    "sale-to-list ratio",
+    "sale-to-list ratios",
+    "sale-to-list price ratio",
+    "sale to list ratio",
+    "payment-to-income ratio",
+)
 METRO_MAX_TOKENS = 600
 NATIONAL_MAX_TOKENS = 4000
 
@@ -197,7 +210,9 @@ def guard_facts(facts: dict[str, Any]) -> dict[str, Any]:
 
 
 def brief_guard(facts: dict[str, Any]) -> Callable[[Any], GuardResult]:
-    return fields_guard(guard_facts(facts), BRIEF_FIELDS, allow=GUARD_ALLOW)
+    """Numbers must come from the facts, and no multiples or ratios the model computed
+    ("4.3 times" passes the value check whenever 4.3 is some other fact; case study 3)."""
+    return fields_guard(guard_facts(facts), BRIEF_FIELDS, allow=GUARD_ALLOW, no_multiples=True)
 
 
 def _prompt(label: str, payload: dict[str, Any]) -> str:

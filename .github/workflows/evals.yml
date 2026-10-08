@@ -1,6 +1,7 @@
 name: Evals
 
-# The eval gate on pull requests (agents-core's run-evals.yml@v0.3.1): runs the
+# The eval gate on pull requests (agents-core's run-evals.yml v0.3.2, pinned by commit
+# SHA 9e4f342 until the v0.3.2 tag exists): runs the
 # suites in evals/real_estate/suites.py and the Listing Prep report template suite
 # (evals/listing_prep/suites.py, free; its live REPORT_AGENT suite costs ~$2 and is
 # run by hand after report prompt or tool changes), appends to evals/history.jsonl, compares
@@ -22,7 +23,8 @@ jobs:
     # run-evals.yml declares no permissions of its own; it only needs to check out.
     permissions:
       contents: read
-    uses: Kghaffari26/agents-core/.github/workflows/run-evals.yml@v0.3.1
+    # agents-core v0.3.2 by commit SHA (the tag doesn't exist yet).
+    uses: Kghaffari26/agents-core/.github/workflows/run-evals.yml@9e4f342a06b4e74bb27d73cf759e931033fa97bf
     with:
       eval_command: >-
         uv run agents-evals run

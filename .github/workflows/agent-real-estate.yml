@@ -24,7 +24,8 @@ jobs:
     # issues: write, because this agent opens no issues (it never calls ctx.alert).
     permissions:
       contents: write
-    uses: Kghaffari26/agents-core/.github/workflows/run-agent.yml@v0.3.1
+    # agents-core v0.3.2 by commit SHA (the tag doesn't exist yet).
+    uses: Kghaffari26/agents-core/.github/workflows/run-agent.yml@9e4f342a06b4e74bb27d73cf759e931033fa97bf
     with:
       agent: real_estate
       extra_args: ${{ inputs.force_briefs && '--force-briefs' || '' }}

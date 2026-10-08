@@ -16,11 +16,11 @@
       },
       "content": [
         {
-          "text": "I'll investigate why Miami's inventory has dropped 20% year-over-year. Let me gather data on Miami's market dynamics, compare it to peers, and check the national context.",
+          "text": "I'll investigate why Miami's inventory has declined 20% year-over-year. Let me gather data on Miami's trends, its regional peers, national context, and mortgage rates.",
           "type": "text"
         },
         {
-          "id": "toolu_019PfotzWezCrKSY9AoKYuh7",
+          "id": "toolu_01LzhUoHHyjaAXH8f8SBRe8L",
           "caller": {
             "type": "direct"
           },
@@ -39,7 +39,7 @@
           "type": "tool_use"
         },
         {
-          "id": "toolu_01Fgu1UmGcS9EC1sJ4WkT8uh",
+          "id": "toolu_01F3DhbYP9QamDjQkszG4GBg",
           "caller": {
             "type": "direct"
           },
@@ -51,31 +51,7 @@
           "type": "tool_use"
         },
         {
-          "id": "toolu_01GTmfZJf3MvwUnL3KfUTWXJ",
-          "caller": {
-            "type": "direct"
-          },
-          "input": {
-            "slug": "miami-fl",
-            "metric": "homes_sold"
-          },
-          "name": "compare_to_peers",
-          "type": "tool_use"
-        },
-        {
-          "id": "toolu_0194yK9gEtoK3LX4L5x98pnZ",
-          "caller": {
-            "type": "direct"
-          },
-          "input": {
-            "slug": "miami-fl",
-            "metric": "new_listings"
-          },
-          "name": "compare_to_peers",
-          "type": "tool_use"
-        },
-        {
-          "id": "toolu_01Suq8LrWDenMUb2qddRJUx1",
+          "id": "toolu_01RZzYWmpNd4rponaCRDqv6f",
           "caller": {
             "type": "direct"
           },
@@ -84,17 +60,28 @@
               "inventory",
               "homes_sold",
               "new_listings",
-              "median_sale_price"
+              "median_dom"
             ]
           },
           "name": "get_national_context",
+          "type": "tool_use"
+        },
+        {
+          "id": "toolu_01Q3tBhjn9qXdjZ43X6826Z6",
+          "caller": {
+            "type": "direct"
+          },
+          "input": {
+            "weeks": 52
+          },
+          "name": "get_rate_history",
           "type": "tool_use"
         }
       ],
       "stop_reason": "tool_use",
       "usage": {
         "input_tokens": 2225,
-        "output_tokens": 389,
+        "output_tokens": 306,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0
       }
@@ -113,11 +100,11 @@
       },
       "content": [
         {
-          "text": "Now let me look at the trend over time and check if there are similar episodes in Miami's history:",
+          "text": "Now let me look at similar episodes in Miami's history to understand if this inventory decline pattern has occurred before.",
           "type": "text"
         },
         {
-          "id": "toolu_011UHipye5ZnbMcSQqmsne8u",
+          "id": "toolu_01GpNPyNYy3Whdurq6vvrVuq",
           "caller": {
             "type": "direct"
           },
@@ -132,8 +119,8 @@
       "stop_reason": "tool_use",
       "usage": {
         "input_tokens": 7,
-        "output_tokens": 96,
-        "cache_creation_input_tokens": 4556,
+        "output_tokens": 97,
+        "cache_creation_input_tokens": 4503,
         "cache_read_input_tokens": 0
       }
     },
@@ -151,20 +138,22 @@
       },
       "content": [
         {
-          "text": "Based on my investigation, here's what the data shows:\n\n**Miami's inventory situation:**\n- Inventory is down 20.4% year-over-year (15,373 units in May 2026 vs. 19,304 in May 2025)\n- This is the sharpest decline among Miami and its 5 closest peer metros (peer median decline is -8.6%)\n- New listings are down 14.1% YoY, the second-steepest decline among the peer group (peer median is -6.9%)\n- Homes sold are down 8.7% YoY, worse than the peer median of -1.5%\n- This inventory decline is unprecedented in Miami's recent 19-month history—there are no similar episodes of this magnitude\n\n**Why this is happening:**\n\nThe inventory decline is driven primarily by a significant shortfall in new listings relative to sales. Miami's new listings fell 14.1% year-over-year while homes sold fell only 8.7%, creating a net drain on available stock. At the national level, inventory is down 9.0% and new listings are down 6.9%, so Miami is experiencing a steeper supply contraction than the nation overall. Homes sold are down 8.7% in Miami versus 4.6% nationally, meaning Miami's demand is falling faster, yet inventory is still dropping faster—indicating that the supply constraint is the primary driver. Unlike some peers such as West Palm Beach (where inventory is down 12.4% but new listings are up 0.6%), Miami is unable to replenish its stock because new listings are actively declining at 14.1%. This tight supply alongside moderating but still-present demand has created the sharp inventory depletion.",
+          "text": "Based on the data I've gathered, here's what's driving Miami's 20% inventory decline:\n\n**Miami's inventory situation:**\n- Inventory fell to 15,373 units in May 2026, down 20.4% year-over-year—the steepest decline among its 5 closest regional peers (West Palm Beach -12.4%, North Port -25.3%, Raleigh -0.1%, Virginia Beach -8.6%, Oklahoma City -5.7%). Only North Port had a comparable drop at -25.3%.\n- This is much sharper than the national inventory decline of 9.0% over the same period.\n- New listings fell 14.1% year-over-year to 3,202, while homes sold declined 8.7% to 1,995.\n\n**Why inventory is contracting:**\nThe data shows that **supply is shrinking faster than demand is falling**. New listings (supply) dropped 14.1% while homes sold (demand) dropped only 8.7%. This means fewer homes are entering the market than are leaving it, creating the inventory squeeze. The gap between supply and demand decline—about 5.4 percentage points—explains the concentrated 20.4% inventory loss.\n\n**Rate context:**\nMortgage rates rose from 6.34% in early October 2025 to 7.03% by late September 2026, an increase of 0.69 percentage points. Higher rates typically reduce buyer demand, yet Miami's sales fell slower than supply, suggesting that limited new listings—not just reduced demand—is the primary driver of inventory depletion.\n\n**Market tightness:**\nMonths of supply in May 2026 was 7.7 months, down from 8.8 months a year earlier, confirming that the market is tightening. The median sale price held steady at 570,000 (up 0.4% year-over-year), showing no pressure to discount despite tight conditions.",
           "type": "text"
         },
         {
-          "id": "toolu_01BnXEEPM7J2e7QuSQgbhFsN",
+          "id": "toolu_016ov14xXhVPMjjCQYekgjqH",
           "caller": {
             "type": "direct"
           },
           "input": {
-            "explanation": "Miami's inventory has fallen 20.4% year-over-year to 15,373 units, far outpacing the peer median decline of 8.6% and the national decline of 9.0%. The primary driver is a severe contraction in new listings, which are down 14.1% YoY—the second-steepest decline among Miami's peer group (peer median -6.9%) and nearly double the national decline of 6.9%. While homes sold are down 8.7% in Miami, this is not steep enough to offset the new listing decline, creating a net drain on inventory. Unlike peers such as West Palm Beach where new listings are stable or growing slightly, Miami's inability to replenish available stock is the critical factor. This inventory depletion has no precedent in Miami's past 19 months, marking an unusual tightening that is driven by supply-side constraints rather than demand strength.",
+            "explanation": "Miami's inventory declined 20.4% year-over-year to 15,373 units in May 2026, well steeper than the national 9.0% decline and more severe than four of its five closest regional peers. The primary driver is a supply-demand imbalance: new listings fell 14.1% while homes sold declined only 8.7%, creating a net drain on inventory as fewer homes enter the market than are selling. Mortgage rates rose 0.69 percentage points over the prior year to 7.03%, which tempered buyer demand, but the outpaced decline in listings relative to sales suggests that restricted supply is the binding constraint. Months of supply contracted to 7.7 months from 8.8 months year-over-year, tightening market conditions even as median prices remained stable at 570,000.",
             "cited_metrics": [
               "inventory",
               "new_listings",
-              "homes_sold"
+              "homes_sold",
+              "months_of_supply",
+              "median_sale_price"
             ]
           },
           "name": "finish",
@@ -174,51 +163,9 @@
       "stop_reason": "tool_use",
       "usage": {
         "input_tokens": 5,
-        "output_tokens": 670,
-        "cache_creation_input_tokens": 257,
-        "cache_read_input_tokens": 4556
-      }
-    },
-    {
-      "request": {
-        "tools": [
-          "compare_to_peers",
-          "find_similar_episodes",
-          "get_metro_series",
-          "get_national_context",
-          "get_rate_history",
-          "finish"
-        ],
-        "n_messages": 7
-      },
-      "content": [
-        {
-          "text": "Let me fix that explanation:",
-          "type": "text"
-        },
-        {
-          "id": "toolu_01LDqUySzoULHY1weWf6RPgz",
-          "caller": {
-            "type": "direct"
-          },
-          "input": {
-            "explanation": "Miami's inventory has fallen 20.4% year-over-year to 15,373 units, far outpacing the peer median decline of 8.6% and the national decline of 9.0%. The primary driver is a severe contraction in new listings, which are down 14.1% YoY—the second-steepest decline among Miami's peer group (peer median -6.9%) and significantly steeper than the national decline of 6.9%. While homes sold are down 8.7% in Miami, this is not steep enough to offset the new listing decline, creating a net drain on inventory. Unlike peers such as West Palm Beach where new listings are stable (up 0.6%), Miami's inability to replenish available stock is the critical factor. This inventory depletion has no precedent in Miami's past 19 months, marking an unusual tightening driven by supply-side constraints rather than demand strength.",
-            "cited_metrics": [
-              "inventory",
-              "new_listings",
-              "homes_sold"
-            ]
-          },
-          "name": "finish",
-          "type": "tool_use"
-        }
-      ],
-      "stop_reason": "tool_use",
-      "usage": {
-        "input_tokens": 7,
-        "output_tokens": 292,
-        "cache_creation_input_tokens": 778,
-        "cache_read_input_tokens": 4813
+        "output_tokens": 724,
+        "cache_creation_input_tokens": 258,
+        "cache_read_input_tokens": 4503
       }
     }
   ]

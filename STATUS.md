@@ -1,7 +1,30 @@
 # Status
 
-Last updated 2026-09-28 by an unattended Claude Code session. Judgment calls
+Last updated 2026-10-08 by an unattended Claude Code session. Judgment calls
 are logged one per line in `DECISIONS.md` ("Session 4", "Session 6", "Session 7").
+
+## agents-core v0.3.2 (2026-10-08, session 11)
+
+- Pinned by commit: `rev = "9e4f342a06b4e74bb27d73cf759e931033fa97bf"` (v0.3.2;
+  the tag doesn't exist yet), and `run-agent.yml@9e4f342…` / `run-evals.yml@9e4f342…`.
+  Once a human tags `v0.3.2`, switch `pyproject.toml`, both workflows and
+  `tests/test_workflows.py` (`AGENTS_CORE_REF`) to the tag.
+- Adopted the feature this repo asked for: `no_multiples=True` on the brief guard
+  (metro and national, which had no multiples check before) and the investigator's
+  guard. `finish` keeps its in-step rejection but uses agents-core's
+  `guards.find_derived` instead of the local regex, which had missed "more than
+  tripling" in the recorded price-gainer explanation. "Sale-to-list ratio" and
+  "payment-to-income ratio" are allowed as metric names. `investigate.PROMPT_VERSION`
+  is now `investigator-2026-10-08.5`, so the next real run regenerates the
+  investigations once.
+- Re-recorded the 6 investigator trajectories. Eval run (one, $0.167):
+  LLM briefs 1.000 pass rate, every score 1.000 (guard_first_try 1.000), $0.034;
+  investigator 1.000 pass rate, trajectory scores 1.000, quality_judge 0.917
+  (0.833 before, one case moving a step), $0.133. No multiple was rejected in
+  that run; the sale-to-list allowance was used ("Average sale-to-list ratio of
+  100.0%"). Template suites unchanged at 1.000.
+- 634 tests (629 before, plus 5 new for computed multiples in briefs) and ruff pass.
+- Eval history lines now carry `dirty` (v0.3.2); these were run on a clean tree.
 
 ## Session 9 (2026-09-28): dashboard v2 "Night Atlas", phases 0-3 (branch `dashboard-v2`)
 
@@ -257,16 +280,16 @@ data through 2026-05-31; 30-yr rate 7.03% as of 2026-09-24):
 
 ## Evals
 
-Latest scores (`evals/history.jsonl`, `evals/results/2026-09-27.json`):
+Latest scores (`evals/history.jsonl`, `evals/results/2026-10-08.json`):
 
 | Suite | Cases | Pass rate | Scores | Cost |
 |---|---:|---:|---|---:|
 | `real_estate-template-briefs` | 14 | 1.000 | number_fidelity, units, no_advice_style, length, flag_coverage_keyword: all 1.000 | $0 |
-| `real_estate-llm-briefs` | 12 | 1.000 | the above, plus guard_first_try 1.000 and flag_coverage_judge 1.000 | $0.033 |
-| `real_estate-investigator` | 6 | 1.000 | required_tools_called, forbidden_tools_not_called, max_steps, stop_reason, guard_passed, sentences_4_to_6, cites_trigger_metric: all 1.000; quality_judge **0.833** | $0.123 |
+| `real_estate-llm-briefs` | 12 | 1.000 | the above, plus guard_first_try 1.000 and flag_coverage_judge 1.000 | $0.034 |
+| `real_estate-investigator` | 6 | 1.000 | required_tools_called, forbidden_tools_not_called, max_steps, stop_reason, guard_passed, sentences_4_to_6, cites_trigger_metric: all 1.000; quality_judge **0.917** | $0.133 |
 
-Investigator history across the three prompt versions (`.2` → `.3` → `.4`):
-quality_judge 0.917 → 0.833 → 0.833, with the trajectory scores at 1.000 each
+Investigator history across the prompt versions (`.2` → `.3` → `.4` → `.5`):
+quality_judge 0.917 → 0.833 → 0.833 → 0.917, with the trajectory scores at 1.000 each
 time. With 6 cases on a 1–5 scale, one case moving a step changes the mean by
 0.042, so that change is noise-level. The judge also missed the two reasoning
 problems that a person reading the output caught (case studies 3–4).
@@ -379,6 +402,8 @@ One older observation for upstream:
   passed because 4.3 appeared elsewhere in the facts (case study 3). This agent
   now rejects multiples in its own `finish` validator. An optional
   "no multiples/ratios" check in `agents_core.guards` would help every agent.
+  **Done in v0.3.2** (`no_multiples=True`, `find_derived`), adopted here on
+  2026-10-08.
 
 ## §13 acceptance criteria
 

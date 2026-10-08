@@ -41,8 +41,8 @@ to its data-branch contract for a portfolio site.
   | Suite | Cases | Pass rate | Scores | Cost |
   |---|---:|---:|---|---:|
   | template briefs (offline) | 14 | 1.000 | number fidelity, units, style, length, flag coverage: all 1.000 | $0.00 |
-  | LLM metro briefs | 12 | 1.000 | guard first-try 1.000, flag-coverage LLM judge 1.000 | $0.033 |
-  | investigator (trajectory) | 6 | 1.000 | required/forbidden tools, max steps, stop reason, guard, 4–6 sentences, cites trigger: all 1.000; **LLM-judge quality 0.833** | $0.123 |
+  | LLM metro briefs | 12 | 1.000 | guard first-try 1.000, flag-coverage LLM judge 1.000 | $0.034 |
+  | investigator (trajectory) | 6 | 1.000 | required/forbidden tools, max steps, stop reason, guard, 4–6 sentences, cites trigger: all 1.000; **LLM-judge quality 0.917** | $0.133 |
 
   A PR workflow (`.github/workflows/evals.yml` → agents-core's
   `run-evals.yml`, $0.25 cap per suite, $0.40 total) fails on a score drop over 0.10.

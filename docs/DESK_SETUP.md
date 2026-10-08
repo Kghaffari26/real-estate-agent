@@ -105,7 +105,7 @@ That's all the site needs. Without them, the Desk says "not configured" and the 
 the site is unchanged. The site never gets the service-role key: the build fails if it's
 pasted into `SUPABASE_ANON_KEY` by mistake, and `check:secrets` scans the built site for it.
 
-### The Listing Prep worker (photo findings and photo housekeeping)
+### The Listing Prep worker (photo findings, reports and photo housekeeping)
 
 The worker (`agents/listing_prep/worker.py`, run by `.github/workflows/listing-prep-worker.yml`
 every 15 minutes) works on the backend with the **service role**: it reads queued
@@ -117,19 +117,59 @@ yourself, and never paste it into a chat.
 | --- | --- | --- |
 | secret `SUPABASE_URL` | (already added above) | the worker |
 | secret `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API → `service_role` / secret key | the worker only |
-| secret `ANTHROPIC_API_KEY` | (already used by the market agent) | the worker's photo analysis |
+| secret `ANTHROPIC_API_KEY` | (already used by the market agent) | the worker's photo analysis and reports |
 | secret `CENSUS_API_KEY` (optional) | a free key from api.census.gov | buyer demand in the property insights |
 | **variable** `DESK_WORKER_ENABLED` | `true` | turns the scheduled worker on |
+| variable `DESK_DAILY_USD_PER_TEAM` (optional) | dollars, e.g. `5` (the default) | each team's daily cap on AI spend for reports |
+| variable `DESK_DAILY_USD_GLOBAL` (optional) | dollars, e.g. `15` (the default) | the daily cap across all teams |
 
 Until the variable is set, the workflow doesn't run. Without the Anthropic key, it does
-housekeeping only (deleting removed and expired photos), and analyses stay queued.
+housekeeping only (deleting removed and expired photos), and analyses and reports stay
+queued.
+
+**What it costs.** Photo findings are about $0.004 a photo (fast tier). A report is a
+research loop on the smart tier plus a fast-tier fair-housing review, capped at $0.80
+and typically $0.30–0.50. The workflow caps each run at $2.50
+(`AGENTS_CORE_MAX_RUN_USD`) and takes at most two reports a run; a report is claimed
+only when the remaining cap covers a whole one, so the rest wait for the next run.
+
+**Daily caps.** On top of the per-run cap, reports have daily caps: $5 a team and $15
+across all teams by default (the variables above). The worker records what every report
+and photo analysis spends (`ai_spend`, which managers can read), and the database claims a
+report only when its team's spend today, plus a whole report's worst case ($0.80), stays
+under the team cap, and the same for the total under the global cap. A report over a cap
+stays queued until the next Pacific day.
+
+**Before the secrets are in.** If the variable is on but `SUPABASE_URL` or
+`SUPABASE_SERVICE_ROLE_KEY` is missing, the URL isn't https, the key is rejected, the
+project can't be reached or the migrations aren't applied, the worker run ends green with
+a warning annotation that says which. It doesn't fail every 15 minutes.
+
+**The live report eval.** `.github/workflows/report-agent-eval.yml` runs the report
+agent's live eval (six fictional properties, at most $2.50 of `ANTHROPIC_API_KEY`) and
+uploads the recordings as the `report-agent-eval` artifact. Start it with **Run workflow**
+once it's on `main`, or add the `live-eval` label to a pull request from this repository.
 The repository is public, so its logs are too. The worker logs counts and ids only:
 no addresses, names, photos or findings.
 
 The Edge Function (`geocode`) gets its own service key from Supabase automatically. It
 uses that key only to write the shared address cache.
 
-## 6. First team
+## 6. The team's prices and value priors
+
+Managers fill two tables on the Desk's **Cost book** tab, each from a template in
+`docs/templates/`:
+
+- `cost_book.csv`: your contractors' low and high price per unit for each improvement.
+- `value_priors.csv`: for each improvement, the share of its cost your team expects to
+  recover at resale (e.g. `1.1` to `1.6`), and **the source** you rely on. It ships
+  blank on purpose. The industry cost-vs-value reports (Zonda's *Cost vs. Value*,
+  NAR's *Remodeling Impact Report*) are copyrighted, and their terms forbid building
+  their figures into software without a license. Use your team's own experience or a
+  source you're licensed to use. Improvements without a prior are reported as "not
+  enough evidence", never guessed.
+
+## 7. First team
 
 Open the live site → **Desk**, sign in with the first manager's email, and create the
 team. That account becomes its manager and invites everyone else from the Team panel.

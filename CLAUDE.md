@@ -175,6 +175,8 @@ uv run agents-run --list                       # show every registered agent
 uv run pytest                                  # tests (HTTP faked, Anthropic faked or replayed)
 uv run ruff check .
 uv run python -m evals.real_estate.run         # the free template eval suite (SPEC §11)
+uv run agents-evals run evals.listing_prep.suites:TEMPLATE_REPORTS  # Listing Prep report fallback (free)
+LP_SAVE_TRAJECTORIES=evals/listing_prep/trajectories uv run agents-evals run evals.listing_prep.suites:REPORT_AGENT --max-usd 2.50  # ~$2 (or report-agent-eval.yml)
 uv run agents-evals run evals.real_estate.suites:LLM_BRIEFS evals.real_estate.suites:INVESTIGATOR --max-usd 0.30  # ~$0.16
 uv run agents-evals compare --threshold 0.10   # score deltas vs the previous history line
 uv run python scripts/build_investigator_fixtures.py  # re-snapshot the investigator eval world (no LLM)

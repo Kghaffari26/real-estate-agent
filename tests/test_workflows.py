@@ -39,8 +39,29 @@ def test_listing_prep_worker_is_opt_in_read_only_and_keeps_its_secrets_server_si
     assert workflow["permissions"] == {"contents": "read"}
     env = job["steps"][-1]["env"]
     assert env["SUPABASE_SERVICE_ROLE_KEY"] == "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
-    assert float(env["AGENTS_CORE_MAX_RUN_USD"]) <= 1.0
+    # Photo findings plus at most two reports ($0.80 each, claimed only while the cap covers one).
+    assert float(env["AGENTS_CORE_MAX_RUN_USD"]) <= 2.5
+    # The daily caps come from repository variables, never hard-coded secrets.
+    assert env["DESK_DAILY_USD_PER_TEAM"] == "${{ vars.DESK_DAILY_USD_PER_TEAM }}"
+    assert env["DESK_DAILY_USD_GLOBAL"] == "${{ vars.DESK_DAILY_USD_GLOBAL }}"
     # The site's build gets the public URL and anon key, never the service key.
     site = (WORKFLOWS / "dashboard.yml").read_text()
     assert "SUPABASE_SERVICE_ROLE_KEY" not in site
     assert "check:secrets" in site
+
+
+def test_the_live_report_eval_is_manual_capped_read_only_and_uploads_its_recordings():
+    wf = yaml.safe_load((WORKFLOWS / "report-agent-eval.yml").read_text())
+    on = wf[True]  # YAML 1.1 reads the key `on` as true
+    assert set(on) == {"workflow_dispatch", "pull_request"} and on["pull_request"] == {"types": ["labeled"]}
+    assert wf["permissions"] == {"contents": "read"}
+    [job] = wf["jobs"].values()
+    # A label run only for this repository's branches (fork runs get no secrets anyway).
+    assert "live-eval" in job["if"] and "head.repo.full_name == github.repository" in job["if"]
+    run = next(s for s in job["steps"] if "agents-evals run" in s.get("run", ""))
+    assert "evals.listing_prep.suites:REPORT_AGENT" in run["run"] and "--max-usd 2.50" in run["run"]
+    assert run["env"]["ANTHROPIC_API_KEY"] == "${{ secrets.ANTHROPIC_API_KEY }}"
+    assert run["env"]["LP_SAVE_TRAJECTORIES"] == "evals/listing_prep/trajectories"
+    assert set(run["env"]) == {"ANTHROPIC_API_KEY", "LP_SAVE_TRAJECTORIES", "AGENTS_CORE_DATA_DIR"}  # no other secrets
+    upload = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/upload-artifact@"))
+    assert upload["if"] == "always()" and "evals/listing_prep/trajectories/" in upload["with"]["path"]

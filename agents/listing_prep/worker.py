@@ -1,6 +1,6 @@
-"""The Listing Prep worker: photo findings (P2) and photo housekeeping.
+"""The Listing Prep worker: photo findings (P2), reports (P5) and photo housekeeping.
 
-    python -m agents.listing_prep.worker            # janitor, property insights, then queued vision jobs
+    python -m agents.listing_prep.worker            # janitor, property insights, queued vision jobs, then queued reports
     python -m agents.listing_prep.worker --janitor  # housekeeping only
 
 Run by `.github/workflows/listing-prep-worker.yml` (on a schedule and on demand). Needs
@@ -16,6 +16,20 @@ Per job, per photo, in order:
      and deleted, one that can't be read is skipped (photo_check.py);
   3. the model sees only re-encoded pixels and answers through a tool (findings.py);
   4. people visible → skipped; findings screened for fair housing; then stored.
+
+Reports (`report.py`): per claimed report, the worker reads the property's confirmed facts,
+insights, confirmed findings, the team's cost book and value priors and the quotes (no
+names, no street address), runs the report agent, and stores the assembled report. A
+report is claimed only while the run's spend cap leaves room for a whole one, and only for
+a team whose spend today (reports and photo analyses, recorded in `ai_spend`) plus a whole
+report stays under the daily caps: DESK_DAILY_USD_PER_TEAM (default $5) for each team and
+DESK_DAILY_USD_GLOBAL (default $15) across all teams. The database checks both when the
+report is claimed; a report over a cap waits for the next (Pacific) day.
+
+Configuration: with SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing, a URL that isn't
+https, or a backend that rejects the key or can't be reached, the worker prints a warning
+annotation and exits 0. The schedule runs every 15 minutes, and a backend that isn't set
+up yet shouldn't turn every run red.
 
 The janitor applies retention (`expire_photos`), queues orphaned files, and deletes every
 queued file through the Storage API (a photo or property deleted on the Desk queues its
@@ -34,18 +48,50 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from agents_core.costs import BudgetExceeded
+from agents_core.http import HttpError
 from agents_core.llm import LLMError
 
 from agents.listing_prep import findings as vision
-from agents.listing_prep.backend import Backend, ConsentRevoked, Job, SupabaseBackend
-from agents.listing_prep.insights import insights_pass
+from agents.listing_prep import report as reports
+from agents.listing_prep.backend import Backend, ConsentRevoked, Job, ReportJob, SupabaseBackend
+from agents.listing_prep.insights import REGION_DATA_URL, insights_pass
 from agents.listing_prep.photo_check import for_model, inspect
 
 log = logging.getLogger("listing_prep.worker")
 
 MAX_JOBS_PER_RUN = 10
+MAX_REPORTS_PER_RUN = 2  # each up to ~7 minutes and reports.BUDGET
+# A report's worst case: its loop budget plus the fair-housing review's.
+REPORT_RESERVE_USD = reports.BUDGET.max_usd + reports.REVIEW_BUDGET_USD
+
+
+@dataclass(frozen=True)
+class DailyCaps:
+    """Daily AI spend caps for reports, in USD (the Pacific day)."""
+
+    team_usd: float = 5.0
+    global_usd: float = 15.0
+
+    @classmethod
+    def from_env(cls) -> DailyCaps:
+        def read(name: str, default: float) -> float:
+            raw = os.environ.get(name, "").strip()
+            if not raw:
+                return default
+            try:
+                v = float(raw)
+            except ValueError:
+                v = -1.0
+            if v < 0:
+                print(f"::warning title=Listing Prep worker::{name}={raw!r} isn't a dollar amount; using {default:.2f}.")
+                return default
+            return v
+
+        d = cls()
+        return cls(read("DESK_DAILY_USD_PER_TEAM", d.team_usd), read("DESK_DAILY_USD_GLOBAL", d.global_usd))
 DELETIONS_PER_RUN = 1000
 # agents-core estimates a request's cost from its JSON size, so a base64 photo is costed
 # as ~80K input tokens (≈ $0.09 on the fast tier) though it bills ~1.6K. Each photo's
@@ -136,18 +182,61 @@ def process_job(backend: Backend, llm: Any, job: Job, *, scope_factory: Any = No
         report.status = "cancelled"
         return report
     except Exception as e:  # noqa: BLE001 - any failure ends the job, never the run
-        if isinstance(e, BudgetExceeded):
-            error = "budget"
-        elif isinstance(e, LLMError) or type(e).__module__.split(".")[0] == "anthropic":
-            error = "model_error"
-        else:
-            error = "worker_error"
+        error = _error_code(e)
         log.warning("job %s failed: %s", job.id, type(e).__name__)
         backend.update_job(job.id, status="failed", error=error, finished_at=_now(), usd=round(report.usd, 4))
         report.status = "failed"
         return report
     backend.update_job(job.id, status="done", finished_at=_now(), usd=round(report.usd, 4))
     return report
+
+
+def _error_code(e: Exception) -> str:
+    if isinstance(e, BudgetExceeded):
+        return "budget"
+    if isinstance(e, LLMError) or type(e).__module__.split(".")[0] == "anthropic":
+        return "model_error"
+    return "worker_error"
+
+
+def process_report(backend: Backend, llm: Any, job: ReportJob, region: dict[str, Any] | None) -> dict[str, Any]:
+    """Run one claimed report to an end state (done / cancelled / failed)."""
+    inputs = backend.report_inputs(job.property_id)
+    if inputs is None or not inputs["property"].get("facts_confirmed_at"):
+        # The facts were edited (un-confirming them) after the report was asked for.
+        backend.update_report(job.id, status="cancelled", error="facts_unconfirmed", finished_at=_now())
+        return {"id": job.id, "status": "cancelled", "usd": 0.0}
+    goal = reports.Goal(target_price=job.target_price, budget=int(job.budget) if job.budget is not None else None, days_to_list=job.days_to_list)
+    tracker = getattr(llm, "tracker", None)
+    before = tracker.total_usd if tracker is not None else 0.0
+    try:
+        out = reports.run_report(llm, reports.build_world(inputs, region, goal))
+    except Exception as e:  # noqa: BLE001 - a failure ends the report, never the run
+        # What it spent before failing still counts toward the daily caps.
+        usd = round((tracker.total_usd - before) if tracker is not None else 0.0, 4)
+        log.warning("report %s failed: %s", job.id, type(e).__name__)
+        backend.update_report(job.id, status="failed", error=_error_code(e), usd=usd, finished_at=_now())
+        return {"id": job.id, "status": "failed", "usd": usd}
+    note = out["notice"]["text"] if out.get("notice") else None
+    backend.update_report(
+        job.id,
+        status="done",
+        output=out,
+        narrative_source=out["narrative_source"],
+        prompt_version=out["prompt_version"],
+        usd=round(out["cost_usd"], 4),
+        note=note,
+        finished_at=_now(),
+    )
+    return {"id": job.id, "status": "done", "narrative_source": out["narrative_source"], "usd": out["cost_usd"]}
+
+
+def room_for_a_report(llm: Any) -> bool:
+    """True while the run's cap can still pay for a whole report (loop and review)."""
+    tracker = getattr(llm, "tracker", None)
+    if tracker is None:
+        return True
+    return tracker.total_usd + reports.BUDGET.max_usd + reports.REVIEW_BUDGET_USD <= tracker.max_usd
 
 
 def janitor(backend: Backend) -> dict[str, int]:
@@ -164,8 +253,17 @@ def janitor(backend: Backend) -> dict[str, int]:
     return {"expired": expired, "orphans": orphans, "files_deleted": deleted}
 
 
-def run(backend: Backend, llm: Any | None, *, janitor_only: bool = False, scope_factory: Any = None, http: Any = None) -> dict[str, Any]:
-    summary: dict[str, Any] = {"janitor": janitor(backend), "jobs": [], "insights": 0}
+def run(
+    backend: Backend,
+    llm: Any | None,
+    *,
+    janitor_only: bool = False,
+    scope_factory: Any = None,
+    http: Any = None,
+    caps: DailyCaps | None = None,
+) -> dict[str, Any]:
+    caps = caps or DailyCaps()
+    summary: dict[str, Any] = {"janitor": janitor(backend), "jobs": [], "insights": 0, "reports": []}
     if janitor_only:
         return summary
     if http is not None:
@@ -179,7 +277,58 @@ def run(backend: Backend, llm: Any | None, *, janitor_only: bool = False, scope_
             break
         r = process_job(backend, llm, job, scope_factory=scope_factory)
         summary["jobs"].append({"id": job.id, **vars(r)})
+        if r.usd > 0:
+            backend.record_spend(job.property_id, "vision", job.id, round(r.usd, 4))
+    region: dict[str, Any] | None = None
+    for i in range(MAX_REPORTS_PER_RUN):
+        if not room_for_a_report(llm):
+            break
+        # The database skips teams over their daily cap, and claims nothing over the global one.
+        rjob = backend.claim_report_job(caps.team_usd, caps.global_usd, REPORT_RESERVE_USD)
+        if rjob is None:
+            break
+        if i == 0 and http is not None:
+            try:
+                region = http.get_json(REGION_DATA_URL, ttl_seconds=3600)
+            except Exception:  # noqa: BLE001 - the report says the market data is missing
+                region = None
+        done = process_report(backend, llm, rjob, region)
+        summary["reports"].append(done)
+        if done["usd"] > 0:
+            backend.record_spend(rjob.property_id, "report", rjob.id, round(done["usd"], 4))
     return summary
+
+
+def config_problem(url: str, key: str) -> str | None:
+    """Why the backend isn't usable yet from these settings alone, or None."""
+    missing = [name for name, v in (("SUPABASE_URL", url), ("SUPABASE_SERVICE_ROLE_KEY", key)) if not v.strip()]
+    if missing:
+        return f"{' and '.join(missing)} {'isn’t' if len(missing) == 1 else 'aren’t'} set"
+    parsed = urlparse(url.strip())
+    local = parsed.hostname in ("localhost", "127.0.0.1")
+    if parsed.scheme not in ("https",) + (("http",) if local else ()) or not parsed.hostname:
+        return "SUPABASE_URL isn’t an https URL (it should look like https://<project-ref>.supabase.co)"
+    return None
+
+
+def reachable(backend: Any) -> str | None:
+    """Ask the backend for nothing: None if it answers, else why it can't be used yet."""
+    try:
+        backend.ping()
+    except HttpError as e:
+        if e.status in (401, 403):
+            return "the backend rejected SUPABASE_SERVICE_ROLE_KEY (check it's the service-role key of this project)"
+        if e.status == 404:
+            return "the backend has no reports table yet (apply the migrations: supabase db push)"
+        if e.status is None:
+            return "SUPABASE_URL can't be reached (check the project URL)"
+        raise
+    return None
+
+
+def not_ready(reason: str) -> int:
+    print(f"::warning title=Listing Prep worker not configured::{reason}; nothing to do. See docs/DESK_SETUP.md.")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -188,11 +337,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-    if not (url and key):
-        print("listing-prep worker: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set; nothing to do.")
-        return 0
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    problem = config_problem(url, key)
+    if problem:
+        return not_ready(problem)
 
     from agents_core import settings
     from agents_core.costs import CostTracker, SpendScope
@@ -201,6 +350,9 @@ def main(argv: list[str] | None = None) -> int:
 
     http = Http()
     backend = SupabaseBackend(http, url, key)
+    problem = reachable(backend)
+    if problem:
+        return not_ready(problem)
     llm = None
     scope_factory = None
     try:
@@ -213,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
         scope_factory = lambda usd, label: SpendScope(tracker, usd, label=label)  # noqa: E731
     elif not args.janitor:
         print("listing-prep worker: no Anthropic key; housekeeping only, jobs stay queued.")
-    summary = run(backend, llm, janitor_only=args.janitor, scope_factory=scope_factory, http=http)
+    summary = run(backend, llm, janitor_only=args.janitor, scope_factory=scope_factory, http=http, caps=DailyCaps.from_env())
     jobs = summary["jobs"]
     print(
         "listing-prep worker:",
@@ -222,8 +374,11 @@ def main(argv: list[str] | None = None) -> int:
         f"jobs={len(jobs)}",
         {k: sum(j[k] for j in jobs) for k in ("analyzed", "skipped", "rejected", "findings", "dropped_fair_housing")} if jobs else {},
         f"usd={sum(j['usd'] for j in jobs):.4f}",
+        f"reports={len(summary['reports'])}",
+        {s: sum(1 for r in summary["reports"] if r["status"] == s) for s in ("done", "failed", "cancelled")} if summary["reports"] else {},
+        f"report_usd={sum(r['usd'] for r in summary['reports']):.4f}",
     )
-    return 1 if any(j["status"] == "failed" for j in jobs) else 0
+    return 1 if any(j["status"] == "failed" for j in jobs) or any(r["status"] == "failed" for r in summary["reports"]) else 0
 
 
 if __name__ == "__main__":

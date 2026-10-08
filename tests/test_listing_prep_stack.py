@@ -28,10 +28,12 @@ from agents_core.http import Http
 from PIL import Image
 
 from agents.listing_prep import insights, places
+from agents.listing_prep import report as R
 from agents.listing_prep.backend import BUCKET, SupabaseBackend
 from agents.listing_prep.worker import run
 from tests.test_listing_prep import finding, jpeg, llm_with
 from tests.test_listing_prep_context import REGION
+from tests.test_listing_prep_report import REVIEW_OK, ScriptedClient, draft_input, research_turns
 
 URL = os.environ.get("DESK_TEST_API_URL", "")
 ANON = os.environ.get("DESK_TEST_ANON_KEY", "")
@@ -40,6 +42,14 @@ SERVICE = os.environ.get("DESK_TEST_SERVICE_KEY", "")
 if os.environ.get("DESK_REQUIRE_STACK") and not (URL and ANON and SERVICE):
     raise RuntimeError("DESK_TEST_API_URL, DESK_TEST_ANON_KEY and DESK_TEST_SERVICE_KEY are required here")
 pytestmark = pytest.mark.skipif(not (URL and ANON and SERVICE), reason="needs the local Supabase stack (desk-db)")
+
+
+def report_llm(turns: list[Any], tmp_path: Path) -> tuple[Any, ScriptedClient]:
+    from agents_core.costs import CostTracker
+    from agents_core.llm import LLM
+
+    client = ScriptedClient(turns)
+    return LLM(CostTracker(agent="t", run_id="r", max_usd=5.0, path=tmp_path / "rc.jsonl"), client=client), client
 
 
 def service_headers() -> dict[str, str]:
@@ -145,6 +155,29 @@ def test_worker_on_the_real_stack(tmp_path):
         # The agent reviews; then the seller revokes.
         r = c.patch(f"{URL}/rest/v1/findings", headers=agent.h, params={"id": f"eq.{f['id']}"}, json={"status": "confirmed"})
         r.raise_for_status()
+
+        # P5: the agent asks for a report; the worker reads the real rows and stores it.
+        rid = agent.rpc("request_report", {"property": prop, "target_price": 1450000, "budget": 10000, "days_to_list": 30})
+        backend = SupabaseBackend(Http(), URL, SERVICE)
+        with respx.mock(assert_all_called=False) as mock:
+            mock.route(host="127.0.0.1").pass_through()
+            mock.get(insights.REGION_DATA_URL).mock(return_value=httpx.Response(200, json=REGION))
+            mock.get(places.CDE_URL).mock(return_value=httpx.Response(200, content=(fix / "cde_schools_sample.tsv").read_bytes()))
+            mock.get(places.OVERPASS_URL).mock(return_value=httpx.Response(200, json=json.loads((fix / "overpass_irvine_800m.json").read_text())))
+            # The review made the insights stale; refresh them first so the worker's run sees what this test sees.
+            insights.insights_pass(backend, Http(cache_dir=tmp_path / "http3"))
+            inputs = backend.report_inputs(prop)
+            assert inputs["rooms_photographed"] == ["kitchen"] and [x["issue"] for x in inputs["findings"]] == ["Cabinet doors are worn at the edges"]
+            assert inputs["cost_book"][0]["item"] == "cabinet_refinish" and "address" not in json.dumps(inputs)
+            world = R.build_world(inputs, REGION, R.Goal(target_price=1450000, budget=10000, days_to_list=30))
+            rllm, _ = report_llm([*research_turns(), [("finish", draft_input(world))], REVIEW_OK], tmp_path)
+            summary = run(backend, rllm, http=Http(cache_dir=tmp_path / "http4"))
+        assert [(x["id"], x["status"], x["narrative_source"]) for x in summary["reports"]] == [(rid, "done", "llm")]
+        [stored_report] = agent.select("reports", id=f"eq.{rid}")
+        assert stored_report["status"] == "done" and stored_report["version"] == 1
+        assert stored_report["output"]["sections"]["improvements"]["items"][0]["key"]
+        assert stored_report["output"]["disclaimer"].startswith("This is a market analysis")
+
         r = c.patch(f"{URL}/rest/v1/seller_consents", headers=agent.h, params={"id": f"eq.{consent}"}, json={"revoked_at": "2026-10-02T12:00:00Z"})
         r.raise_for_status()
         assert agent.select("findings", property_id=f"eq.{prop}")[0]["status"] == "withdrawn"

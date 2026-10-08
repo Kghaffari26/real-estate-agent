@@ -4,12 +4,17 @@ SPEC_LISTING_PREP.md §5.1). Distances and counts only, computed here.
 * **Schools**: the California Department of Education's public school directory (a
   ~9 MB tab-separated file, downloaded with a conditional GET and cached). Kept: the
   school's code, name, type, grades and position. The directory also lists
-  administrators by name; those columns are never read. No ratings yet: the CAASPP
-  results are a separate, larger dataset (a later step). Attribution: California
-  Department of Education.
-* **Amenities**: OpenStreetMap through the Overpass API, cached for a week: groceries,
-  parks, transit stops, cafés and restaurants within a walk. Attribution:
-  © OpenStreetMap contributors (ODbL).
+  administrators by name; those columns are never read. **No ratings, ever** (owner
+  review): each school links to its page on the official California School Dashboard
+  instead, so the Desk never republishes or summarizes school performance.
+  Attribution: California Department of Education.
+* **Amenities**: OpenStreetMap through the Overpass API: groceries, parks, transit
+  stops, cafés and restaurants within a walk. A public, volunteer-run service, so the
+  worker is a polite client: an identifying User-Agent, at most one request every
+  2 seconds and 400 a day (an `agents_core` host policy), up to 3 attempts with backoff
+  when it's busy (504/429), and a per-property cache in the database (a property's
+  answer is reused for 30 days; `insights.py`). A failure returns None, never raises.
+  Attribution: © OpenStreetMap contributors (ODbL).
 """
 
 from __future__ import annotations
@@ -19,13 +24,19 @@ import io
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from agents_core import settings
-from agents_core.http import Http, HttpError
+from agents_core.http import HostPolicy, Http, HttpError
 
 CDE_URL = "https://www.cde.ca.gov/schooldirectory/report?rid=dl1&tp=txt"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_HOST = "overpass-api.de"
+OVERPASS_POLICY = HostPolicy(min_interval_seconds=2.0, daily_budget=400, max_attempts=3)
+# Overpass asks clients to identify themselves.
+OVERPASS_USER_AGENT = "MetroPulseDesk/0.1 (listing-prep worker; +https://github.com/Kghaffari26/real-estate-agent)"
+DASHBOARD_URL = "https://www.caschooldashboard.org/reports/{cds}/{year}"
 WALK_METERS = 1600  # about a 20-minute walk
 KEEP = ("CDSCode", "School", "SOCType", "GSserved", "Charter", "Latitude", "Longitude", "City", "County", "StatusType")
 
@@ -101,6 +112,14 @@ class NearbySchool:
     grades: str
     charter: bool
     miles: float
+    cds: str = ""
+    dashboard_url: str = ""  # the school's official California School Dashboard report
+
+
+def dashboard_url(cds: str, today: date | None = None) -> str:
+    """The school's report on the official California School Dashboard. Each year's
+    Dashboard is released in December, so the latest complete one is last year's."""
+    return DASHBOARD_URL.format(cds=cds, year=(today or date.today()).year - 1)
 
 
 def nearest_schools(lat: float, lon: float, schools: Iterable[School], per_level: int = 2) -> list[NearbySchool]:
@@ -112,7 +131,7 @@ def nearest_schools(lat: float, lon: float, schools: Iterable[School], per_level
     out: list[NearbySchool] = []
     for level in ("elementary", "middle", "high"):
         picks = [x for x in ranked if x[0].level in (level, "k12") and not x[0].charter][:per_level] or [x for x in ranked if x[0].level == level][:per_level]
-        out += [NearbySchool(s.name, level, s.grades, s.charter, round(m / 1609.344, 2)) for s, m in picks]
+        out += [NearbySchool(s.name, level, s.grades, s.charter, round(m / 1609.344, 2), s.code, dashboard_url(s.code)) for s, m in picks]
     return out
 
 
@@ -127,8 +146,13 @@ AMENITIES = {
 }
 
 
+def point_key(lat: float, lon: float) -> str:
+    """The cache key for a property's amenities: its position to 5 decimals (about 1 m)."""
+    return f"{lat:.5f},{lon:.5f}"
+
+
 def overpass_query(lat: float, lon: float, radius: int = WALK_METERS) -> str:
-    parts = "".join(f"nwr(around:{radius},{lat:.6f},{lon:.6f}){tag};" for tag in AMENITIES.values())
+    parts = "".join(f"nwr(around:{radius},{lat:.5f},{lon:.5f}){tag};" for tag in AMENITIES.values())
     return f"[out:json][timeout:25];({parts});out center tags;"
 
 
@@ -161,8 +185,21 @@ def summarize_amenities(lat: float, lon: float, elements: list[dict]) -> list[Am
 
 
 def amenities(http: Http, lat: float, lon: float) -> list[AmenityCount] | None:
+    """One Overpass request under the polite policy. None when the service is busy or
+    down after its retries, over the daily budget, or answers with an error remark
+    (Overpass reports timeouts inside a 200): the caller keeps its previous answer."""
+    http.set_policy(OVERPASS_HOST, OVERPASS_POLICY)
     try:
-        data = http.get_json(OVERPASS_URL, params={"data": overpass_query(lat, lon)}, headers={"Accept": "application/json"}, ttl_seconds=7 * 86400)
+        res = http.request(
+            "GET",
+            OVERPASS_URL,
+            params={"data": overpass_query(lat, lon)},
+            headers={"Accept": "application/json", "User-Agent": OVERPASS_USER_AGENT},
+            ttl_seconds=0,  # cached per property in the database instead
+        )
+        data = res.json()
     except (HttpError, ValueError):
         return None
-    return summarize_amenities(lat, lon, data.get("elements", []) if isinstance(data, dict) else [])
+    if not isinstance(data, dict) or "elements" not in data or "runtime error" in str(data.get("remark", "")):
+        return None
+    return summarize_amenities(lat, lon, data["elements"])

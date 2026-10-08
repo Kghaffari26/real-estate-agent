@@ -26,14 +26,16 @@ def test_prefeed_value_is_ppsf_times_sqft_with_size_and_condition_and_a_wide_low
     # ZIP: $650/sq ft, median $1.3M → typical 2,000 sq ft. This home: 2,000 sq ft, average condition.
     out = v.zip_ppsf_value(sqft=2000, zip_ppsf=650, zip_median_price=1_300_000, zip_low_sample=False)
     assert out is not None
-    assert (out.mid, out.low, out.high, out.confidence, out.method) == (1_300_000, 1_105_000, 1_495_000, "low", "zip_ppsf")
+    assert (out.low, out.high, out.confidence, out.method, out.interval) == (1_105_000, 1_495_000, "low", "zip_ppsf", "rough")
+    assert out.mid is None and out.coverage_target is None  # no midpoint and no claimed coverage until comps exist
+    assert v.center(out) == pytest.approx(math.sqrt(1_105_000 * 1_495_000))
     assert out.inputs["typical_sqft"] == 2000 and out.inputs["size_adjustment"] == 1.0
-    assert any("comparable sales" in n for n in out.notes) and any("condition isn’t reflected" in n for n in out.notes)
+    assert any("not a calibrated interval" in n for n in out.notes) and any("condition isn’t reflected" in n for n in out.notes)
     # Bigger home: $/sq ft falls (elasticity -0.3); worn condition (2/5): -3%.
     big = v.zip_ppsf_value(sqft=3000, zip_ppsf=650, zip_median_price=1_300_000, zip_low_sample=False, condition=2.0)
     assert big is not None
     expected = 650 * 3000 * (1.5**-0.3) * 0.97
-    assert big.mid == round(expected / 5000) * 5000
+    assert (big.low, big.high) == (round(expected * 0.85 / 5000) * 5000, round(expected * 1.15 / 5000) * 5000)
     assert big.inputs["condition_adjustment"] == 0.97
 
 
@@ -97,13 +99,39 @@ def test_comp_selection_filters_type_size_age_of_sale_and_distance():
     assert comps == sorted(comps, key=lambda c: c.similarity, reverse=True)
 
 
-def test_noiseless_comps_recover_the_true_value_with_high_confidence():
+def test_noiseless_comps_recover_the_true_value_but_stay_unpublished_without_calibration():
     out = v.comp_value(SUBJECT, market(40, 2), TODAY, price_index=index)
-    assert out is not None and out.method == "comps"
+    assert out is not None and out.method == "comps" and out.mid is not None
     truth = true_price(SUBJECT, TODAY)
     assert abs(out.mid / truth - 1) < 0.02
     assert out.low <= truth <= out.high
-    assert out.confidence == "high"
+    assert (out.interval, out.confidence, out.measured_coverage) == ("uncalibrated", "low", None)
+    assert any("Not calibrated" in n for n in out.notes)
+
+
+def test_the_calibrated_interval_targets_80_percent_and_reports_its_measured_coverage():
+    sales = market(160, 11, noise=0.06)
+    cal = v.calibrate(sales, price_index=index)
+    assert cal is not None and cal.target == 0.8 and cal.log_low < 0 < cal.log_high
+    assert cal.train_n >= 30 and cal.holdout_n >= 10
+    assert 0.65 <= cal.measured_coverage <= 0.97  # measured on later sales it never saw
+    out = v.comp_value(SUBJECT, market(40, 2), TODAY, calibration=cal, price_index=index)
+    assert out is not None and out.interval == "calibrated" and out.coverage_target == 0.8
+    assert out.measured_coverage == round(cal.measured_coverage, 3)
+    assert any("80% interval" in n and f"{cal.holdout_n} later sales" in n for n in out.notes)
+    assert out.low <= out.mid <= out.high
+    # Round-trips through JSON (the backtest script writes it; the worker reads it).
+    assert v.Calibration.from_json(cal.to_json()) == cal
+    # Too few sales: no calibration rather than a made-up one.
+    assert v.calibrate(market(20, 12), price_index=index) is None
+
+
+def test_backtest_with_a_calibration_scores_only_the_held_out_sales():
+    sales = market(160, 11, noise=0.06)
+    cal = v.calibrate(sales, price_index=index)
+    assert cal is not None
+    bands = v.backtest(sales, calibration=cal, price_index=index)
+    assert sum(b.n for b in bands) == cal.holdout_n
 
 
 def test_noisy_or_scarce_comps_widen_the_range_and_lower_confidence():
@@ -155,5 +183,6 @@ def test_the_backtest_script_reads_the_documented_csv(tmp_path, capsys):
     assert script.main([str(path), "--json", str(out)]) == 0
     printed = capsys.readouterr()
     assert "40 closed sales" in printed.out and "line 42: skipped" in printed.err
+    assert "Not enough sales to calibrate" in printed.out  # 40 sales: too few to fit and measure
     table = _json.loads(out.read_text())
-    assert table["sales"] == 40 and table["bands"] and all(0 <= b["coverage"] <= 1 for b in table["bands"])
+    assert table["sales"] == 40 and table["calibration"] is None and table["bands"]

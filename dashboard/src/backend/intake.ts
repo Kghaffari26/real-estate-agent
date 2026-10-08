@@ -7,7 +7,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { GeocodeMatch } from '../../../supabase/functions/_shared/census.ts';
-import { preparePhoto, type CostRow, type Facts, type PropertyStatus, type Room } from '../lib/intake';
+import { preparePhoto, type CostRow, type Facts, type PropertyStatus, type Room, type ValuePrior } from '../lib/intake';
 import { DeskError, friendly } from './desk';
 
 export type { GeocodeMatch };
@@ -121,6 +121,28 @@ export interface VisionJob {
   finished_at: string | null;
 }
 
+/** A listing-prep report (P5): queued by an agent, written by the worker (agents/listing_prep/report.py). */
+export interface Report {
+  id: string;
+  version: number;
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+  target_price: number | null;
+  budget: number | null;
+  days_to_list: number | null;
+  narrative_source: 'llm' | 'template' | null;
+  /** Why the report uses the plain template, when it does: shown to the agent as is. */
+  note: string | null;
+  error: string | null;
+  requested_at: string;
+  finished_at: string | null;
+}
+
+export interface ReportRequest {
+  target_price: number | null;
+  budget: number | null;
+  days_to_list: number | null;
+}
+
 export interface PhotoResult {
   photo_id: string;
   outcome: 'analyzed' | 'skipped_people' | 'skipped_unusable' | 'rejected_metadata';
@@ -131,15 +153,20 @@ export interface PhotoResult {
 export interface Insights {
   valuation: {
     low: number;
-    mid: number;
     high: number;
+    /** Only with comparable sales; a rough range has none. */
+    mid: number | null;
     method: 'zip_ppsf' | 'comps';
     confidence: 'high' | 'moderate' | 'low';
+    /** rough: area medians, not calibrated; calibrated: an interval with measured coverage. */
+    interval: 'rough' | 'calibrated' | 'uncalibrated';
+    coverage_target: number | null;
+    measured_coverage: number | null;
     notes: string[];
     inputs: Record<string, number | string | null>;
   } | null;
-  segments: Array<{ key: string; label: string; weight: number; priorities: string[]; evidence: string[] }> | null;
-  schools: Array<{ name: string; level: string; grades: string; charter: boolean; miles: number }> | null;
+  segments: Array<{ key: string; label: string; weight: number; priorities: string[]; evidence: string[]; reliable: boolean; reliability: string | null }> | null;
+  schools: Array<{ name: string; level: string; grades: string; charter: boolean; miles: number; cds: string; dashboard_url: string }> | null;
   amenities: Array<{ kind: string; count: number; nearest_miles: number | null }> | null;
   sources: string[];
   notes: string[];
@@ -170,6 +197,9 @@ export function intakeMessage(message: string): string {
   if (/only a manager can delete all photos/.test(message)) return 'Only a manager can delete all of a property’s photos.';
   if (/withdrawn finding/.test(message)) return 'This finding was withdrawn when consent was revoked. Run the analysis again under a new consent.';
   if (/vision_jobs_one_active|duplicate key.*vision_jobs/.test(message)) return 'An analysis is already queued or running for this property.';
+  if (/report for this property is already queued or running|reports_one_active/.test(message)) return 'A report is already queued or running for this property.';
+  if (/confirm the property's facts first/.test(message)) return 'Confirm the facts before asking for a report.';
+  if (/reports_(target_price|budget|days_to_list)_check/.test(message)) return 'Check the target price (at least $10,000), the budget and the days until listing (0 to 365).';
   return friendly(message);
 }
 
@@ -283,6 +313,22 @@ export function intakeApi(c: SupabaseClient) {
       return rows[0] ?? null;
     },
 
+    async latestReport(property: string): Promise<Report | null> {
+      const rows = check(
+        await c.from('reports').select('id, version, status, target_price, budget, days_to_list, narrative_source, note, error, requested_at, finished_at').eq('property_id', property).order('version', { ascending: false }).limit(1),
+      ) as Report[];
+      const r = rows[0];
+      return r ? { ...r, target_price: num(r.target_price), budget: num(r.budget) } : null;
+    },
+
+    async requestReport(property: string, r: ReportRequest): Promise<void> {
+      check(await c.rpc('request_report', { property, target_price: r.target_price, budget: r.budget, days_to_list: r.days_to_list }));
+    },
+
+    async cancelReport(report: string): Promise<void> {
+      check(await c.rpc('cancel_report', { report }));
+    },
+
     async requestAnalysis(property: string, me: string): Promise<void> {
       check(await c.from('vision_jobs').insert({ property_id: property, requested_by: me }).select('id'));
     },
@@ -316,6 +362,17 @@ export function intakeApi(c: SupabaseClient) {
     async saveCostRows(team: string, rows: readonly CostRow[]): Promise<void> {
       if (!rows.length) return;
       check(await c.rpc('save_cost_rows', { team, rows }));
+    },
+
+    async valuePriors(team: string): Promise<ValuePrior[]> {
+      const rows = check(await c.from('value_priors').select('item, recovery_low, recovery_high, source, notes').eq('team_id', team).order('item')) as ValuePrior[];
+      return rows.map((r) => ({ ...r, recovery_low: Number(r.recovery_low), recovery_high: Number(r.recovery_high) }));
+    },
+
+    /** Insert or replace priors by item, through save_value_priors (managers only). */
+    async saveValuePriors(team: string, rows: readonly ValuePrior[]): Promise<void> {
+      if (!rows.length) return;
+      check(await c.rpc('save_value_priors', { team, rows }));
     },
 
     async deleteCostRow(team: string, item: string): Promise<void> {

@@ -1,12 +1,13 @@
 """Backtest the comp-based valuation on closed sales (SPEC_LISTING_PREP.md §5.2, P3/P7).
 
-    uv run python scripts/backtest_valuation.py closed_sales.csv [--json out.json]
+    uv run python scripts/backtest_valuation.py closed_sales.csv [--json out.json] [--calibration out.json]
 
-Each sale is predicted from the sales that closed before it (agents/listing_prep/valuation.py,
-`backtest`), and the result is scored by price band: the share of actual prices inside
-the predicted range (an interquartile range, so about half is the honest expectation)
-and the median absolute error of the midpoint. The report publishes this table once the
-MLS feed is live.
+Each sale is predicted from the sales that closed before it (agents/listing_prep/valuation.py).
+The earlier 70% of those out-of-sample errors calibrate an 80% interval (split conformal);
+the later 30% measure it: the share of actual prices inside, overall and by price band,
+and the median absolute error of the point. `--calibration` writes the interval for the
+worker (config/listing_prep/valuation_calibration.json); the report shows the measured
+coverage next to every comp-based range.
 
 The CSV (one row per closed sale; a CRMLS export maps onto it in P7):
 
@@ -29,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from agents.listing_prep.valuation import Home, Sale, backtest  # noqa: E402
+from agents.listing_prep.valuation import Home, Sale, backtest, calibrate  # noqa: E402
 
 COLUMNS = ("id", "close_date", "price", "sqft", "beds", "baths", "year_built", "property_type", "lat", "lon", "pool", "garage_spaces")
 
@@ -64,15 +65,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("csv", type=Path)
     parser.add_argument("--json", type=Path, help="also write the table as JSON")
+    parser.add_argument("--calibration", type=Path, help="write the calibrated interval for the worker")
     args = parser.parse_args(argv)
     sales = read_sales(args.csv)
-    bands = backtest(sales)
+    cal = calibrate(sales)
     print(f"{len(sales)} closed sales")
+    if cal is None:
+        print("Not enough sales to calibrate an interval (needs 30 to fit and 10 to measure); the table is the uncalibrated IQR.")
+    else:
+        print(f"{cal.target:.0%} interval: {cal.log_low:+.3f} to {cal.log_high:+.3f} (log), fitted on {cal.train_n} sales; measured on {cal.holdout_n} later sales: {cal.measured_coverage:.1%}")
+        if args.calibration:
+            args.calibration.parent.mkdir(parents=True, exist_ok=True)
+            args.calibration.write_text(json.dumps(cal.to_json(), indent=2))
+    bands = backtest(sales, calibration=cal)
     print(f"{'band':<16}{'n':>6}{'coverage':>10}{'median error':>14}")
     for b in bands:
         print(f"{b.band:<16}{b.n:>6}{b.coverage:>10.1%}{b.median_abs_error:>14.1%}")
     if args.json:
-        args.json.write_text(json.dumps({"sales": len(sales), "bands": [asdict(b) for b in bands]}, indent=2))
+        args.json.write_text(json.dumps({"sales": len(sales), "calibration": cal.to_json() if cal else None, "bands": [asdict(b) for b in bands]}, indent=2))
     return 0
 
 

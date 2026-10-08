@@ -2,7 +2,7 @@ name: listing-prep-worker
 
 # The Desk's private worker (agents/listing_prep/worker.py): photo housekeeping
 # (retention, orphaned and deleted files), property insights (P3: value range, buyer
-# needs, schools, amenities) and queued photo-findings jobs (P2).
+# needs, schools, amenities), queued photo-findings jobs (P2) and queued reports (P5).
 #
 # It talks to the Desk's backend with the service role, a server-side secret of this
 # workflow only (the site's build never sees it; dashboard.yml's check:secrets scans
@@ -11,7 +11,9 @@ name: listing-prep-worker
 #
 # Off until the owner turns it on: set the repository variable DESK_WORKER_ENABLED=true
 # and the secrets SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and ANTHROPIC_API_KEY
-# (docs/DESK_SETUP.md). Without the Anthropic key it does housekeeping only.
+# (docs/DESK_SETUP.md). Without the Anthropic key it does housekeeping only. Until the
+# Supabase secrets are set (or while the URL or key is wrong) it exits with a warning
+# annotation instead of failing every 15 minutes.
 on:
   schedule:
     - cron: "*/15 * * * *"
@@ -28,14 +30,14 @@ jobs:
   work:
     if: ${{ vars.DESK_WORKER_ENABLED == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
       - run: uv sync --no-dev
-      - name: Housekeeping, then queued photo findings
+      - name: Housekeeping, then queued photo findings and reports
         run: uv run python -m agents.listing_prep.worker
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -43,4 +45,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Optional: buyer demand by need (P3). Without it the insights say demand couldn't be sized.
           CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
-          AGENTS_CORE_MAX_RUN_USD: "1.00"
+          # Photo findings cost about $0.004 a photo; a report is capped at $0.80 (report.BUDGET
+          # + the fair-housing review) and is only claimed while the cap has room for a whole one.
+          AGENTS_CORE_MAX_RUN_USD: "2.50"
+          # Daily caps on report spend (photo analyses count toward them), checked when a report
+          # is claimed. Repository variables; empty means the defaults: $5 a team, $15 in all.
+          DESK_DAILY_USD_PER_TEAM: ${{ vars.DESK_DAILY_USD_PER_TEAM }}
+          DESK_DAILY_USD_GLOBAL: ${{ vars.DESK_DAILY_USD_GLOBAL }}

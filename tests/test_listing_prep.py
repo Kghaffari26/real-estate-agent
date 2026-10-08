@@ -235,6 +235,9 @@ class MemoryBackend:
     def clear_deletions(self, ids):
         pass
 
+    def record_spend(self, property_id, kind, ref, usd):
+        self.spend = [*getattr(self, "spend", []), (kind, ref, usd)]
+
 
 def scoped(tracker):
     return lambda usd, label: SpendScope(tracker, usd, label=label)
@@ -296,7 +299,7 @@ def test_janitor_deletes_queued_files_and_run_skips_jobs_without_a_model(tmp_pat
     backend = MemoryBackend({"a": ("kitchen", jpeg())})
     backend.expired = 2
     summary = run(backend, None)
-    assert summary == {"janitor": {"expired": 2, "orphans": 0, "files_deleted": 2}, "jobs": [], "insights": 0}
+    assert summary == {"janitor": {"expired": 2, "orphans": 0, "files_deleted": 2}, "jobs": [], "insights": 0, "reports": []}
     assert backend.deleted == ["t/p/a.jpg", "t/p/b.jpg"]
     assert backend.jobs  # still queued
     assert janitor(backend)["files_deleted"] == 0

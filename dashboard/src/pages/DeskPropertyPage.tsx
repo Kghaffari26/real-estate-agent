@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link, useParams } from 'react-router-dom';
 import { DeskError } from '../backend/desk';
 import { deskApi } from '../backend/desk';
-import { CONSENT_TEXT, CONSENT_TITLE, CONSENT_VERSION, intakeApi, PROCESSING_VERSIONS, type Consent, type Finding, type Insights, type Photo, type PhotoResult, type Property, type Quote, type VisionJob } from '../backend/intake';
+import { CONSENT_TEXT, CONSENT_TITLE, CONSENT_VERSION, intakeApi, PROCESSING_VERSIONS, type Consent, type Finding, type Insights, type Photo, type PhotoResult, type Property, type Quote, type Report, type VisionJob } from '../backend/intake';
 import { useRegionForZip } from '../data/hooks';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { formatDate, formatDelta, formatValue } from '../lib/format';
@@ -37,6 +37,7 @@ import { Button } from '../ui/controls';
 import { Card, DeskFrame } from './DeskPage';
 import { FindingsCard } from './desk/FindingsCard';
 import { InsightsCard } from './desk/InsightsCard';
+import { ReportCard } from './desk/ReportCard';
 
 const input = 'h-11 rounded-control border border-mp-line bg-mp-panel px-3 text-mp-ink';
 const errText = (e: unknown) => (e instanceof DeskError ? e.message : e instanceof Error ? e.message : 'Something went wrong. Try again.');
@@ -65,6 +66,7 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
   const [results, setResults] = useState<PhotoResult[]>([]);
   const [manager, setManager] = useState(false);
   const [insights, setInsights] = useState<Insights | null>(null);
+  const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -73,7 +75,7 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
       setProperty(p);
       if (!p) return;
       onTitle(p.address);
-      const [c, ph, q, book, j, f, members, ins] = await Promise.all([
+      const [c, ph, q, book, j, f, members, ins, rep] = await Promise.all([
         api.consents(id),
         api.photos(id),
         api.quotes(id),
@@ -82,8 +84,10 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
         api.findings(id),
         deskApi(client).members(p.team_id),
         api.insights(id),
+        api.latestReport(id),
       ]);
       setInsights(ins);
+      setReport(rep);
       setConsents(c);
       setPhotos(ph);
       setQuotes(q);
@@ -100,13 +104,14 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
   useEffect(() => {
     load();
   }, [load]);
-  // While an analysis is queued or running, check on it every 15 seconds.
+  // While an analysis or a report is queued or running, check on it every 15 seconds.
   const jobActive = job?.status === 'queued' || job?.status === 'running';
+  const reportActive = report?.status === 'queued' || report?.status === 'running';
   useEffect(() => {
-    if (!jobActive) return;
+    if (!jobActive && !reportActive) return;
     const t = window.setInterval(load, 15_000);
     return () => window.clearInterval(t);
-  }, [jobActive, load]);
+  }, [jobActive, reportActive, load]);
 
   const act = async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -196,6 +201,12 @@ function PropertyIntake({ client, session, id, onTitle }: { client: SupabaseClie
         results={results}
         onRequest={() => act(() => api.requestAnalysis(id, me))}
         onReview={(fid, edit) => act(() => api.reviewFinding(fid, edit))}
+      />
+      <ReportCard
+        report={report}
+        factsConfirmed={Boolean(property.facts_confirmed_at)}
+        onRequest={(r) => act(() => api.requestReport(id, r))}
+        onCancel={(rid) => act(() => api.cancelReport(rid))}
       />
       <QuotesCard quotes={quotes} costBook={costBook} onAdd={(q) => act(() => api.addQuote(id, me, q))} onDelete={(qid) => act(() => api.deleteQuote(qid))} />
     </div>

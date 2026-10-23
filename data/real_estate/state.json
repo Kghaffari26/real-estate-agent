@@ -15,7 +15,7 @@
     "denver-co": "b5685b0de3775beb4c8b55c1a2d28d3a2761780c055fbc19e1abdec0159ed2c0",
     "detroit-mi": "70827bdf91e5031d7f3d59c80c61c213d5eeba6765fd3baa26e6cdaadb2964ea",
     "fort-lauderdale-fl": "504a9dd6a1e7a3e0db446ec8a7bf9475f65cefbf4f622d3ad42aa17d815cffbf",
-    "fort-worth-tx": "72035337019cc6b054ef27cf3b07cced13f653f23ab2b4dbb378f0ba4ce8b2e9",
+    "fort-worth-tx": "14fd0d07eb7e3bc59015d664bb3cf80201541514574bd80d6a7d6a35db7448c5",
     "houston-tx": "f1e859333f4fc5aa66398dddf2480ed0c7498c28038c249fc0ab78edd567ee34",
     "indianapolis-in": "159d4c875f6e2e01d98357349ace6bdab4146552dcd9a5a8b715db8bb42f61b4",
     "jacksonville-fl": "f89142ef480595904939129a236fac9ae67d64f6cf524f66abeb186aafaa0f32",
@@ -28,7 +28,7 @@
     "myrtle-beach-sc": "975634c37934a129835f470c09ce8951e5e440a9fb2d252c57aba4e09772e488",
     "nashville-tn": "112280b84576ea23f46b380fa7adb3a27466eb7a83825bcb9543ba426764c313",
     "nassau-county-ny": "81ba540cf784c6ed76c3c0a6cc27be30f39ff947b30ecf9670c4013b532f8d40",
-    "national": "6f7af020f30a201ef9b9bf91f212e05ea7b9bd1f3b996d05881bbefbd79975cb",
+    "national": "4b0f9efe258a403d4b0fc0a3b865d3fb84417890dd547d3efc6262ee4375cf4a",
     "new-brunswick-nj": "1c397cf01c517383ef35b81ac2f093afcd67278810993efc312eb3ffe9c3c1f0",
     "new-york-ny": "946585bb4830cc901a8ce240c316bd8e335e2ca1a8bb8933d2deb7e9dafdf7ec",
     "north-port-fl": "48bd7273a03b12c51b8c6b287a4cb465f42fbd9259cd07f90c083ba6fbe8cf55",
@@ -50,14 +50,14 @@
     "virginia-beach-va": "adfeb7d507c9a1012592a394772b1e827b060ca539e7adebe874ed8029ab4ec9",
     "warren-mi": "9612ef16a3e549b04db7a476698c8aac9c0914aeefb80742e7f9d232f881278d",
     "washington-dc": "c8ec469cbbe4cdce42a2d61fb542b91413aa9a7f646c38076f076012416a225e",
-    "west-palm-beach-fl": "ea759f78a9e5184947408dfdf5cada87ca8d1a011370c5b5244e3fcbd3572725"
+    "west-palm-beach-fl": "9608adabe0f6a788f215545e5571b61bc2867f25f1331b164ec9da6976a80e2a"
   },
   "investigation_hashes": {
-    "cleveland-oh": "e866a6e8f70cacdf11a0d8273c006247dabdca57f833a1af59e9f673da648b36"
+    "cleveland-oh": "099464f90e68d6cc3402e7cd589ed7fdd7c23ff177e93ff024d986cb16456b4f"
   },
   "sources": {
     "fred": {
-      "MORTGAGE30US": "2026-10-15:7.4"
+      "MORTGAGE30US": "2026-10-22:7.32"
     },
     "redfin_metro": {
       "data_through": "2026-09-30"

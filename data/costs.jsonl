@@ -485,3 +485,4 @@
 {"ts": "2026-11-06T20:44:04Z", "agent": "real_estate", "run_id": "2026-11-06T20-40-22Z-ebffb3", "tier": "fast", "model": "claude-haiku-4-5-20251001", "purpose": "investigate:cleveland-oh:step4", "batch": false, "input_tokens": 7, "output_tokens": 805, "cache_write_tokens": 913, "cache_read_tokens": 5469, "usd": 0.00572}
 {"ts": "2026-11-06T20:44:07Z", "agent": "real_estate", "run_id": "2026-11-06T20-40-22Z-ebffb3", "tier": "fast", "model": "claude-haiku-4-5-20251001", "purpose": "investigate:cleveland-oh:step5", "batch": false, "input_tokens": 7, "output_tokens": 343, "cache_write_tokens": 929, "cache_read_tokens": 6382, "usd": 0.003521}
 {"ts": "2026-11-06T20:44:07Z", "kind": "run", "agent": "real_estate", "run_id": "2026-11-06T20-40-22Z-ebffb3", "status": "ok", "calls": 50, "run_usd": 0.061954}
+{"ts": "2026-11-13T21:08:46Z", "kind": "run", "agent": "real_estate", "run_id": "2026-11-13T21-08-25Z-d743f2", "status": "failed", "calls": 0, "run_usd": 0.0}

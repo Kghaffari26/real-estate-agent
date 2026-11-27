@@ -487,3 +487,4 @@
 {"ts": "2026-11-06T20:44:07Z", "kind": "run", "agent": "real_estate", "run_id": "2026-11-06T20-40-22Z-ebffb3", "status": "ok", "calls": 50, "run_usd": 0.061954}
 {"ts": "2026-11-13T21:08:46Z", "kind": "run", "agent": "real_estate", "run_id": "2026-11-13T21-08-25Z-d743f2", "status": "failed", "calls": 0, "run_usd": 0.0}
 {"ts": "2026-11-20T22:05:40Z", "kind": "run", "agent": "real_estate", "run_id": "2026-11-20T22-05-05Z-53d89b", "status": "failed", "calls": 0, "run_usd": 0.0}
+{"ts": "2026-11-27T23:09:41Z", "kind": "run", "agent": "real_estate", "run_id": "2026-11-27T23-09-25Z-4f8b65", "status": "failed", "calls": 0, "run_usd": 0.0}
